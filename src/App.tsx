@@ -7,6 +7,7 @@ import SupportChatWidget from './components/SupportChatWidget'
 import Disclaimer from './pages/Disclaimer'
 import Hero from './sections/Hero'
 import ChartAnalyzer from './sections/ChartAnalyzer'
+import AIAgentsWorkflow from './sections/AIAgentsWorkflow'
 import CommunityWins from './sections/CommunityWins'
 import Features from './sections/Features'
 import Pricing from './sections/Pricing'
@@ -60,6 +61,7 @@ export default function App() {
       <main>
         <Hero />
         <ChartAnalyzer />
+        <AIAgentsWorkflow />
         <CommunityWins />
         <Features />
         <Pricing />
