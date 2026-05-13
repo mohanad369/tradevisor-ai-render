@@ -14,7 +14,7 @@ interface Props {
 }
 
 const DEV_CODE = "TRADEVISOR2024"
-const USDT_WALLET = "TVo3XJgMjcEZiDxQYhJ7bqR6rxQaK9zL7mP"
+const USDT_WALLET = "TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA"
 
 export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, yearlyAmount = "669" }: Props) {
   const [step, setStep] = useState<"select" | "wallet" | "upload" | "pending" | "success" | "dev" | "error">("select")

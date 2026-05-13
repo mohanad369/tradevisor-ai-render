@@ -26,7 +26,7 @@ TRADEVISOR VIP PRICES (memorize exactly):
 - Monthly: $69
 - 3 Months: $249  
 - Yearly: $669 (best value)
-- Payment: USDT TRC20 to wallet TVo3XJgMjcEZiDxQYhJ7bqR6rxQaK9zL7mP
+- Payment: USDT TRC20 to wallet TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA
 - Admin email: mohanadmaria777@gmail.com
 - VIP codes are 8-character alphanumeric
 
@@ -149,7 +149,7 @@ export default function Jarvis() {
     }
 
     if (/vip|اشتراك|اشترك|سعر|price|cost/.test(q)) {
-      return `VIP Dashboard يحتوي على كل شيء:\n• AI Analyzer لتحليل الشارتات\n• إشارات يومية\n• شارت TradingView متقدم مع أدوات الرسم\n• 30 درس تعليمي (SMC + ICT + Classic)\n• Gold Chart AI\n• Education Schools\n\nالأسعار:\n• $69/شهر\n• $249/3 أشهر\n• $669/سنة (الأفضل قيمة!)\n\nالدفع: USDT TRC20\nالمحفظة: TVo3XJgMjcEZiDxQYhJ7bqR6rxQaK9zL7mP`
+      return `VIP Dashboard يحتوي على كل شيء:\n• AI Analyzer لتحليل الشارتات\n• إشارات يومية\n• شارت TradingView متقدم مع أدوات الرسم\n• 30 درس تعليمي (SMC + ICT + Classic)\n• Gold Chart AI\n• Education Schools\n\nالأسعار:\n• $69/شهر\n• $249/3 أشهر\n• $669/سنة (الأفضل قيمة!)\n\nالدفع: USDT TRC20\nالمحفظة: TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA`
     }
 
     if (/gold|ذهب|xau/.test(q)) {
