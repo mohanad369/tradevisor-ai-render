@@ -1,0 +1,312 @@
+//@version=5
+indicator("XAUUSD Bank Whale Direct System COMPATIBLE", overlay=true, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
+
+// Inputs
+liqLen = input.int(20, "Liquidity Lookback", minval=5)
+swingLen = input.int(4, "Pivot Strength", minval=2)
+volLen = input.int(30, "Volume Length", minval=10)
+atrLen = input.int(14, "ATR Length", minval=5)
+
+minScore = input.int(65, "Minimum Entry Score", minval=30, maxval=100)
+strongScore = input.int(80, "Strong Entry Score", minval=50, maxval=100)
+
+rr1 = input.float(0.8, "TP1 R", minval=0.3, step=0.1)
+rr2 = input.float(1.6, "TP2 R", minval=0.5, step=0.1)
+
+showHeatmap = input.bool(true, "Show Heatmap")
+showFVG = input.bool(true, "Show FVG")
+showStops = input.bool(true, "Show Retail Stops")
+showBank = input.bool(true, "Show Bank Signals")
+showWhale = input.bool(true, "Show Whale Signals")
+showTable = input.bool(true, "Show Dashboard")
+showLabels = input.bool(true, "Show Entry Labels")
+
+useConfirm = input.bool(true, "Use Strong Confirmation")
+useSession = input.bool(false, "Use Session Filter")
+tradeSession = input.session("0700-1800", "Trading Session")
+
+useChaosFilter = input.bool(true, "Avoid News Candles")
+chaosATR = input.float(2.5, "Chaos ATR", minval=1.0, step=0.1)
+
+roundStep = input.float(10.0, "Psychological Step", minval=1.0)
+whaleVolMult = input.float(1.6, "Whale Volume Multiplier", minval=1.0, step=0.1)
+
+// Core
+atr = ta.atr(atrLen)
+volMA = ta.sma(volume, volLen)
+volSD = ta.stdev(volume, volLen)
+volZ = volSD > 0 ? (volume - volMA) / volSD : 0.0
+
+rng = high - low
+body = math.abs(close - open)
+bodyRatio = rng > 0 ? body / rng : 0.0
+
+upperWick = high - math.max(open, close)
+lowerWick = math.min(open, close) - low
+
+upperWickRatio = rng > 0 ? upperWick / rng : 0.0
+lowerWickRatio = rng > 0 ? lowerWick / rng : 0.0
+
+inSession = useSession ? not na(time(timeframe.period, tradeSession)) : true
+chaos = useChaosFilter and rng > atr * chaosATR
+allowed = inSession and not chaos
+
+// Delta proxy
+buyVol = rng > 0 ? volume * (close - low) / rng : volume * 0.5
+sellVol = rng > 0 ? volume * (high - close) / rng : volume * 0.5
+delta = buyVol - sellVol
+deltaMA = ta.ema(delta, volLen)
+deltaPower = volMA > 0 ? deltaMA / volMA : 0.0
+
+bullDelta = deltaPower > 0.10
+bearDelta = deltaPower < -0.10
+deltaFlipBuy = deltaMA > 0 and deltaMA[1] <= 0
+deltaFlipSell = deltaMA < 0 and deltaMA[1] >= 0
+
+// Liquidity
+liqHigh = ta.highest(high[1], liqLen)
+liqLow = ta.lowest(low[1], liqLen)
+
+sweepHigh = high > liqHigh and close < liqHigh
+sweepLow = low < liqLow and close > liqLow
+
+softSweepHigh = high > liqHigh and close < high
+softSweepLow = low < liqLow and close > low
+
+// Previous day
+pdh = request.security(syminfo.tickerid, "D", high[1])
+pdl = request.security(syminfo.tickerid, "D", low[1])
+pdo = request.security(syminfo.tickerid, "D", open)
+
+nearPDH = math.abs(high - pdh) <= atr
+nearPDL = math.abs(low - pdl) <= atr
+
+// FVG
+bullFVG = low > high[2]
+bearFVG = high < low[2]
+
+if showFVG and bullFVG
+    box.new(bar_index - 2, high[2], bar_index + 20, low, bgcolor=color.new(color.lime, 88), border_color=color.new(color.lime, 65))
+
+if showFVG and bearFVG
+    box.new(bar_index - 2, low[2], bar_index + 20, high, bgcolor=color.new(color.red, 88), border_color=color.new(color.red, 65))
+
+// AMD simple
+rangeHigh = ta.highest(high, liqLen)
+rangeLow = ta.lowest(low, liqLen)
+rangeSize = rangeHigh - rangeLow
+
+accumulation = rangeSize < atr * 3 and volume > volMA * 0.85 and math.abs(deltaPower) < 0.18
+distribution = rangeSize < atr * 3 and volume > volMA * 0.85 and math.abs(deltaPower) > 0.10
+manipulationBuy = accumulation[1] and sweepLow
+manipulationSell = accumulation[1] and sweepHigh
+
+// Candle behavior
+bullDisplacement = close > open and body > atr * 0.35
+bearDisplacement = close < open and body > atr * 0.35
+
+buyAbsorption = lowerWickRatio > 0.25 and deltaMA > deltaMA[1]
+sellAbsorption = upperWickRatio > 0.25 and deltaMA < deltaMA[1]
+
+// Heatmap pivots
+ph = ta.pivothigh(high, swingLen, swingLen)
+pl = ta.pivotlow(low, swingLen, swingLen)
+
+if showHeatmap and not na(ph)
+    box.new(bar_index - swingLen, ph + atr * 0.22, bar_index + 80, ph - atr * 0.22, bgcolor=color.new(color.red, 86), border_color=color.new(color.red, 70))
+
+if showHeatmap and not na(pl)
+    box.new(bar_index - swingLen, pl + atr * 0.22, bar_index + 80, pl - atr * 0.22, bgcolor=color.new(color.lime, 86), border_color=color.new(color.lime, 70))
+
+// Nearest simple support/resistance
+nearestRes = ta.highest(high[1], liqLen)
+nearestSup = ta.lowest(low[1], liqLen)
+
+nearLiquidityResistance = math.abs(high - nearestRes) <= atr * 0.7
+nearLiquiditySupport = math.abs(low - nearestSup) <= atr * 0.7
+
+// Retail stops
+buySideStops = liqHigh
+sellSideStops = liqLow
+
+roundAbove = math.ceil(close / roundStep) * roundStep
+roundBelow = math.floor(close / roundStep) * roundStep
+
+nearBuySideStops = math.abs(high - buySideStops) <= atr * 0.5
+nearSellSideStops = math.abs(low - sellSideStops) <= atr * 0.5
+
+stopHuntBuy = low < sellSideStops and close > sellSideStops and lowerWickRatio > 0.30
+stopHuntSell = high > buySideStops and close < buySideStops and upperWickRatio > 0.30
+
+// Bank detection
+bankBuy = showBank and (sweepLow or stopHuntBuy or softSweepLow) and lowerWickRatio > 0.30 and volume > volMA * 1.10 and deltaMA > deltaMA[1]
+bankSell = showBank and (sweepHigh or stopHuntSell or softSweepHigh) and upperWickRatio > 0.30 and volume > volMA * 1.10 and deltaMA < deltaMA[1]
+
+// Whale detection
+whaleVolume = volume > volMA * whaleVolMult
+
+whaleBuy = showWhale and whaleVolume and (sweepLow or stopHuntBuy or nearPDL or nearLiquiditySupport) and lowerWickRatio > 0.35 and deltaMA > deltaMA[1] and close > open
+whaleSell = showWhale and whaleVolume and (sweepHigh or stopHuntSell or nearPDH or nearLiquidityResistance) and upperWickRatio > 0.35 and deltaMA < deltaMA[1] and close < open
+
+if whaleBuy
+    box.new(bar_index, math.max(open, close), bar_index + 50, low, bgcolor=color.new(color.aqua, 84), border_color=color.new(color.aqua, 25))
+
+if whaleSell
+    box.new(bar_index, high, bar_index + 50, math.min(open, close), bgcolor=color.new(color.orange, 84), border_color=color.new(color.orange, 25))
+
+// Score
+buyScore = 0.0
+sellScore = 0.0
+
+buyScore += sweepLow ? 22 : softSweepLow ? 12 : 0
+buyScore += stopHuntBuy ? 14 : 0
+buyScore += bankBuy ? 12 : 0
+buyScore += whaleBuy ? 15 : 0
+buyScore += buyAbsorption ? 12 : 0
+buyScore += bullDisplacement ? 12 : 0
+buyScore += bullDelta ? 10 : 0
+buyScore += deltaFlipBuy ? 10 : 0
+buyScore += bullFVG ? 6 : 0
+buyScore += nearPDL ? 8 : 0
+buyScore += nearSellSideStops ? 8 : 0
+buyScore += nearLiquiditySupport ? 7 : 0
+buyScore += manipulationBuy ? 10 : 0
+
+sellScore += sweepHigh ? 22 : softSweepHigh ? 12 : 0
+sellScore += stopHuntSell ? 14 : 0
+sellScore += bankSell ? 12 : 0
+sellScore += whaleSell ? 15 : 0
+sellScore += sellAbsorption ? 12 : 0
+sellScore += bearDisplacement ? 12 : 0
+sellScore += bearDelta ? 10 : 0
+sellScore += deltaFlipSell ? 10 : 0
+sellScore += bearFVG ? 6 : 0
+sellScore += nearPDH ? 8 : 0
+sellScore += nearBuySideStops ? 8 : 0
+sellScore += nearLiquidityResistance ? 7 : 0
+sellScore += manipulationSell ? 10 : 0
+
+buyScore := math.min(buyScore, 100)
+sellScore := math.min(sellScore, 100)
+
+// Confirmation
+buyConfirm = not useConfirm or ((sweepLow or stopHuntBuy or bankBuy or whaleBuy) and bullDisplacement and deltaPower > 0.03)
+sellConfirm = not useConfirm or ((sweepHigh or stopHuntSell or bankSell or whaleSell) and bearDisplacement and deltaPower < -0.03)
+
+// Entries
+directBuy = allowed and barstate.isconfirmed and buyScore >= minScore and buyScore > sellScore and buyConfirm
+directSell = allowed and barstate.isconfirmed and sellScore >= minScore and sellScore > buyScore and sellConfirm
+
+strongBuy = directBuy and buyScore >= strongScore
+strongSell = directSell and sellScore >= strongScore
+
+buyNow = directBuy and not strongBuy
+sellNow = directSell and not strongSell
+
+// Trade levels
+buyEntry = close
+buySL = low - atr * 0.08
+buyRisk = buyEntry - buySL
+buyTP1 = buyEntry + buyRisk * rr1
+buyTP2 = buyEntry + buyRisk * rr2
+
+sellEntry = close
+sellSL = high + atr * 0.08
+sellRisk = sellSL - sellEntry
+sellTP1 = sellEntry - sellRisk * rr1
+sellTP2 = sellEntry - sellRisk * rr2
+
+// Main plots
+plot(liqHigh, "Liquidity High", color=color.new(color.red, 75))
+plot(liqLow, "Liquidity Low", color=color.new(color.lime, 75))
+plot(pdh, "PDH", color=color.new(color.red, 45), style=plot.style_linebr)
+plot(pdl, "PDL", color=color.new(color.lime, 45), style=plot.style_linebr)
+plot(pdo, "Daily Open", color=color.new(color.gray, 65), style=plot.style_linebr)
+
+plot(showStops ? buySideStops : na, "Retail Stops Above", color=color.new(color.red, 10), linewidth=2)
+plot(showStops ? sellSideStops : na, "Retail Stops Below", color=color.new(color.lime, 10), linewidth=2)
+plot(showStops ? roundAbove : na, "Psych Level Above", color=color.new(color.orange, 35), linewidth=1)
+plot(showStops ? roundBelow : na, "Psych Level Below", color=color.new(color.aqua, 35), linewidth=1)
+
+// Priority shapes
+plotshape(stopHuntBuy and not bankBuy and not whaleBuy and not directBuy, title="STOP HUNT BUY", style=shape.labelup, location=location.belowbar, text="STOP\nBUY", color=color.rgb(0,188,212), textcolor=color.black, size=size.small)
+plotshape(stopHuntSell and not bankSell and not whaleSell and not directSell, title="STOP HUNT SELL", style=shape.labeldown, location=location.abovebar, text="STOP\nSELL", color=color.rgb(255,152,0), textcolor=color.black, size=size.small)
+
+plotshape(bankBuy and not whaleBuy and not directBuy, title="BANK BUY", style=shape.triangleup, location=location.belowbar, text="BANK", color=color.aqua, textcolor=color.black, size=size.small)
+plotshape(bankSell and not whaleSell and not directSell, title="BANK SELL", style=shape.triangledown, location=location.abovebar, text="BANK", color=color.orange, textcolor=color.black, size=size.small)
+
+plotshape(whaleBuy and not directBuy, title="WHALE BUY", style=shape.triangleup, location=location.belowbar, text="WHALE", color=color.aqua, textcolor=color.black, size=size.normal)
+plotshape(whaleSell and not directSell, title="WHALE SELL", style=shape.triangledown, location=location.abovebar, text="WHALE", color=color.orange, textcolor=color.black, size=size.normal)
+
+plotshape(buyNow, title="BUY NOW", style=shape.labelup, location=location.belowbar, text="BUY NOW", color=color.lime, textcolor=color.black, size=size.large)
+plotshape(sellNow, title="SELL NOW", style=shape.labeldown, location=location.abovebar, text="SELL NOW", color=color.red, textcolor=color.white, size=size.large)
+
+plotshape(strongBuy, title="STRONG BUY", style=shape.labelup, location=location.belowbar, text="STRONG\nBUY", color=color.rgb(0,140,70), textcolor=color.white, size=size.large)
+plotshape(strongSell, title="STRONG SELL", style=shape.labeldown, location=location.abovebar, text="STRONG\nSELL", color=color.rgb(150,0,30), textcolor=color.white, size=size.large)
+
+// Labels and levels
+if directBuy and showLabels
+    label.new(bar_index, low, "BUY NOW\nEntry: " + str.tostring(buyEntry, format.mintick) + "\nSL: " + str.tostring(buySL, format.mintick) + "\nTP1: " + str.tostring(buyTP1, format.mintick) + "\nTP2: " + str.tostring(buyTP2, format.mintick) + "\nScore: " + str.tostring(buyScore) + "\nDelta: " + str.tostring(deltaPower, "#.##"), style=label.style_label_up, color=color.lime, textcolor=color.black)
+    line.new(bar_index, buyEntry, bar_index + 14, buyEntry, color=color.lime, width=2)
+    line.new(bar_index, buySL, bar_index + 14, buySL, color=color.red, width=2)
+    line.new(bar_index, buyTP1, bar_index + 14, buyTP1, color=color.yellow, width=1)
+    line.new(bar_index, buyTP2, bar_index + 14, buyTP2, color=color.green, width=1)
+
+if directSell and showLabels
+    label.new(bar_index, high, "SELL NOW\nEntry: " + str.tostring(sellEntry, format.mintick) + "\nSL: " + str.tostring(sellSL, format.mintick) + "\nTP1: " + str.tostring(sellTP1, format.mintick) + "\nTP2: " + str.tostring(sellTP2, format.mintick) + "\nScore: " + str.tostring(sellScore) + "\nDelta: " + str.tostring(deltaPower, "#.##"), style=label.style_label_down, color=color.red, textcolor=color.white)
+    line.new(bar_index, sellEntry, bar_index + 14, sellEntry, color=color.red, width=2)
+    line.new(bar_index, sellSL, bar_index + 14, sellSL, color=color.lime, width=2)
+    line.new(bar_index, sellTP1, bar_index + 14, sellTP1, color=color.yellow, width=1)
+    line.new(bar_index, sellTP2, bar_index + 14, sellTP2, color=color.green, width=1)
+
+// Dashboard
+phase = manipulationBuy or manipulationSell ? "Manipulation" : accumulation ? "Accumulation" : distribution ? "Distribution" : "Neutral"
+
+var table dash = table.new(position.top_right, 2, 10, border_width=1)
+
+panelBg = color.rgb(18, 22, 32)
+headBg = color.rgb(38, 43, 58)
+buyBg = color.rgb(0, 70, 45)
+sellBg = color.rgb(90, 20, 30)
+neutralBg = color.rgb(28, 32, 44)
+
+if showTable and barstate.islast
+    table.cell(dash, 0, 0, "Metric", bgcolor=headBg, text_color=color.white)
+    table.cell(dash, 1, 0, "Value", bgcolor=headBg, text_color=color.white)
+
+    table.cell(dash, 0, 1, "Buy Score", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 1, str.tostring(buyScore), bgcolor=buyScore >= minScore ? buyBg : neutralBg, text_color=buyScore >= minScore ? color.lime : color.white)
+
+    table.cell(dash, 0, 2, "Sell Score", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 2, str.tostring(sellScore), bgcolor=sellScore >= minScore ? sellBg : neutralBg, text_color=sellScore >= minScore ? color.red : color.white)
+
+    table.cell(dash, 0, 3, "Delta", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 3, str.tostring(deltaPower, "#.##"), bgcolor=neutralBg, text_color=bullDelta ? color.lime : bearDelta ? color.red : color.white)
+
+    table.cell(dash, 0, 4, "AMD", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 4, phase, bgcolor=neutralBg, text_color=color.white)
+
+    table.cell(dash, 0, 5, "Sweep", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 5, sweepLow ? "Low Sweep" : sweepHigh ? "High Sweep" : "None", bgcolor=neutralBg, text_color=sweepLow ? color.lime : sweepHigh ? color.red : color.white)
+
+    table.cell(dash, 0, 6, "Bank", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 6, bankBuy ? "Bank Buy" : bankSell ? "Bank Sell" : "None", bgcolor=neutralBg, text_color=bankBuy ? color.aqua : bankSell ? color.orange : color.white)
+
+    table.cell(dash, 0, 7, "Whale", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 7, whaleBuy ? "Whale Buy" : whaleSell ? "Whale Sell" : "None", bgcolor=neutralBg, text_color=whaleBuy ? color.aqua : whaleSell ? color.orange : color.white)
+
+    table.cell(dash, 0, 8, "Filter", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 8, chaos ? "Chaos" : inSession ? "Allowed" : "Out Session", bgcolor=chaos ? sellBg : inSession ? buyBg : neutralBg, text_color=color.white)
+
+    table.cell(dash, 0, 9, "Mode", bgcolor=panelBg, text_color=color.white)
+    table.cell(dash, 1, 9, useConfirm ? "Confirmed" : "Sensitive", bgcolor=neutralBg, text_color=color.white)
+
+// Alerts
+alertcondition(directBuy, title="BUY NOW", message="BUY NOW on {{ticker}} at {{close}}")
+alertcondition(directSell, title="SELL NOW", message="SELL NOW on {{ticker}} at {{close}}")
+alertcondition(strongBuy, title="STRONG BUY", message="STRONG BUY on {{ticker}} at {{close}}")
+alertcondition(strongSell, title="STRONG SELL", message="STRONG SELL on {{ticker}} at {{close}}")
+alertcondition(bankBuy, title="BANK BUY", message="BANK BUY detected on {{ticker}} at {{close}}")
+alertcondition(bankSell, title="BANK SELL", message="BANK SELL detected on {{ticker}} at {{close}}")
+alertcondition(whaleBuy, title="WHALE BUY", message="WHALE BUY detected on {{ticker}} at {{close}}")
+alertcondition(whaleSell, title="WHALE SELL", message="WHALE SELL detected on {{ticker}} at {{close}}")

@@ -1,0 +1,33 @@
+export default function Footer() {
+  return (
+    <footer className="bg-[#050505] border-t border-[#1f1f1f] py-12">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+          <div className="flex flex-col items-center md:items-start">
+            <span className="text-white font-bold text-sm tracking-[0.1em] uppercase">
+              TRADEVISOR
+            </span>
+            <span className="text-[#a0a0a0] text-xs">
+              Premium AI Trading Tools
+            </span>
+          </div>
+
+          <div className="flex items-center justify-center">
+            <a
+              href="/#/privacy"
+              className="text-[#a0a0a0] text-sm hover:text-[#d4a843] transition-colors duration-200"
+            >
+              Privacy Policy
+            </a>
+          </div>
+        </div>
+
+        <div className="text-center">
+          <p className="text-[#666666] text-xs">
+            &copy; 2026 Tradevisor. All rights reserved.
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}

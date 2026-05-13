@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: tradevisor-ai
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/vip2/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20
+      - key: DB_DIR
+        value: /tmp/tradevisor-db
+      - key: PUBLIC_SITE_ORIGIN
+        value: https://tradevisor-ai.onrender.com
+      - key: PUBLIC_SITE_ORIGIN_WWW
+        value: https://tradevisor-ai.onrender.com
+      - key: VIP2_OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_API_KEY
+        sync: false
