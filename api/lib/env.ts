@@ -7,6 +7,10 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const WORQHAT_API_KEY = process.env.WORQHAT_API_KEY;   // keep variable, ignore contents
 const PUBLIC_SITE_ORIGIN = process.env.PUBLIC_SITE_ORIGIN ?? "https://tradevisorai.com";
 const PUBLIC_SITE_ORIGIN_WWW = process.env.PUBLIC_SITE_ORIGIN_WWW ?? "https://www.tradevisorai.com";
+const PUBLIC_EXTRA_SITE_ORIGINS = (process.env.PUBLIC_EXTRA_SITE_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 export const env = {
   DATABASE_URL,
@@ -15,4 +19,5 @@ export const env = {
   WORQHAT_API_KEY,
   PUBLIC_SITE_ORIGIN,
   PUBLIC_SITE_ORIGIN_WWW,
+  PUBLIC_EXTRA_SITE_ORIGINS,
 };

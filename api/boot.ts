@@ -12,16 +12,26 @@ import { seedVIPCodes } from "../db/seed";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
+const allowedOrigins = env.IS_PRODUCTION
+  ? [
+      env.PUBLIC_SITE_ORIGIN,
+      env.PUBLIC_SITE_ORIGIN_WWW,
+      "https://mohanad369.github.io",
+      "https://tradevisorai369.b-cdn.net",
+      ...env.PUBLIC_EXTRA_SITE_ORIGINS,
+    ].filter(Boolean) as string[]
+  : ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173"];
+
 // 1. CORS
 app.use(cors({
-  origin: env.IS_PRODUCTION
-    ? [env.PUBLIC_SITE_ORIGIN, env.PUBLIC_SITE_ORIGIN_WWW].filter(Boolean) as string[]
-    : ["http://localhost:3000", "http://localhost:5173"],
+  origin: allowedOrigins,
   allowMethods: ["GET", "POST", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "x-trpc-source", "x-csrf-token"],
   credentials: true,
   maxAge: 600,
 }));
+
+app.get("/api/health", (c) => c.json({ ok: true }));
 
 // 2. Security headers
 app.use(secureHeaders({ contentSecurityPolicy: {}, crossOriginEmbedderPolicy: false }));

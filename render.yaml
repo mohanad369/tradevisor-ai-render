@@ -16,9 +16,11 @@ services:
       - key: DB_DIR
         value: /tmp/tradevisor-db
       - key: PUBLIC_SITE_ORIGIN
-        value: https://tradevisor-ai.onrender.com
+        value: https://mohanad369.github.io
       - key: PUBLIC_SITE_ORIGIN_WWW
-        value: https://tradevisor-ai.onrender.com
+        value: https://tradevisorai369.b-cdn.net
+      - key: PUBLIC_EXTRA_SITE_ORIGINS
+        value: https://tradevisorai.com,https://www.tradevisorai.com
       - key: VIP2_OPENAI_MODEL
         value: gpt-4o-mini
       - key: OPENAI_API_KEY

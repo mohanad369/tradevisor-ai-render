@@ -3,6 +3,9 @@ import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import { trpc } from "./trpc";
 
+const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "");
+const apiOrigin = configuredApiOrigin || "";
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -15,7 +18,7 @@ export const queryClient = new QueryClient({
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: `${apiOrigin}/api/trpc`,
       transformer: superjson,
     }),
   ],
