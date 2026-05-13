@@ -9,52 +9,53 @@ import {
   ShieldCheck,
   Target,
 } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
 const agents = [
   {
     id: "01",
-    name: "وكيل الاخبار",
-    role: "يجمع الاخبار المؤثرة ويحولها الى اشارات اولية",
+    name: { en: "News Agent", ar: "وكيل الاخبار" },
+    role: { en: "Collects market-moving news and turns it into the first signal context.", ar: "يجمع الاخبار المؤثرة ويحولها الى اشارات اولية" },
     icon: Newspaper,
     status: "Scanning news",
     color: "#38bdf8",
   },
   {
     id: "02",
-    name: "وكيل التحقق",
-    role: "يتأكد من الخبر ويقارن البيانات قبل تمرير القرار",
+    name: { en: "Validation Agent", ar: "وكيل التحقق" },
+    role: { en: "Checks the news, compares data, and blocks weak decision inputs.", ar: "يتأكد من الخبر ويقارن البيانات قبل تمرير القرار" },
     icon: CheckCircle2,
     status: "Validating data",
     color: "#22c55e",
   },
   {
     id: "03",
-    name: "وكيل زخم السوق",
-    role: "يراقب الاتجاه، السيولة، وقوة الحركة الحالية",
+    name: { en: "Market Momentum Agent", ar: "وكيل زخم السوق" },
+    role: { en: "Reads trend, liquidity, pressure, and current market strength.", ar: "يراقب الاتجاه، السيولة، وقوة الحركة الحالية" },
     icon: Activity,
     status: "Reading momentum",
     color: "#f59e0b",
   },
   {
     id: "04",
-    name: "وكيل الشارت",
-    role: "يطابق الصفقة مع الاصل، المستويات، والهيكل الفني",
+    name: { en: "Chart Trade Agent", ar: "وكيل الشارت" },
+    role: { en: "Matches the trade with asset type, price levels, and chart structure.", ar: "يطابق الصفقة مع الاصل، المستويات، والهيكل الفني" },
     icon: Crosshair,
     status: "Mapping chart",
     color: "#a78bfa",
   },
   {
     id: "05",
-    name: "وكيل المراقبة",
-    role: "يراقب كل الوكلاء ويفحص الاخطاء على مدار الساعة",
+    name: { en: "Supervisor Agent", ar: "وكيل المراقبة" },
+    role: { en: "Monitors all agents and checks workflow errors around the clock.", ar: "يراقب كل الوكلاء ويفحص الاخطاء على مدار الساعة" },
     icon: Radar,
     status: "Supervising",
     color: "#eab308",
   },
   {
     id: "06",
-    name: "وكيل المخاطر",
-    role: "يعطي القرار النهائي مع الستوب، الاهداف، وحجم المخاطرة",
+    name: { en: "Risk Agent", ar: "وكيل المخاطر" },
+    role: { en: "Finalizes stop loss, targets, position size, and trade risk.", ar: "يعطي القرار النهائي مع الستوب، الاهداف، وحجم المخاطرة" },
     icon: ShieldCheck,
     status: "Final risk gate",
     color: "#fb7185",
@@ -62,6 +63,25 @@ const agents = [
 ];
 
 export default function AIAgentsWorkflow() {
+  const { language, t } = useLanguage();
+  const steps = language === "ar"
+    ? [
+      "الاخبار تدخل الى الوكيل الاول ويتحدد تأثيرها.",
+      "الوكيل الثاني يفلتر الخبر ويمنع القرارات الضعيفة.",
+      "الزخم والاوردرات تضيف قوة السوق الحقيقية.",
+      "الشارت يحدد الاصل، الدخول، الستوب، والاهداف.",
+      "المراقب يفحص اتصال الوكلاء ويكشف الاخطاء.",
+      "وكيل المخاطر يعطي القرار النهائي القابل للتنفيذ.",
+    ]
+    : [
+      "News enters the first agent and its market impact is scored.",
+      "The validation agent filters weak or conflicting inputs.",
+      "Momentum and order pressure add real market context.",
+      "The chart agent maps asset, entry, stop, and targets.",
+      "The supervisor checks agent links and catches workflow errors.",
+      "The risk agent produces the final executable trade plan.",
+    ];
+
   return (
     <section id="ai-agents" className="relative bg-[#050505] py-20 overflow-hidden">
       <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(212,168,67,0.03), rgba(34,197,94,0.02), transparent)" }} />
@@ -75,11 +95,11 @@ export default function AIAgentsWorkflow() {
         >
           <div className="flex items-center justify-center gap-2 mb-3">
             <Bot size={20} className="text-[#d4a843]" />
-            <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">AI Agent Network</span>
+            <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">{t("agents.eyebrow")}</span>
           </div>
-          <h2 className="text-white text-3xl sm:text-4xl font-bold mb-3">وكلاء الذكاء الاصطناعي</h2>
+          <h2 className="text-white text-3xl sm:text-4xl font-bold mb-3">{t("agents.title")}</h2>
           <p className="text-[#a0a0a0] text-sm sm:text-base max-w-3xl mx-auto leading-relaxed">
-            الصفقة تمر داخل الموقع عبر ستة وكلاء مترابطين: خبر، تحقق، زخم، شارت، مراقبة، ثم ادارة مخاطر قبل ظهور القرار النهائي.
+            {t("agents.subtitle")}
           </p>
         </motion.div>
 
@@ -109,7 +129,7 @@ export default function AIAgentsWorkflow() {
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <div>
                       <div className="text-[#666666] text-[10px] uppercase tracking-wider mb-1">Agent {agent.id}</div>
-                      <h3 className="text-white font-semibold text-base leading-tight">{agent.name}</h3>
+                      <h3 className="text-white font-semibold text-base leading-tight">{agent.name[language]}</h3>
                     </div>
                     <RobotAvatar color={agent.color} index={index} />
                   </div>
@@ -134,7 +154,7 @@ export default function AIAgentsWorkflow() {
                     </div>
                   </div>
 
-                  <p className="text-[#777777] text-xs leading-relaxed">{agent.role}</p>
+                  <p className="text-[#777777] text-xs leading-relaxed">{agent.role[language]}</p>
 
                   {index < agents.length - 1 && (
                     <motion.div
@@ -142,7 +162,7 @@ export default function AIAgentsWorkflow() {
                       animate={{ x: [0, 4, 0], opacity: [0.4, 1, 0.4] }}
                       transition={{ duration: 1.6, repeat: Infinity, delay: index * 0.12 }}
                     >
-                      next signal
+                      {t("agents.next")}
                     </motion.div>
                   )}
                 </motion.div>
@@ -160,17 +180,10 @@ export default function AIAgentsWorkflow() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Target size={18} className="text-[#d4a843]" />
-                <h3 className="text-white font-semibold">حركة الصفقة داخل النظام</h3>
+                <h3 className="text-white font-semibold">{t("agents.flowTitle")}</h3>
               </div>
               <div className="space-y-3">
-                {[
-                  "الاخبار تدخل الى الوكيل الاول ويتحدد تأثيرها.",
-                  "الوكيل الثاني يفلتر الخبر ويمنع القرارات الضعيفة.",
-                  "الزخم والاوردرات تضيف قوة السوق الحقيقية.",
-                  "الشارت يحدد الاصل، الدخول، الستوب، والاهداف.",
-                  "المراقب يفحص اتصال الوكلاء ويكشف الاخطاء.",
-                  "وكيل المخاطر يعطي القرار النهائي القابل للتنفيذ.",
-                ].map((step, index) => (
+                {steps.map((step, index) => (
                   <motion.div
                     key={step}
                     className="flex gap-3 rounded-xl border border-[#1f1f1f] bg-[#0a0a0a] px-3 py-3"
@@ -188,8 +201,8 @@ export default function AIAgentsWorkflow() {
 
             <div className="mt-5 rounded-xl border border-[#22c55e]/25 bg-[#22c55e]/5 p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#a0a0a0] text-xs">Network status</span>
-                <span className="text-[#22c55e] text-xs font-bold">All agents linked</span>
+                <span className="text-[#a0a0a0] text-xs">{t("agents.statusLabel")}</span>
+                <span className="text-[#22c55e] text-xs font-bold">{t("agents.statusValue")}</span>
               </div>
               <div className="h-1.5 bg-[#141414] rounded-full overflow-hidden">
                 <motion.div

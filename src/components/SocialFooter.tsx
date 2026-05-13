@@ -1,5 +1,6 @@
 // ─── Social Footer — Links to Facebook, YouTube, Instagram, Telegram ───
 import { Facebook, Youtube, Instagram, Send, ExternalLink } from "lucide-react"
+import { useLanguage } from "@/lib/language"
 
 const socialLinks = [
   {
@@ -37,13 +38,14 @@ const socialLinks = [
 ]
 
 export default function SocialFooter() {
+  const { t } = useLanguage()
   return (
     <div className="bg-[#0d0d0d] border-t border-[#1f1f1f]">
       {/* Newsletter Section */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 border-b border-[#1f1f1f]">
         <div className="text-center mb-4">
-          <h3 className="text-sm sm:text-base font-bold mb-1">Stay Connected</h3>
-          <p className="text-[10px] sm:text-xs text-[#666666]">Follow us for daily signals, analysis & trading tips</p>
+          <h3 className="text-sm sm:text-base font-bold mb-1">{t("social.title")}</h3>
+          <p className="text-[10px] sm:text-xs text-[#666666]">{t("social.subtitle")}</p>
         </div>
 
         {/* Social Icons */}
@@ -68,27 +70,23 @@ export default function SocialFooter() {
           ))}
         </div>
 
-        {/* Replace URLs notice */}
-        <p className="text-[8px] text-[#444444] text-center mt-4">
-          Replace links in SocialFooter.tsx with your actual social media URLs
-        </p>
       </div>
 
       {/* Bottom Bar */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-[10px] sm:text-xs font-bold">Tradevisor</span>
-          <span className="text-[9px] text-[#666666]">AI-Powered Trading</span>
+          <span className="text-[9px] text-[#666666]">{t("social.powered")}</span>
         </div>
         <div className="flex items-center gap-4">
-          <a href="#/privacy" className="text-[9px] sm:text-[10px] text-[#666666] hover:text-[#d4a843] transition-colors">Privacy</a>
-          <a href="#/terms" className="text-[9px] sm:text-[10px] text-[#666666] hover:text-[#d4a843] transition-colors">Terms</a>
+          <a href="#/privacy" className="text-[9px] sm:text-[10px] text-[#666666] hover:text-[#d4a843] transition-colors">{t("social.privacy")}</a>
+          <a href="#/terms" className="text-[9px] sm:text-[10px] text-[#666666] hover:text-[#d4a843] transition-colors">{t("social.terms")}</a>
           <a href="#/vip" className="text-[9px] sm:text-[10px] text-[#666666] hover:text-[#d4a843] transition-colors flex items-center gap-0.5">
             VIP <ExternalLink size={9} />
           </a>
         </div>
         <span className="text-[8px] sm:text-[9px] text-[#444444]">
-          &copy; {new Date().getFullYear()} Tradevisor. All rights reserved.
+          &copy; {new Date().getFullYear()} Tradevisor. {t("footer.rights")}
         </span>
       </div>
     </div>

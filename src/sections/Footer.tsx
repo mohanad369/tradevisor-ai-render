@@ -1,4 +1,7 @@
+import { useLanguage } from "@/lib/language";
+
 export default function Footer() {
+  const { t } = useLanguage();
   return (
     <footer className="bg-[#050505] border-t border-[#1f1f1f] py-12">
       <div className="max-w-[1200px] mx-auto px-6">
@@ -8,7 +11,7 @@ export default function Footer() {
               TRADEVISOR
             </span>
             <span className="text-[#a0a0a0] text-xs">
-              Premium AI Trading Tools
+              {t("footer.tools")}
             </span>
           </div>
 
@@ -17,14 +20,14 @@ export default function Footer() {
               href="/#/privacy"
               className="text-[#a0a0a0] text-sm hover:text-[#d4a843] transition-colors duration-200"
             >
-              Privacy Policy
+              {t("footer.privacy")}
             </a>
           </div>
         </div>
 
         <div className="text-center">
           <p className="text-[#666666] text-xs">
-            &copy; 2026 Tradevisor. All rights reserved.
+            &copy; 2026 Tradevisor. {t("footer.rights")}
           </p>
         </div>
       </div>

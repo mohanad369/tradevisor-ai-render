@@ -11,6 +11,7 @@ import LivePriceTicker from "@/components/LivePriceTicker";
 import CryptoPaymentModal from "@/components/CryptoPaymentModal";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
+import { useLanguage } from "@/lib/language";
 
 const ANALYSIS_COUNT_KEY = "tradevisor_analysis_count";
 const FREE_LIMIT = 4;
@@ -35,6 +36,7 @@ function getDefaultDecimals(asset: Asset): number {
 
 export default function ChartAnalyzer() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<Asset>(assets[4]);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy>(strategies[1]);
@@ -131,13 +133,12 @@ export default function ChartAnalyzer() {
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.5 }} className="text-center mb-10">
           <div className="flex items-center justify-center gap-2 mb-3">
             <Brain size={20} className="text-[#d4a843]" />
-            <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">AI-Powered Chart Analysis</span>
+            <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">{t("analyzer.eyebrow")}</span>
             <span className="text-[10px] bg-[#d4a843]/20 text-[#d4a843] px-2 py-0.5 rounded-full font-medium">GPT-4o</span>
           </div>
-          <h2 className="text-white text-4xl font-bold mb-3">AI Detects Your Entry, SL & Targets</h2>
+          <h2 className="text-white text-4xl font-bold mb-3">{t("analyzer.title")}</h2>
           <p className="text-[#a0a0a0] text-base max-w-2xl mx-auto">
-            Upload any chart. Our AI reads price action, detects patterns, and automatically
-            generates Entry, Stop Loss, and 3 Take Profit levels with professional risk management.
+            {t("analyzer.subtitle")}
           </p>
         </motion.div>
 
@@ -150,7 +151,7 @@ export default function ChartAnalyzer() {
             <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl px-4 py-3 flex items-center gap-3">
               <DollarSign size={16} className="text-[#d4a843] flex-shrink-0" />
               <label className="text-[#a0a0a0] text-xs whitespace-nowrap">
-                Current Price from Your Chart:
+                {t("analyzer.currentPrice")}
               </label>
               <input
                 type="number"
@@ -173,7 +174,7 @@ export default function ChartAnalyzer() {
             {/* Info text */}
             {!manualPrice && (
               <p className="text-[#666666] text-[11px] pl-1">
-                Tip: Enter the exact price shown on your chart above for 100% accurate alignment. Leaving empty uses the live market price.
+                {t("analyzer.tipPrice")}
               </p>
             )}
           </motion.div>
@@ -210,7 +211,7 @@ export default function ChartAnalyzer() {
           </div>
           {/* Timeframes */}
           <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-[#1f1f1f]">
-            <span className="text-[#666666] text-xs mr-1">Timeframe:</span>
+            <span className="text-[#666666] text-xs mr-1">{t("analyzer.timeframe")}</span>
             {selectedStrategy.timeframes.map((tf) => (
               <button key={tf} onClick={() => { setSelectedTimeframe(tf); setResult(null); }} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${selectedTimeframe === tf ? "bg-[#d4a843]/15 text-[#d4a843] border border-[#d4a843]/30" : "bg-transparent text-[#666666] border border-transparent hover:text-[#a0a0a0]"}`}>
                 {tf}
@@ -233,8 +234,8 @@ export default function ChartAnalyzer() {
                     <Zap size={16} className="text-[#d4a843]" />
                     <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">Powered by GPT-4o Vision</span>
                   </div>
-                  <p className="text-white font-semibold text-lg mb-1">AI Analyzing Your Chart...</p>
-                  <p className="text-[#666666] text-sm mb-1">Reading price action &bull; Detecting patterns &bull; Calculating levels</p>
+                  <p className="text-white font-semibold text-lg mb-1">{t("analyzer.analyzing")}</p>
+                  <p className="text-[#666666] text-sm mb-1">{t("analyzer.analyzingSteps")}</p>
                   <p className="text-[#666666] text-xs">{selectedAsset.name} &bull; {selectedStrategy.name} &bull; {selectedTimeframe}</p>
                   <div className="mt-5 w-56 h-1 bg-[#1f1f1f] rounded-full overflow-hidden">
                     <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 2, ease: "easeInOut" }} className="h-full bg-[#d4a843] rounded-full" />
@@ -266,27 +267,27 @@ export default function ChartAnalyzer() {
               {uploadedImage && !result && !isAnalyzing && analysisCount < FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full bg-[#d4a843] text-[#050505] font-semibold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#e8c76a] hover:scale-[1.01] transition-all duration-200">
                   <Sparkles size={18} />
-                  Analyze Chart with AI &mdash; Auto Detect Entry/SL/TP
+                  {t("analyzer.analyze")}
                 </motion.button>
               )}
               {uploadedImage && !result && !isAnalyzing && analysisCount >= FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse">
                   <Lock size={18} />
-                  Unlock Unlimited Analysis &mdash; Subscribe to VIP
+                  {t("analyzer.unlock")}
                   <Crown size={16} />
                 </motion.button>
               )}
               {result && analysisCount < FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full border border-[#1f1f1f] text-[#a0a0a0] font-semibold py-4 rounded-xl flex items-center justify-center gap-2 hover:border-[#d4a843] hover:text-white transition-all duration-200">
                   <Brain size={18} />
-                  Re-Analyze with AI
+                  {t("analyzer.reanalyze")}
                   <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{FREE_LIMIT - analysisCount} left</span>
                 </motion.button>
               )}
               {result && analysisCount >= FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse">
                   <Lock size={18} />
-                  Unlock Unlimited Analysis &mdash; Subscribe to VIP
+                  {t("analyzer.unlock")}
                   <Crown size={16} />
                 </motion.button>
               )}
@@ -313,12 +314,10 @@ export default function ChartAnalyzer() {
                     <Brain size={28} className="text-[#d4a843]/40" />
                   </div>
                   <p className="text-white font-medium text-lg mb-2">
-                    {uploadedImage ? "Ready for AI Analysis" : "Upload Your Chart"}
+                    {uploadedImage ? t("analyzer.readyTitle") : t("analyzer.uploadTitle")}
                   </p>
                   <p className="text-[#666666] text-sm max-w-xs leading-relaxed mb-4">
-                    {uploadedImage
-                      ? "Click 'Analyze Chart with AI' and our AI will automatically detect Entry, Stop Loss, and Take Profit levels."
-                      : "Upload a chart screenshot for professional AI technical analysis with auto-detected price levels."}
+                    {uploadedImage ? t("analyzer.readyText") : t("analyzer.uploadText")}
                   </p>
                   {uploadedImage && (
                     <div className="flex items-center gap-2 text-[#d4a843] text-xs">

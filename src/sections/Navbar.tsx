@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Flame, Crown, Menu, X } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useLanguage } from "@/lib/language";
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 20);
@@ -14,12 +16,12 @@ export default function Navbar() {
   }, []);
 
   const links = [
-    { label: "AI Agents", sectionId: "ai-agents" },
-    { label: "Analyzer", sectionId: "analyzer" },
-    { label: "Wins", sectionId: "wins" },
-    { label: "Features", sectionId: "features" },
-    { label: "Testimonials", sectionId: "testimonials" },
-    { label: "Pricing", sectionId: "pricing" },
+    { label: t("nav.aiAgents"), sectionId: "ai-agents" },
+    { label: t("nav.analyzer"), sectionId: "analyzer" },
+    { label: t("nav.wins"), sectionId: "wins" },
+    { label: t("nav.features"), sectionId: "features" },
+    { label: t("nav.testimonials"), sectionId: "testimonials" },
+    { label: t("nav.pricing"), sectionId: "pricing" },
   ];
 
   const scrollToSection = (id: string) => {
@@ -62,7 +64,7 @@ export default function Navbar() {
         {/* Logo */}
         <div className="flex flex-col cursor-pointer" onClick={() => { setMobileMenuOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
           <span className="text-white font-bold text-xs sm:text-sm tracking-[0.1em] uppercase">TRADEVISOR</span>
-          <span className="text-[#a0a0a0] text-[9px] sm:text-[10px]">Smart Trading Insights</span>
+          <span className="text-[#a0a0a0] text-[9px] sm:text-[10px]">{t("nav.subtitle")}</span>
         </div>
 
         {/* Desktop Links */}
@@ -80,14 +82,14 @@ export default function Navbar() {
           {/* Candle AI - desktop */}
           <button onClick={() => navigate("/candles")}
             className="hidden md:flex items-center gap-1.5 text-[#d4a843] hover:text-[#e8c76a] text-xs border border-[#d4a843]/20 px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/40 bg-transparent transition-colors">
-            <Flame size={12} /> Candle AI
+            <Flame size={12} /> {t("nav.candle")}
           </button>
 
           {/* VIP button - VISIBLE on ALL screens */}
           <button onClick={() => navigate("/vip")}
             className="flex items-center gap-1 text-[#d4a843] hover:text-[#e8c76a] text-[10px] sm:text-xs border border-[#d4a843]/30 px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/60 hover:bg-[#d4a843]/5 bg-transparent transition-colors">
             <Crown size={11} className="sm:hidden" /><Crown size={12} className="hidden sm:block" />
-            <span className="font-semibold">VIP</span>
+            <span className="font-semibold">{t("nav.vip")}</span>
           </button>
 
           {/* Mobile hamburger */}

@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { trpc } from '@/lib/trpc'
 import { trpcClient, queryClient } from '@/lib/trpcClient'
+import { LanguageProvider } from '@/lib/language'
 import './index.css'
 
 import App from './App.tsx'
@@ -27,9 +28,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <RouterProvider router={router} />
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
+        </LanguageProvider>
       </QueryClientProvider>
     </trpc.Provider>
   </StrictMode>,

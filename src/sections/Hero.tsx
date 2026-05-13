@@ -5,6 +5,7 @@ import {
   Radio, ArrowUpRight, ArrowDownRight,
   BarChart3, Eye, Compass, Lightbulb, Menu, Target
 } from "lucide-react"
+import { useLanguage } from "@/lib/language"
 
 /* ═══════════════════════════════════════════
    LIVING HERO - Pulsing, breathing, alive
@@ -137,6 +138,7 @@ function LivingParticles() {
    ═══════════════════════════════════════════ */
 
 function ProfitHeader() {
+  const { t } = useLanguage()
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4">
@@ -144,7 +146,7 @@ function ProfitHeader() {
       <motion.div initial={{ opacity: 0, y: -15 }} animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-start mb-6">
         <div>
-          <p className="text-[10px] text-[#666666] uppercase tracking-wider mb-1">Total Profits</p>
+          <p className="text-[10px] text-[#666666] uppercase tracking-wider mb-1">{t("hero.totalProfits")}</p>
           <motion.div className="text-3xl sm:text-4xl font-black text-[#d4a843]"
             animate={{ textShadow: ["0 0 10px rgba(212,168,67,0.3)", "0 0 25px rgba(212,168,67,0.5)", "0 0 10px rgba(212,168,67,0.3)"] }}
             transition={{ duration: 2, repeat: Infinity }}>
@@ -152,14 +154,14 @@ function ProfitHeader() {
           </motion.div>
           <div className="flex items-center gap-1 mt-1">
             <ArrowUpRight size={10} className="text-[#22c55e]" />
-            <span className="text-[10px] text-[#22c55e]">+$12,700 today</span>
+            <span className="text-[10px] text-[#22c55e]">{t("hero.todayProfit")}</span>
           </div>
         </div>
 
         <motion.div className="bg-[#0a0a0a]/80 backdrop-blur border border-[#22c55e]/20 rounded-2xl px-5 py-3 text-center"
           animate={{ borderColor: ["rgba(34,197,94,0.2)", "rgba(34,197,94,0.5)", "rgba(34,197,94,0.2)"] }}
           transition={{ duration: 3, repeat: Infinity }}>
-          <p className="text-[9px] text-[#666666] uppercase tracking-wider">Win Rate</p>
+          <p className="text-[9px] text-[#666666] uppercase tracking-wider">{t("hero.winRate")}</p>
           <motion.p className="text-2xl font-black text-[#22c55e]"
             animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity }}>
             78%
@@ -367,11 +369,12 @@ function LiveChart() {
    ═══════════════════════════════════════════ */
 
 function StatsGrid() {
+  const { t } = useLanguage()
   const stats = [
-    { label: "Active Signals", value: "12", icon: Radio, color: "#d4a843", sub: "+3 this hour" },
-    { label: "Win Rate", value: "78%", icon: Target, color: "#22c55e", sub: "Last 30 days" },
-    { label: "Profit Today", value: "$12.7K", icon: TrendingUp, color: "#22c55e", sub: "+8.4%" },
-    { label: "Assets", value: "6", icon: Globe, color: "#3b82f6", sub: "XAU, EUR, BTC..." },
+    { label: t("hero.activeSignals"), value: "12", icon: Radio, color: "#d4a843", sub: t("hero.thisHour") },
+    { label: t("hero.winRate"), value: "78%", icon: Target, color: "#22c55e", sub: t("hero.last30") },
+    { label: t("hero.profitToday"), value: "$12.7K", icon: TrendingUp, color: "#22c55e", sub: "+8.4%" },
+    { label: t("hero.assets"), value: "6", icon: Globe, color: "#3b82f6", sub: t("hero.assetsList") },
   ]
 
   return (
@@ -402,13 +405,14 @@ function StatsGrid() {
    ═══════════════════════════════════════════ */
 
 function SignalsFeed() {
+  const { t } = useLanguage()
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 mb-6">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold flex items-center gap-1.5">
-          <Radio size={12} className="text-[#d4a843]" /> Live Signals
+          <Radio size={12} className="text-[#d4a843]" /> {t("hero.liveSignals")}
         </h2>
-        <span className="text-[8px] text-[#666666]">Real-time</span>
+        <span className="text-[8px] text-[#666666]">{t("hero.realTime")}</span>
       </div>
 
       <div className="space-y-2">
@@ -458,11 +462,12 @@ function SignalsFeed() {
    ═══════════════════════════════════════════ */
 
 function AssetsGrid() {
+  const { t } = useLanguage()
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 mb-8">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold flex items-center gap-1.5">
-          <Globe size={12} className="text-[#d4a843]" /> Trading Assets
+          <Globe size={12} className="text-[#d4a843]" /> {t("hero.tradingAssets")}
         </h2>
       </div>
 

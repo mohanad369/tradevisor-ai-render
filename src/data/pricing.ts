@@ -1,52 +1,54 @@
+import type { LocalizedText } from "./features";
+
 export interface PricingPlan {
-  name: string;
+  name: LocalizedText;
   originalPrice: string;
   salePrice: string;
   discount: string;
-  period: string;
-  features: string[];
-  cta: string;
+  period: LocalizedText;
+  features: LocalizedText[];
+  cta: LocalizedText;
   premium?: boolean;
 }
 
 export const pricingPlans: PricingPlan[] = [
   {
-    name: "TradeVisor Monthly",
+    name: { en: "TradeVisor Monthly", ar: "تريدفايزر شهري" },
     originalPrice: "$99",
     salePrice: "$69",
     discount: "30% OFF",
-    period: "Monthly subscription • Cancel anytime",
+    period: { en: "Monthly subscription - Cancel anytime", ar: "اشتراك شهري - إلغاء في أي وقت" },
     features: [
-      "AI-powered BUY & SELL signals",
-      "Advanced AI-powered market analysis",
-      "TradingView premium indicator integration",
-      "Multi-timeframe market analysis",
-      "24/7 automated market monitoring",
-      "Risk management & stop-loss alerts",
-      "Custom indicator settings & optimization",
-      "Mobile & desktop notifications",
+      { en: "AI-powered BUY & SELL signals", ar: "إشارات شراء وبيع بالذكاء الاصطناعي" },
+      { en: "Advanced AI-powered market analysis", ar: "تحليل سوق متقدم بالذكاء الاصطناعي" },
+      { en: "TradingView premium indicator integration", ar: "تكامل مؤشرات TradingView المميزة" },
+      { en: "Multi-timeframe market analysis", ar: "تحليل السوق على عدة أطر زمنية" },
+      { en: "24/7 automated market monitoring", ar: "مراقبة آلية للسوق 24/7" },
+      { en: "Risk management & stop-loss alerts", ar: "إدارة مخاطر وتنبيهات وقف الخسارة" },
+      { en: "Custom indicator settings & optimization", ar: "إعدادات مؤشرات مخصصة وتحسينها" },
+      { en: "Mobile & desktop notifications", ar: "تنبيهات للموبايل والكمبيوتر" },
     ],
-    cta: "Get Monthly Access",
+    cta: { en: "Get Monthly Access", ar: "احصل على الوصول الشهري" },
   },
   {
-    name: "TradeVisor Yearly",
+    name: { en: "TradeVisor Yearly", ar: "تريدفايزر سنوي" },
     originalPrice: "$1,200",
     salePrice: "$669",
     discount: "44% OFF",
-    period: "Yearly subscription • Save $531",
+    period: { en: "Yearly subscription - Save $531", ar: "اشتراك سنوي - وفر $531" },
     features: [
-      "AI-powered BUY & SELL signals",
-      "Advanced AI-powered market analysis",
-      "TradingView premium indicator integration",
-      "Multi-timeframe market analysis",
-      "24/7 automated market monitoring",
-      "Risk management & stop-loss alerts",
-      "Custom indicator settings & optimization",
-      "Mobile & desktop notifications",
-      "Priority VIP support",
-      "Exclusive market insights",
+      { en: "AI-powered BUY & SELL signals", ar: "إشارات شراء وبيع بالذكاء الاصطناعي" },
+      { en: "Advanced AI-powered market analysis", ar: "تحليل سوق متقدم بالذكاء الاصطناعي" },
+      { en: "TradingView premium indicator integration", ar: "تكامل مؤشرات TradingView المميزة" },
+      { en: "Multi-timeframe market analysis", ar: "تحليل السوق على عدة أطر زمنية" },
+      { en: "24/7 automated market monitoring", ar: "مراقبة آلية للسوق 24/7" },
+      { en: "Risk management & stop-loss alerts", ar: "إدارة مخاطر وتنبيهات وقف الخسارة" },
+      { en: "Custom indicator settings & optimization", ar: "إعدادات مؤشرات مخصصة وتحسينها" },
+      { en: "Mobile & desktop notifications", ar: "تنبيهات للموبايل والكمبيوتر" },
+      { en: "Priority VIP support", ar: "دعم VIP أولوية" },
+      { en: "Exclusive market insights", ar: "رؤى سوق حصرية" },
     ],
-    cta: "Get Yearly Access",
+    cta: { en: "Get Yearly Access", ar: "احصل على الوصول السنوي" },
     premium: true,
   },
 ];

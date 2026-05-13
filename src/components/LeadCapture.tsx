@@ -2,6 +2,7 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { Mail, CheckCircle, Zap, ArrowRight } from "lucide-react"
+import { useLanguage } from "@/lib/language"
 
 interface Props {
   variant?: "inline" | "card"
@@ -11,6 +12,7 @@ export default function LeadCapture({ variant = "card" }: Props) {
   const [email, setEmail] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { t } = useLanguage()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,7 +44,7 @@ export default function LeadCapture({ variant = "card" }: Props) {
           disabled={loading || submitted}
           className="px-3 py-2 bg-[#d4a843] text-[#050505] text-xs font-bold rounded-lg hover:bg-[#e8c76a] transition-all disabled:opacity-50 flex-shrink-0"
         >
-          {submitted ? <CheckCircle size={14} /> : loading ? "..." : "Join"}
+          {submitted ? <CheckCircle size={14} /> : loading ? "..." : t("lead.join")}
         </button>
       </form>
     )
@@ -62,12 +64,12 @@ export default function LeadCapture({ variant = "card" }: Props) {
           <div className="w-8 h-8 rounded-lg bg-[#d4a843]/10 flex items-center justify-center">
             <Zap size={16} className="text-[#d4a843]" />
           </div>
-          <span className="text-xs font-bold text-[#d4a843]">VIP Early Access</span>
+          <span className="text-xs font-bold text-[#d4a843]">{t("lead.badge")}</span>
         </div>
 
-        <h3 className="text-sm sm:text-base font-bold mb-1">Get Trading Signals First</h3>
+        <h3 className="text-sm sm:text-base font-bold mb-1">{t("lead.title")}</h3>
         <p className="text-[10px] sm:text-xs text-[#a0a0a0] mb-4 leading-relaxed">
-          Join our exclusive list and receive AI-powered trading signals, market analysis, and early access to new features.
+          {t("lead.subtitle")}
         </p>
 
         {!submitted ? (
@@ -78,7 +80,7 @@ export default function LeadCapture({ variant = "card" }: Props) {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="Enter your email..."
+                placeholder={t("lead.placeholder")}
                 required
                 className="w-full bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl pl-9 pr-4 py-3 text-xs text-white placeholder-[#555] focus:border-[#d4a843] focus:outline-none"
               />
@@ -88,19 +90,19 @@ export default function LeadCapture({ variant = "card" }: Props) {
               disabled={loading}
               className="bg-[#d4a843] text-[#050505] font-bold py-3 px-5 rounded-xl hover:bg-[#e8c76a] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs flex-shrink-0"
             >
-              {loading ? "Joining..." : <><span>Join Now</span><ArrowRight size={12} /></>}
+              {loading ? t("lead.joining") : <><span>{t("lead.join")}</span><ArrowRight size={12} /></>}
             </button>
           </form>
         ) : (
           <div className="bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-xl p-4 text-center">
             <CheckCircle size={20} className="text-[#22c55e] mx-auto mb-1" />
-            <p className="text-xs text-[#22c55e] font-bold">You're on the list!</p>
-            <p className="text-[10px] text-[#a0a0a0] mt-0.5">Check your email for confirmation.</p>
+            <p className="text-xs text-[#22c55e] font-bold">{t("lead.done")}</p>
+            <p className="text-[10px] text-[#a0a0a0] mt-0.5">{t("lead.doneText")}</p>
           </div>
         )}
 
         <p className="text-[8px] text-[#666666] mt-3 text-center">
-          No spam. Unsubscribe anytime. Your data is protected.
+          {t("lead.noSpam")}
         </p>
       </div>
     </motion.div>

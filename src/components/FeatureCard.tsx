@@ -9,8 +9,6 @@ import {
   Check,
   Sparkles,
 } from "lucide-react";
-import type { FeatureData } from "@/data/features";
-
 const iconMap: Record<string, React.ElementType> = {
   Target,
   Zap,
@@ -20,7 +18,15 @@ const iconMap: Record<string, React.ElementType> = {
   Globe,
 };
 
-export default function FeatureCard({ data }: { data: FeatureData }) {
+type FeatureCardData = {
+  icon: string;
+  title: string;
+  description: string;
+  bullets: string[];
+  footer: string;
+};
+
+export default function FeatureCard({ data }: { data: FeatureCardData }) {
   const Icon = iconMap[data.icon] || Target;
 
   return (

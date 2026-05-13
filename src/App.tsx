@@ -15,6 +15,7 @@ import Testimonials from './sections/Testimonials'
 import LeadCapture from './components/LeadCapture'
 import SocialFooter from './components/SocialFooter'
 import Jarvis from './components/Jarvis'
+import LanguageToggle from './components/LanguageToggle'
 import { initFacebookPixel, initGoogleAnalytics, trackPageView } from './lib/analytics'
 import { initDefaultMeta, setPageMeta } from './components/SEOMeta'
 
@@ -74,6 +75,7 @@ export default function App() {
       <Footer />
       {/* Social Media Footer with Facebook, YouTube, Instagram, Telegram */}
       <SocialFooter />
+      <LanguageToggle />
       <Jarvis />
       <SpringSalePopup />
       <SupportChatWidget />

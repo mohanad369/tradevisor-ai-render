@@ -4,20 +4,22 @@ import ScrollReveal from "@/components/ScrollReveal";
 import TestimonialCard from "@/components/TestimonialCard";
 import LivePulse from "@/components/LivePulse";
 import { testimonialsData } from "@/data/testimonials";
+import { useLanguage } from "@/lib/language";
 
 export default function Testimonials() {
+  const { t } = useLanguage();
   return (
     <section id="testimonials" className="bg-[#050505] py-24">
       <div className="max-w-[1200px] mx-auto px-6">
         <ScrollReveal>
           <span className="text-[#666666] text-xs font-mono uppercase tracking-wider block mb-2">
-            CUSTOMER_TESTIMONIALS
+            {t("testimonials.kicker")}
           </span>
         </ScrollReveal>
 
         <ScrollReveal delay={0.1}>
           <h2 className="text-white text-4xl font-bold mb-4">
-            Real results from real community members
+            {t("testimonials.title")}
           </h2>
         </ScrollReveal>
 
@@ -25,11 +27,11 @@ export default function Testimonials() {
           <div className="flex items-center gap-4 mb-12">
             <div className="flex items-center gap-1 bg-[#0d0d0d] border border-[#1f1f1f] rounded-full px-3 py-1.5">
               <Star size={14} className="text-[#d4a843] fill-[#d4a843]" />
-              <span className="text-white text-sm font-medium">5.0 on Whop</span>
+              <span className="text-white text-sm font-medium">{t("testimonials.rating")}</span>
             </div>
             <div className="flex items-center gap-2">
               <LivePulse size={6} />
-              <span className="text-[#22c55e] text-sm">Live community results</span>
+              <span className="text-[#22c55e] text-sm">{t("testimonials.live")}</span>
             </div>
           </div>
         </ScrollReveal>
