@@ -37,6 +37,7 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
     }
     const pendingData = {
       orderId, plan: selectedPlan, amount: selectedAmount, email, txId,
+      screenshot: screenshot || "",
       status: "PENDING", submittedAt: new Date().toISOString()
     }
     const existing = JSON.parse(localStorage.getItem("tradevisor_pending_users") || "[]")

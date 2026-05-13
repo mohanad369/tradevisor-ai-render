@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   Shield, LogOut, Users, BarChart3, Settings, CreditCard, CheckCircle, XCircle,
   Mail, Key, Ban, RefreshCw, Copy, ChevronDown, ChevronUp, Trash2, Menu, X,
-  TrendingUp, Clock, Gift, Crown
+  TrendingUp, Clock, Gift, Crown, ImageIcon, ExternalLink
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { trpc } from '@/lib/trpc'
@@ -32,6 +32,45 @@ function checkTrpcError(err: any) {
     return true
   }
   return false
+}
+
+function PaymentProof({ screenshot }: { screenshot?: string }) {
+  if (!screenshot) {
+    return (
+      <div className="bg-[#141414] rounded-lg p-3 col-span-2 border border-[#1f1f1f]">
+        <div className="flex items-center gap-2 text-[#666666] text-xs">
+          <ImageIcon size={14} />
+          No payment screenshot attached
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-[#141414] rounded-lg p-3 col-span-2 border border-[#d4a843]/20">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 text-[#d4a843] text-xs font-bold">
+          <ImageIcon size={14} />
+          Payment Screenshot
+        </div>
+        <a
+          href={screenshot}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-[#f2a900] hover:text-white flex items-center gap-1 transition-colors"
+        >
+          Open full size <ExternalLink size={11} />
+        </a>
+      </div>
+      <a href={screenshot} target="_blank" rel="noopener noreferrer" className="block">
+        <img
+          src={screenshot}
+          alt="Payment proof"
+          className="w-full max-h-64 object-contain rounded-lg border border-[#1f1f1f] bg-black"
+        />
+      </a>
+    </div>
+  )
 }
 
 export default function Admin() {
@@ -243,6 +282,7 @@ export default function Admin() {
         amount: p.amount,
         email: p.email,
         txId: p.txId,
+        screenshot: p.screenshot || "",
         status: p.status,
         submittedAt: p.submittedAt ? new Date(p.submittedAt).toISOString() : new Date().toISOString(),
         assignedCode: p.assignedCode,
@@ -708,6 +748,7 @@ export default function Admin() {
                         <div className="bg-[#141414] rounded-lg p-2 col-span-2">
                           <span className="text-[#666666]">TXID: </span><span className="text-[#f2a900] font-mono text-[10px] break-all">{user.txId}</span>
                         </div>
+                        <PaymentProof screenshot={user.screenshot} />
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => handleApprove(user.orderId)} className="flex-1 bg-[#22c55e] text-white text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-1.5 hover:bg-[#2dd46a] transition-all">
