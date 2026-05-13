@@ -14,6 +14,7 @@ export default function Navbar() {
   }, []);
 
   const links = [
+    { label: "AI Agents", sectionId: "ai-agents" },
     { label: "Analyzer", sectionId: "analyzer" },
     { label: "Wins", sectionId: "wins" },
     { label: "Features", sectionId: "features" },

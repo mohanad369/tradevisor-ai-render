@@ -60,8 +60,8 @@ export default function App() {
       <Navbar />
       <main>
         <Hero />
-        <ChartAnalyzer />
         <AIAgentsWorkflow />
+        <ChartAnalyzer />
         <CommunityWins />
         <Features />
         <Pricing />
