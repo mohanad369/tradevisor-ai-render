@@ -6,6 +6,7 @@ import {
   BarChart3, Eye, Compass, Lightbulb, Menu, Target
 } from "lucide-react"
 import { useLanguage } from "@/lib/language"
+import { fetchMarketQuotes, type MarketQuote } from "@/lib/marketPrices"
 
 /* ═══════════════════════════════════════════
    LIVING HERO - Pulsing, breathing, alive
@@ -28,7 +29,55 @@ const ASSETS = [
   { pair: "US30", price: 38520.00, change: 0.78, dir: "up" as const },
 ]
 
+function applyQuotes<T extends { pair: string; price: number }>(items: T[], quotes: Record<string, MarketQuote>) {
+  return items.map((item) => {
+    const quote = quotes[item.pair]
+    if (!quote) return item
+    return {
+      ...item,
+      price: quote.price,
+      ...("change" in item ? { change: quote.change, dir: quote.change >= 0 ? "up" as const : "down" as const } : {}),
+    }
+  })
+}
+
+function useMarketData() {
+  const [quotes, setQuotes] = useState<Record<string, MarketQuote>>({})
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const nextQuotes = await fetchMarketQuotes()
+        if (!mounted || Object.keys(nextQuotes).length === 0) return
+        setQuotes(nextQuotes)
+        setUpdatedAt(Date.now())
+      } catch (error) {
+        console.warn("[Market] Live price update failed:", error)
+      }
+    }
+
+    load()
+    const interval = window.setInterval(load, 60_000)
+
+    return () => {
+      mounted = false
+      window.clearInterval(interval)
+    }
+  }, [])
+
+  return {
+    assets: applyQuotes(ASSETS, quotes),
+    signals: applyQuotes(SIGNALS, quotes),
+    updatedAt,
+  }
+}
+
 export default function Hero() {
+  const marketData = useMarketData()
+
   return (
     <section className="relative bg-[#030305] text-white overflow-hidden pt-20 pb-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -38,8 +87,8 @@ export default function Hero() {
         <ProfitHeader />
         <LiveChart />
         <StatsGrid />
-        <SignalsFeed />
-        <AssetsGrid />
+        <SignalsFeed signals={marketData.signals} />
+        <AssetsGrid assets={marketData.assets} updatedAt={marketData.updatedAt} />
       </div>
     </section>
   )
@@ -404,7 +453,7 @@ function StatsGrid() {
    SIGNALS FEED
    ═══════════════════════════════════════════ */
 
-function SignalsFeed() {
+function SignalsFeed({ signals }: { signals: typeof SIGNALS }) {
   const { t } = useLanguage()
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 mb-6">
@@ -416,7 +465,7 @@ function SignalsFeed() {
       </div>
 
       <div className="space-y-2">
-        {SIGNALS.map((sig, i) => (
+        {signals.map((sig, i) => (
           <motion.div key={i} initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 + i * 0.08 }}
             className={`flex items-center justify-between bg-[#0a0a0f]/60 backdrop-blur border rounded-xl px-3 py-2.5 ${
@@ -461,7 +510,7 @@ function SignalsFeed() {
    ASSETS GRID
    ═══════════════════════════════════════════ */
 
-function AssetsGrid() {
+function AssetsGrid({ assets, updatedAt }: { assets: typeof ASSETS; updatedAt: number | null }) {
   const { t } = useLanguage()
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 mb-8">
@@ -469,10 +518,13 @@ function AssetsGrid() {
         <h2 className="text-xs font-bold flex items-center gap-1.5">
           <Globe size={12} className="text-[#d4a843]" /> {t("hero.tradingAssets")}
         </h2>
+        <span className="text-[9px] text-[#666666] font-mono">
+          {updatedAt ? "LIVE API" : "FALLBACK"}
+        </span>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {ASSETS.map((a, i) => (
+        {assets.map((a, i) => (
           <motion.div key={a.pair} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 + i * 0.08 }}
             className="bg-[#0a0a0f]/60 border border-[#1f1f1f] rounded-xl p-3 hover:border-[#d4a843]/15 transition-all group">
