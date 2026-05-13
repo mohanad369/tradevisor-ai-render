@@ -6,6 +6,7 @@ import { inspectAttr } from 'kimi-plugin-inspect-react'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: process.env.GITHUB_PAGES === "true" ? "/tradevisor-ai-render/" : "/",
   plugins: [
     inspectAttr(), react()],
   server: {
