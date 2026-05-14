@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+button[title="Developer Access"],
+a[href="#/developer"],
+a[href="/#/developer"] {
+  display: none !important;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
