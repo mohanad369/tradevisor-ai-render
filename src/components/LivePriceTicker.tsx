@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { fetchMarketQuotes } from "@/lib/marketPrices";
 
 interface GoldPrice {
   price: number;
@@ -36,21 +37,18 @@ export default function LivePriceTicker() {
     }
   }, [goldData]);
 
-  // Client-side fallback if tRPC fails
+  // Client-side live price fallback for static hosting and Android builds.
   useEffect(() => {
-    if (!loading || goldData) return;
-
     let mounted = true;
 
-    async function fetchBinance() {
+    async function fetchGoldQuote() {
       try {
-        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=XAUUSDT");
-        if (!res.ok) return;
-        const data = await res.json();
-        const price = parseFloat(data.lastPrice) || 0;
-        const open = parseFloat(data.openPrice) || price;
-        const change = parseFloat(data.priceChange) || 0;
-        const changePercent = parseFloat(data.priceChangePercent) || 0;
+        const quotes = await fetchMarketQuotes();
+        const quote = quotes["XAU/USD"];
+        if (!quote) return;
+        const price = quote.price || 0;
+        const changePercent = quote.change || 0;
+        const change = price * (changePercent / 100);
 
         if (mounted) {
           setPrices({
@@ -58,8 +56,8 @@ export default function LivePriceTicker() {
               price,
               change,
               changePercent,
-              high: parseFloat(data.highPrice) || price,
-              low: parseFloat(data.lowPrice) || price,
+              high: price + Math.abs(change),
+              low: price - Math.abs(change),
             },
           });
           setLoading(false);
@@ -69,14 +67,14 @@ export default function LivePriceTicker() {
       }
     }
 
-    fetchBinance();
-    const interval = setInterval(fetchBinance, 5000);
+    fetchGoldQuote();
+    const interval = setInterval(fetchGoldQuote, 60_000);
 
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [loading, goldData]);
+  }, []);
 
   const gold = prices.XAU;
   const goldUp = (gold?.changePercent || 0) >= 0;

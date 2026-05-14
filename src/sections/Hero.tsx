@@ -71,8 +71,16 @@ function useMarketData() {
   return {
     assets: applyQuotes(ASSETS, quotes),
     signals: applyQuotes(SIGNALS, quotes),
+    goldPrice: quotes["XAU/USD"]?.price || ASSETS[0].price,
     updatedAt,
   }
+}
+
+function formatGoldPrice(price: number) {
+  return price.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 export default function Hero() {
@@ -85,7 +93,7 @@ export default function Hero() {
       </div>
       <div className="relative z-10">
         <ProfitHeader />
-        <LiveChart />
+        <LiveChart goldPrice={marketData.goldPrice} />
         <StatsGrid />
         <SignalsFeed signals={marketData.signals} />
         <AssetsGrid assets={marketData.assets} updatedAt={marketData.updatedAt} />
@@ -225,7 +233,7 @@ function ProfitHeader() {
    LIVE CANDLESTICK CHART (Canvas)
    ═══════════════════════════════════════════ */
 
-function LiveChart() {
+function LiveChart({ goldPrice }: { goldPrice: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -385,11 +393,16 @@ function LiveChart() {
             <Activity size={12} className="text-[#d4a843]" />
             <span className="text-[10px] text-[#a0a0a0] font-mono">XAU/USD - 5M</span>
           </div>
-          <motion.div className="flex items-center gap-1 bg-[#22c55e]/10 border border-[#22c55e]/30 rounded-full px-2 py-0.5"
-            animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-            <span className="text-[8px] text-[#22c55e] font-bold">LIVE</span>
-          </motion.div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs text-[#d4a843] font-mono font-black">
+              ${formatGoldPrice(goldPrice)}
+            </span>
+            <motion.div className="flex items-center gap-1 bg-[#22c55e]/10 border border-[#22c55e]/30 rounded-full px-2 py-0.5"
+              animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
+              <span className="text-[8px] text-[#22c55e] font-bold">LIVE</span>
+            </motion.div>
+          </div>
         </div>
 
         <canvas ref={canvasRef} style={{ width: "100%", height: 220 }} className="block" />
