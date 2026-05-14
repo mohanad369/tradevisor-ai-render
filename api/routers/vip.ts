@@ -146,6 +146,49 @@ export const vipRouter = createRouter({
       return activateVipFromPayment(payment);
     }),
 
+  recheckPayment: adminQuery
+    .input(z.object({ orderId: z.string() }))
+    .mutation(async ({ input }) => {
+      const [payment] = await db.select().from(vipPayments)
+        .where(eq(vipPayments.orderId, input.orderId));
+
+      if (!payment) return { success: false, autoVerified: false, error: "Payment not found" };
+      if (payment.status !== "PENDING") return { success: false, autoVerified: false, error: "Already processed" };
+
+      const verification = await verifyUsdtTrc20Payment({
+        txId: payment.txId,
+        expectedAmount: payment.amount,
+        expectedRecipient: USDT_TRC20_WALLET,
+      });
+
+      if (!verification.verified) {
+        return {
+          success: true,
+          autoVerified: false,
+          orderId: payment.orderId,
+          reason: verification.reason,
+          retryable: verification.retryable || false,
+        };
+      }
+
+      const activation = await activateVipFromPayment(payment);
+      if (!activation.success) {
+        return {
+          success: false,
+          autoVerified: false,
+          error: activation.error || "Could not activate VIP",
+        };
+      }
+
+      return {
+        success: true,
+        autoVerified: true,
+        orderId: payment.orderId,
+        code: activation.code,
+        email: activation.email,
+      };
+    }),
+
   rejectPayment: adminQuery
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {

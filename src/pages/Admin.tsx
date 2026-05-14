@@ -180,6 +180,20 @@ export default function Admin() {
 
   const [currentApproveOrderId, setCurrentApproveOrderId] = useState("")
 
+  const recheckPaymentMutation = trpc.vip.recheckPayment.useMutation({
+    onSuccess: (data) => {
+      if (!data.success) {
+        showToast(data.error || 'Recheck failed', 'error')
+      } else if (data.autoVerified) {
+        showToast(`TXID verified! Code ${data.code} activated for ${data.email}`, 'success')
+      } else {
+        showToast(`Still pending: ${data.reason || 'TXID not confirmed yet'}`, data.retryable ? 'warning' : 'error')
+      }
+      invalidateAll()
+    },
+    onError: (err) => showToast(err.message, 'error')
+  })
+
   const rejectMutation = trpc.vip.rejectPayment.useMutation({
     onSuccess: () => { showToast('Payment rejected.', 'warning'); invalidateAll() },
     onError: (err) => {
@@ -393,6 +407,14 @@ export default function Admin() {
     setCurrentApproveOrderId(orderId)
     if (!trpcAvailable) { approveLocal(orderId); return }
     approveMutation.mutate({ orderId })
+  }
+
+  const handleRecheckPayment = (orderId: string) => {
+    if (!trpcAvailable) {
+      showToast('Automatic TXID recheck requires the secure server.', 'error')
+      return
+    }
+    recheckPaymentMutation.mutate({ orderId })
   }
   const handleReject = (orderId: string) => {
     if (!confirm('Reject this payment?')) return
@@ -847,6 +869,10 @@ export default function Admin() {
                         <PaymentProof screenshot={user.screenshot} />
                       </div>
                       <div className="flex gap-2">
+                        <button onClick={() => handleRecheckPayment(user.orderId)} disabled={recheckPaymentMutation.isPending}
+                          className="flex-1 bg-[#d4a843] text-[#050505] text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-1.5 hover:bg-[#e8c76a] transition-all disabled:opacity-60">
+                          <RefreshCw size={14} className={recheckPaymentMutation.isPending ? "animate-spin" : ""} /> Recheck TXID
+                        </button>
                         <button onClick={() => handleApprove(user.orderId)} className="flex-1 bg-[#22c55e] text-white text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-1.5 hover:bg-[#2dd46a] transition-all">
                           <CheckCircle size={14} /> Approve
                         </button>
