@@ -8,13 +8,17 @@ services:
     startCommand: npm run start
     healthCheckPath: /api/health
     autoDeploy: true
+    disk:
+      name: tradevisor-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: 20
       - key: DB_DIR
-        value: /tmp/tradevisor-db
+        value: /var/data
       - key: PUBLIC_SITE_ORIGIN
         value: https://tradevisor-ai-render.onrender.com
       - key: PUBLIC_SITE_ORIGIN_WWW
