@@ -4,6 +4,16 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 const ADMIN_PASSWORD_HASH = "0f18e01da6b8904711c136ffdb98322c1a0fce88199b9c34828a567ddf504460";
 const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "");
 
+function getAdminApiOrigin() {
+  if (configuredApiOrigin) return configuredApiOrigin;
+  if (typeof window === "undefined") return "";
+  const host = window.location.hostname;
+  if (host.endsWith(".onrender.com") || host === "localhost" || host === "127.0.0.1") {
+    return window.location.origin;
+  }
+  return "";
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -35,15 +45,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Synchronous check on first render — no useEffect delay
   const token = typeof window !== 'undefined' ? localStorage.getItem("tradevisor_admin_token") : null;
   const session = typeof window !== 'undefined' ? localStorage.getItem("tradevisor_admin_session") : null;
-  const hasAuth = configuredApiOrigin ? Boolean(session && token === ADMIN_PASSWORD_HASH) : token === ADMIN_PASSWORD_HASH;
+  const adminApiOrigin = getAdminApiOrigin();
+  const hasAuth = adminApiOrigin ? Boolean(session && token === ADMIN_PASSWORD_HASH) : token === ADMIN_PASSWORD_HASH;
 
   const [isAuthenticated, setIsAuthenticated] = useState(hasAuth);
   const [isAdmin, setIsAdmin] = useState(hasAuth);
 
   const login = async (password: string): Promise<boolean> => {
-    if (configuredApiOrigin) {
+    const apiOrigin = getAdminApiOrigin();
+    if (apiOrigin) {
       try {
-        const response = await fetch(`${configuredApiOrigin}/api/admin/login`, {
+        const response = await fetch(`${apiOrigin}/api/admin/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password }),
