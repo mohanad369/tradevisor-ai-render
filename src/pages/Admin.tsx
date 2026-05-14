@@ -671,7 +671,10 @@ export default function Admin() {
               <div className="bg-[#0d0d0d] border border-[#d4a843]/20 rounded-xl p-4 mb-6">
                 <div className="flex items-center gap-2 mb-3">
                   <UserPlus size={16} className="text-[#d4a843]" />
-                  <h3 className="text-sm font-bold">Create VIP Code</h3>
+                  <div>
+                    <h3 className="text-sm font-bold">Create VIP Code</h3>
+                    <p className="text-[10px] text-[#666666]">This creates active VIP access immediately. Send the code to the user and tell them to enter it in VIP Access Code, not payment.</p>
+                  </div>
                 </div>
                 <form onSubmit={handleGrantVipGift} className="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-2">
                   <input
@@ -709,6 +712,7 @@ export default function Admin() {
                       <p className="text-[10px] text-[#a0a0a0]">VIP code for {giftResult.email}</p>
                       <code className="text-[#d4a843] text-base font-bold tracking-[0.16em]">{giftResult.code}</code>
                       <p className="text-[10px] text-[#666666]">Expires: {new Date(giftResult.expires).toLocaleDateString()}</p>
+                      <p className="text-[10px] text-[#22c55e] mt-1">User should open /#/vip and paste this in "I Have an Access Code".</p>
                     </div>
                     <button onClick={() => handleCopy(giftResult.code)} className="w-9 h-9 rounded-lg bg-[#1f1f1f] hover:bg-[#2a2a2a] flex items-center justify-center">
                       <Copy size={14} className="text-[#d4a843]" />
