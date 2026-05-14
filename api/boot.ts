@@ -68,6 +68,38 @@ app.post("/api/developer/login", async (c) => {
   }
 });
 
+app.post("/api/developer/grant-vip", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`developer-grant:${ip}`, 12);
+  if (!limit.allowed) return c.json({ error: "Too many VIP code requests", retryAfter: limit.retryAfter }, 429);
+
+  const body = await c.req.json().catch(() => null) as {
+    password?: string;
+    email?: string;
+    months?: number;
+    plan?: string;
+  } | null;
+
+  if (!body?.password || !verifyDeveloperPassword(body.password)) {
+    return c.json({ error: "Invalid developer credentials" }, 401);
+  }
+
+  const email = body.email?.trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return c.json({ error: "Valid friend email is required" }, 400);
+  }
+
+  const months = Math.min(Math.max(Math.floor(body.months || 1), 1), 12);
+  const plan = body.plan?.trim() || `Developer Gift ${months} Month${months === 1 ? "" : "s"}`;
+
+  try {
+    return c.json(await grantVipAccess(email, months, plan));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create VIP code";
+    return c.json({ error: message }, 500);
+  }
+});
+
 app.get("/api/market/quotes", async (c) => {
   const ip = getClientIp(c.req.raw);
   const limit = checkRateLimit(`market:${ip}`, 90);
@@ -187,4 +219,43 @@ async function grantDeveloperAccess() {
   });
 
   return { success: true, email: developerEmail, code, expires: endDate };
+}
+
+async function grantVipAccess(email: string, months: number, plan: string) {
+  const [existing] = await db.select().from(vipSubscribers).where(eq(vipSubscribers.email, email));
+
+  if (existing?.status === "ACTIVE" && existing.endDate && new Date(existing.endDate) > new Date()) {
+    return { success: true, email: existing.email, code: existing.code, expires: existing.endDate, reused: true };
+  }
+
+  let code = existing?.code;
+  if (!code) {
+    const [availableCode] = await db.select().from(vipCodes).where(eq(vipCodes.used, false)).limit(1);
+    if (!availableCode) throw new Error("No VIP codes available");
+    code = availableCode.code;
+    await db.update(vipCodes).set({ used: true, assignedTo: email }).where(eq(vipCodes.id, availableCode.id));
+  }
+
+  if (existing) {
+    await db.delete(vipSubscribers).where(eq(vipSubscribers.subscriberId, existing.subscriberId));
+  }
+
+  const now = new Date();
+  const endDate = new Date(now);
+  endDate.setMonth(endDate.getMonth() + months);
+
+  await db.insert(vipSubscribers).values({
+    subscriberId: `gift_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+    orderId: `DEV-GIFT-${Date.now()}`,
+    email,
+    code,
+    plan,
+    amount: "$0",
+    txId: "DEVELOPER-GIFT",
+    status: "ACTIVE",
+    startDate: now,
+    endDate,
+  });
+
+  return { success: true, email, code, expires: endDate, reused: false };
 }
