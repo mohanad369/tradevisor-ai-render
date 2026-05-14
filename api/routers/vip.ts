@@ -3,9 +3,48 @@ import { eq, and, desc } from "drizzle-orm";
 import { db } from "../../db/db";
 import { vipPayments, vipSubscribers, vipCodes, vipSessions, referrals } from "../../db/schema";
 import { adminQuery, createRouter, publicQuery } from "../middleware";
+import { verifyUsdtTrc20Payment } from "../lib/tron";
 
 function generateUUID(): string {
   return 'sub_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+}
+
+const USDT_TRC20_WALLET = "TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA";
+
+async function activateVipFromPayment(payment: typeof vipPayments.$inferSelect) {
+  const [availableCode] = await db.select().from(vipCodes)
+    .where(eq(vipCodes.used, false))
+    .limit(1);
+
+  if (!availableCode) return { success: false, error: "No codes available" };
+
+  await db.update(vipCodes)
+    .set({ used: true, assignedTo: payment.email })
+    .where(eq(vipCodes.id, availableCode.id));
+
+  const now = new Date();
+  const isYearly = payment.planName.toLowerCase().includes("year");
+  const endDate = new Date();
+  endDate.setMonth(now.getMonth() + (isYearly ? 12 : 1));
+
+  await db.update(vipPayments)
+    .set({ status: "APPROVED", approvedAt: now, assignedCode: availableCode.code })
+    .where(eq(vipPayments.id, payment.id));
+
+  await db.insert(vipSubscribers).values({
+    subscriberId: generateUUID(),
+    orderId: payment.orderId,
+    email: payment.email,
+    code: availableCode.code,
+    plan: payment.planName,
+    amount: payment.amount,
+    txId: payment.txId,
+    status: "ACTIVE",
+    startDate: now,
+    endDate,
+  });
+
+  return { success: true, code: availableCode.code, email: payment.email };
 }
 
 export const vipRouter = createRouter({
@@ -21,17 +60,59 @@ export const vipRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       try {
+        const normalizedTxId = input.txId.trim();
+        const existingTx = await db.select().from(vipPayments)
+          .where(eq(vipPayments.txId, normalizedTxId))
+          .limit(1);
+
+        if (existingTx.length > 0) {
+          return {
+            success: false,
+            autoVerified: false,
+            error: "This TXID was already submitted. Do not send again.",
+          };
+        }
+
         await db.insert(vipPayments).values({
           orderId: input.orderId,
           planName: input.planName,
           amount: input.amount,
           email: input.email,
-          txId: input.txId,
+          txId: normalizedTxId,
           status: "PENDING",
           screenshot: input.screenshot || "",
         });
+
+        const [payment] = await db.select().from(vipPayments)
+          .where(eq(vipPayments.orderId, input.orderId));
+
+        const verification = await verifyUsdtTrc20Payment({
+          txId: normalizedTxId,
+          expectedAmount: input.amount,
+          expectedRecipient: USDT_TRC20_WALLET,
+        });
+
+        if (payment && verification.verified) {
+          const activation = await activateVipFromPayment(payment);
+          if (activation.success) {
+            console.log(`[vip.submitPayment] Auto-approved order ${input.orderId} for ${input.email}`);
+            return {
+              success: true,
+              orderId: input.orderId,
+              autoVerified: true,
+              code: activation.code,
+              email: activation.email,
+            };
+          }
+        }
+
         console.log(`[vip.submitPayment] Saved order ${input.orderId} for ${input.email}`);
-        return { success: true, orderId: input.orderId };
+        return {
+          success: true,
+          orderId: input.orderId,
+          autoVerified: false,
+          verificationReason: verification.verified ? "Activation code was unavailable" : verification.reason,
+        };
       } catch (err: any) {
         // SQLite UNIQUE constraint => duplicate orderId. Treat as already-submitted.
         if (String(err?.message || "").includes("UNIQUE")) {
@@ -62,39 +143,7 @@ export const vipRouter = createRouter({
       if (!payment) return { success: false, error: "Payment not found" };
       if (payment.status !== "PENDING") return { success: false, error: "Already processed" };
 
-      const [availableCode] = await db.select().from(vipCodes)
-        .where(eq(vipCodes.used, false))
-        .limit(1);
-
-      if (!availableCode) return { success: false, error: "No codes available" };
-
-      await db.update(vipCodes)
-        .set({ used: true, assignedTo: payment.email })
-        .where(eq(vipCodes.id, availableCode.id));
-
-      const now = new Date();
-      const isYearly = payment.planName.toLowerCase().includes("year");
-      const endDate = new Date();
-      endDate.setMonth(now.getMonth() + (isYearly ? 12 : 1));
-
-      await db.update(vipPayments)
-        .set({ status: "APPROVED", approvedAt: now, assignedCode: availableCode.code })
-        .where(eq(vipPayments.id, payment.id));
-
-      await db.insert(vipSubscribers).values({
-        subscriberId: generateUUID(),
-        orderId: payment.orderId,
-        email: payment.email,
-        code: availableCode.code,
-        plan: payment.planName,
-        amount: payment.amount,
-        txId: payment.txId,
-        status: "ACTIVE",
-        startDate: now,
-        endDate,
-      });
-
-      return { success: true, code: availableCode.code, email: payment.email };
+      return activateVipFromPayment(payment);
     }),
 
   rejectPayment: adminQuery

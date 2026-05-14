@@ -26,6 +26,7 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
   const [submitError, setSubmitError] = useState("")
   const [orderId] = useState(() => "TV-" + Math.random().toString(36).substring(2, 10).toUpperCase())
   const [submittedOrderId, setSubmittedOrderId] = useState(orderId)
+  const [activationCode, setActivationCode] = useState("")
 
   // ─── Save to localStorage (works without backend) ───
   const savePaymentLocally = () => {
@@ -49,8 +50,18 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
     onSuccess: (data) => {
       if (data?.success) {
         setSubmittedOrderId(data.orderId || orderId)
-        setStep("pending")
+        if (data.autoVerified && data.code) {
+          setActivationCode(data.code)
+          setStep("success")
+        } else {
+          setStep("pending")
+        }
       } else {
+        if (data?.error) {
+          setSubmitError(data.error)
+          setStep("error")
+          return
+        }
         // Server returned false — fallback to localStorage
         if (!allowUnsafeLocalFallbacks) {
           setSubmitError("Payment server did not accept the request. Please try again.")
@@ -173,7 +184,7 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                 </button>
                 <div className="flex items-center gap-1.5 justify-center mt-4">
                   <Shield size={10} className="text-[#22c55e]" />
-                  <span className="text-[9px] text-[#666666]">Secure payment - Manual verification</span>
+                  <span className="text-[9px] text-[#666666]">Secure payment - Automatic TXID verification</span>
                 </div>
               </div>
             )}
@@ -213,7 +224,7 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
               <div className="p-6">
                 <div className="text-center mb-4">
                   <h3 className="text-lg font-bold text-white">Verify Payment</h3>
-                  <p className="text-[10px] text-[#666666]">Submit proof for manual verification</p>
+                  <p className="text-[10px] text-[#666666]">Paste TXID for automatic blockchain verification</p>
                 </div>
                 <div className="mb-3">
                   <label className="text-[10px] text-[#666666] mb-1 block">Your Email</label>
@@ -246,7 +257,7 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                 <button onClick={handleSubmitPayment} disabled={!email || !txId || submitMutation.isPending}
                   className="w-full bg-gradient-to-r from-[#d4a843] to-[#b8922e] text-[#050505] font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">
                   {submitMutation.isPending ? <Clock size={16} className="animate-spin" /> : <Mail size={16} />}
-                  {submitMutation.isPending ? "Submitting..." : "Submit for Verification"}
+                  {submitMutation.isPending ? "Checking blockchain..." : "Verify TXID"}
                 </button>
                 <button onClick={() => setStep("wallet")} className="w-full mt-2 text-[10px] text-[#666666]">Back</button>
               </div>
@@ -260,7 +271,7 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                   <Clock size={28} className="text-[#d4a843]" />
                 </motion.div>
                 <h3 className="text-lg font-bold text-white mb-2">Pending Admin Approval</h3>
-                <p className="text-[11px] text-[#a0a0a0] mb-4">Your payment is under review. <span className="text-[#d4a843] font-bold">Do NOT send again.</span></p>
+                <p className="text-[11px] text-[#a0a0a0] mb-4">Automatic verification could not confirm this TXID yet. Your proof is saved for admin review. <span className="text-[#d4a843] font-bold">Do NOT send again.</span></p>
                 <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4 text-left mb-4">
                   <p className="text-[9px] text-[#666666] mb-1">Order ID: <span className="text-[#d4a843] font-mono">{submittedOrderId}</span></p>
                   <p className="text-[9px] text-[#666666] mb-1">Amount: <span className="text-white">${selectedAmount} USDT</span></p>
@@ -313,7 +324,20 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                   <CheckCircle size={32} className="text-[#22c55e]" />
                 </motion.div>
                 <h3 className="text-xl font-bold text-white mb-2">Activated!</h3>
-                <p className="text-sm text-[#a0a0a0] mb-4">Welcome to <span className="text-[#d4a843] font-semibold">Tradevisor VIP</span></p>
+                <p className="text-sm text-[#a0a0a0] mb-4">Payment verified on TRC20. Welcome to <span className="text-[#d4a843] font-semibold">Tradevisor VIP</span></p>
+                {activationCode && (
+                  <div className="bg-[#141414] border border-[#22c55e]/25 rounded-xl p-4 text-left mb-4">
+                    <p className="text-[10px] text-[#666666] mb-1">Your VIP Code</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-[#22c55e] text-lg font-black tracking-widest flex-1">{activationCode}</code>
+                      <button onClick={() => handleCopy(activationCode)}
+                        className="p-2 rounded-lg bg-[#1f1f1f] hover:bg-[#333] transition-colors">
+                        {copied ? <CheckCircle size={14} className="text-[#22c55e]" /> : <Copy size={14} className="text-[#a0a0a0]" />}
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-[#666666] mt-2">Use this code on the VIP login page.</p>
+                  </div>
+                )}
                 <button onClick={onClose} className="w-full bg-[#d4a843] text-[#050505] font-bold py-3 rounded-xl hover:bg-[#e8c76a] transition-all">
                   Access VIP Dashboard
                 </button>
