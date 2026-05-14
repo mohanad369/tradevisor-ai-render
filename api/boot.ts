@@ -7,9 +7,12 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { fetchServerMarketQuotes } from "./lib/market";
-import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyPassword } from "./lib/security";
+import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyDeveloperPassword, verifyPassword } from "./lib/security";
 import { env } from "./lib/env";
 import { seedVIPCodes } from "../db/seed";
+import { db } from "../db/db";
+import { vipCodes, vipSubscribers } from "../db/schema";
+import { eq } from "drizzle-orm";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -45,6 +48,24 @@ app.post("/api/admin/login", async (c) => {
   }
 
   return c.json({ token: createAdminSessionToken() });
+});
+
+app.post("/api/developer/login", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`developer-login:${ip}`, 5);
+  if (!limit.allowed) return c.json({ error: "Too many login attempts", retryAfter: limit.retryAfter }, 429);
+
+  const body = await c.req.json().catch(() => null) as { password?: string } | null;
+  if (!body?.password || !verifyDeveloperPassword(body.password)) {
+    return c.json({ error: "Invalid credentials" }, 401);
+  }
+
+  try {
+    return c.json(await grantDeveloperAccess());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to grant developer access";
+    return c.json({ error: message }, 500);
+  }
 });
 
 app.get("/api/market/quotes", async (c) => {
@@ -126,4 +147,44 @@ if (env.IS_PRODUCTION) {
 
 function getClientIp(req: Request) {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+}
+
+async function grantDeveloperAccess() {
+  const developerEmail = "developer@tradevisor.ai";
+  const [existing] = await db.select().from(vipSubscribers).where(eq(vipSubscribers.email, developerEmail));
+
+  if (existing?.status === "ACTIVE" && existing.endDate && new Date(existing.endDate) > new Date()) {
+    return { success: true, email: existing.email, code: existing.code, expires: existing.endDate };
+  }
+
+  let code = existing?.code;
+  if (!code) {
+    const [availableCode] = await db.select().from(vipCodes).where(eq(vipCodes.used, false)).limit(1);
+    if (!availableCode) throw new Error("No VIP codes available");
+    code = availableCode.code;
+    await db.update(vipCodes).set({ used: true, assignedTo: developerEmail }).where(eq(vipCodes.id, availableCode.id));
+  }
+
+  if (existing) {
+    await db.delete(vipSubscribers).where(eq(vipSubscribers.subscriberId, existing.subscriberId));
+  }
+
+  const now = new Date();
+  const endDate = new Date();
+  endDate.setFullYear(now.getFullYear() + 1);
+
+  await db.insert(vipSubscribers).values({
+    subscriberId: `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+    orderId: `DEV-${Date.now()}`,
+    email: developerEmail,
+    code,
+    plan: "Developer Access",
+    amount: "$0",
+    txId: "DEVELOPER-LOGIN",
+    status: "ACTIVE",
+    startDate: now,
+    endDate,
+  });
+
+  return { success: true, email: developerEmail, code, expires: endDate };
 }

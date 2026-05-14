@@ -298,60 +298,6 @@ export const vipRouter = createRouter({
     return await db.select().from(vipSessions).where(eq(vipSessions.active, true)).orderBy(desc(vipSessions.lastSeenAt));
   }),
 
-  // ─── Developer Access — bypass with hardcoded master code ───
-  devAccess: adminQuery
-    .input(z.object({ devCode: z.string() }))
-    .mutation(async ({ input }) => {
-      if (input.devCode !== "TRADEVISOR2024") {
-        return { success: false, error: "Invalid developer code" };
-      }
-      const DEV_EMAIL = "dev@tradevisor.ai";
-      // Check if dev already has active access
-      const [existing] = await db.select().from(vipSubscribers)
-        .where(eq(vipSubscribers.email, DEV_EMAIL));
-
-      if (existing && existing.status === "ACTIVE" && existing.endDate && new Date(existing.endDate) > new Date()) {
-        return { success: true, email: existing.email, code: existing.code, expires: existing.endDate };
-      }
-
-      // Reuse existing code or get a new one
-      let code = existing?.code;
-      if (!code) {
-        const [availableCode] = await db.select().from(vipCodes)
-          .where(eq(vipCodes.used, false))
-          .limit(1);
-        if (!availableCode) return { success: false, error: "No codes available" };
-        code = availableCode.code;
-        await db.update(vipCodes)
-          .set({ used: true, assignedTo: DEV_EMAIL })
-          .where(eq(vipCodes.id, availableCode.id));
-      }
-
-      // Delete old subscriber if exists
-      if (existing) {
-        await db.delete(vipSubscribers).where(eq(vipSubscribers.subscriberId, existing.subscriberId));
-      }
-
-      const now = new Date();
-      const endDate = new Date();
-      endDate.setMonth(now.getMonth() + 12); // Dev gets 1 year
-
-      await db.insert(vipSubscribers).values({
-        subscriberId: generateUUID(),
-        orderId: "DEV-" + Date.now(),
-        email: DEV_EMAIL,
-        code,
-        plan: "Developer (Lifetime)",
-        amount: "$0",
-        txId: "DEV-MODE",
-        status: "ACTIVE",
-        startDate: now,
-        endDate,
-      });
-
-      return { success: true, email: DEV_EMAIL, code, expires: endDate };
-    }),
-
   // ─── Referral / Partner Program ───
 
   submitReferral: publicQuery

@@ -11,6 +11,7 @@ import './index.css'
 import App from './App.tsx'
 import Login from './pages/Login.tsx'
 import Admin from './pages/Admin.tsx'
+import Developer from './pages/Developer.tsx'
 import Privacy from './pages/Privacy.tsx'
 import CandlePredictor from './pages/CandlePredictor.tsx'
 import VIPDashboard from './pages/VIPDashboard.tsx'
@@ -19,6 +20,7 @@ const router = createHashRouter([
   { path: '/', element: <App /> },
   { path: '/login', element: <Login /> },
   { path: '/admin', element: <Admin /> },
+  { path: '/developer', element: <Developer /> },
   { path: '/privacy', element: <Privacy /> },
   { path: '/candles', element: <CandlePredictor /> },
   { path: '/vip', element: <VIPDashboard /> },

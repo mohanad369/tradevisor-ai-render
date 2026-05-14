@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Copy, CheckCircle, Shield, Bitcoin, Clock, AlertTriangle, Mail, Upload, Key, Code, Terminal } from "lucide-react"
+import { X, Copy, CheckCircle, Shield, Bitcoin, Clock, AlertTriangle, Mail, Upload } from "lucide-react"
 import { trpc } from "@/lib/trpc"
 import { trackPaymentSubmit } from "@/lib/analytics"
 import { allowUnsafeLocalFallbacks } from "@/lib/runtime"
@@ -13,19 +13,16 @@ interface Props {
   yearlyAmount?: string
 }
 
-const DEV_CODE = "TRADEVISOR2024"
 const USDT_WALLET = "TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA"
 
 export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, yearlyAmount = "669" }: Props) {
-  const [step, setStep] = useState<"select" | "wallet" | "upload" | "pending" | "success" | "dev" | "error">("select")
+  const [step, setStep] = useState<"select" | "wallet" | "upload" | "pending" | "success" | "error">("select")
   const [selectedAmount, setSelectedAmount] = useState(amount)
   const [selectedPlan, setSelectedPlan] = useState(planName)
   const [copied, setCopied] = useState(false)
   const [email, setEmail] = useState("")
   const [txId, setTxId] = useState("")
   const [screenshot, setScreenshot] = useState<string | null>(null)
-  const [devCode, setDevCode] = useState("")
-  const [devError, setDevError] = useState("")
   const [submitError, setSubmitError] = useState("")
   const [orderId] = useState(() => "TV-" + Math.random().toString(36).substring(2, 10).toUpperCase())
   const [submittedOrderId, setSubmittedOrderId] = useState(orderId)
@@ -110,21 +107,6 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
     })
   }
 
-  const handleDevAccess = () => {
-    if (!allowUnsafeLocalFallbacks) {
-      setDevError("Developer access is disabled in production")
-      return
-    }
-    if (devCode === DEV_CODE) {
-      localStorage.setItem("tradevisor_current_user_email", "developer@tradevisor.ai")
-      localStorage.setItem("tradevisor_current_user_code", "DEV-ACCESS")
-      localStorage.setItem("tradevisor_dev_mode", "true")
-      setStep("success")
-    } else {
-      setDevError("Invalid code")
-    }
-  }
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -193,9 +175,6 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                   <Shield size={10} className="text-[#22c55e]" />
                   <span className="text-[9px] text-[#666666]">Secure payment - Manual verification</span>
                 </div>
-                <button onClick={() => setStep("dev")} className="w-full mt-4 flex items-center justify-center gap-1 text-[8px] text-[#222222] hover:text-[#d4a843]/40 transition-colors bg-transparent border-none cursor-pointer">
-                  <Terminal size={9} /> Developer Access
-                </button>
               </div>
             )}
 
@@ -323,29 +302,6 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                     Close
                   </button>
                 </div>
-              </div>
-            )}
-
-            {/* STEP: Developer */}
-            {step === "dev" && (
-              <div className="p-6">
-                <div className="text-center mb-4">
-                  <div className="w-12 h-12 bg-[#d4a843]/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <Code size={20} className="text-[#d4a843]" />
-                  </div>
-                  <h3 className="text-lg font-bold text-white mb-1">Developer Access</h3>
-                </div>
-                <div className="space-y-3">
-                  <input type="password" placeholder="Enter developer code..." value={devCode}
-                    onChange={e => { setDevCode(e.target.value); setDevError("") }}
-                    onKeyDown={e => e.key === "Enter" && handleDevAccess()}
-                    className="w-full bg-[#141414] border border-[#1f1f1f] rounded-xl px-4 py-3 text-sm text-white placeholder-[#555555] focus:border-[#d4a843]/30 focus:outline-none font-mono text-center tracking-[0.2em]" />
-                  {devError && <p className="text-[10px] text-[#e11d48] flex items-center gap-1"><AlertTriangle size={10} /> {devError}</p>}
-                  <button onClick={handleDevAccess} className="w-full bg-[#d4a843] text-[#050505] font-bold py-3 rounded-xl hover:bg-[#e8c76a] transition-all flex items-center justify-center gap-2">
-                    <Key size={14} /> Unlock
-                  </button>
-                </div>
-                <button onClick={() => setStep("select")} className="w-full mt-3 text-[10px] text-[#666666]">Back</button>
               </div>
             )}
 

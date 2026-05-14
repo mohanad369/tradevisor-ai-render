@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Flame, Crown, Menu, X } from "lucide-react";
+import { Flame, Crown, Menu, X, Code2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useLanguage } from "@/lib/language";
 export default function Navbar() {
@@ -46,6 +46,10 @@ export default function Navbar() {
                 </button>
               ))}
               <div className="flex gap-2 mt-3">
+                <button onClick={() => { setMobileMenuOpen(false); navigate("/developer"); }}
+                  className="flex items-center justify-center text-[#d4a843] text-xs border border-[#d4a843]/20 px-3 py-2.5 rounded-full cursor-pointer">
+                  <Code2 size={12} />
+                </button>
                 <button onClick={() => { setMobileMenuOpen(false); navigate("/candles"); }}
                   className="flex-1 flex items-center justify-center gap-1.5 text-[#d4a843] text-xs border border-[#d4a843]/20 px-3 py-2.5 rounded-full cursor-pointer">
                   <Flame size={12} /> Candle AI
@@ -83,6 +87,11 @@ export default function Navbar() {
           <button onClick={() => navigate("/candles")}
             className="hidden md:flex items-center gap-1.5 text-[#d4a843] hover:text-[#e8c76a] text-xs border border-[#d4a843]/20 px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/40 bg-transparent transition-colors">
             <Flame size={12} /> {t("nav.candle")}
+          </button>
+
+          <button onClick={() => navigate("/developer")} title="Developer Access"
+            className="hidden md:flex items-center justify-center text-[#d4a843] hover:text-[#e8c76a] border border-[#d4a843]/20 w-8 h-8 rounded-full cursor-pointer hover:border-[#d4a843]/40 bg-transparent transition-colors">
+            <Code2 size={13} />
           </button>
 
           {/* VIP button - VISIBLE on ALL screens */}

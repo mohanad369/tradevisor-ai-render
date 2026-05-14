@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Lock, Key, AlertTriangle, Crown, ArrowRight, LogOut,
   Brain, BarChart3, TrendingUp, TrendingDown, Target, Shield,
-  Layers, Activity, Zap, X, Terminal,
+  Layers, Activity, Zap, X,
   Upload, Camera, DollarSign, Sparkles, Loader2, Crosshair, Send,
   Briefcase, Calculator, Building2, Settings,
   ChevronDown, Clock, CheckCircle2, Star, Globe,
@@ -57,10 +57,6 @@ function VIPDashboardInner() {
   const [enteredOTP, setEnteredOTP] = useState("")
   const [otpError, setOtpError] = useState("")
   const [verifying, setVerifying] = useState(false)
-  const [showDev, setShowDev] = useState(false)
-  const [devCode, setDevCode] = useState("")
-  const [devError, setDevError] = useState("")
-  const [devLoading, setDevLoading] = useState(false)
   const [sessionBlocked, setSessionBlocked] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const toast = useToast()
@@ -94,27 +90,7 @@ function VIPDashboardInner() {
     }
   })
 
-  const devMutation = trpc.vip.devAccess.useMutation({
-    onSuccess: (data) => {
-      setDevLoading(false)
-      if (data.success && data.email && data.code) {
-        localStorage.setItem("tradevisor_current_user_email", data.email)
-        localStorage.setItem("tradevisor_current_user_code", data.code)
-        toast.addToast("Developer access granted! Welcome.", "success")
-        setTimeout(() => window.location.reload(), 500)
-      } else {
-        setDevError(data.error || "Invalid code")
-        toast.addToast(data.error || "Invalid developer code", "error")
-      }
-    },
-    onError: (err) => {
-      // tRPC backend not available (static deployment) — fallback to localStorage
-      console.warn("[DevAccess] tRPC failed, using localStorage fallback:", err.message)
-      handleDevFallback()
-    }
-  })
-
-  // ─── Verify code format (8 chars, alphanumeric, 1+ letter, 1+ digit)
+  // Verify code format (8 chars, alphanumeric, 1+ letter, 1+ digit)
   const isValidCodeFormat = (code: string): boolean => {
     if (!code || code.length < 6 || code.length > 12) return false
     const hasLetter = /[A-Z]/.test(code)
@@ -215,59 +191,6 @@ function VIPDashboardInner() {
     loginMutation.mutate({ code: enteredOTP.toUpperCase().trim(), deviceId })
   }
 
-  // ─── Fallback: create dev subscriber in localStorage when tRPC backend is not available
-  const handleDevFallback = () => {
-    setDevLoading(false)
-    if (!allowUnsafeLocalFallbacks) {
-      setDevError("Developer fallback is disabled in production")
-      toast.addToast("Developer fallback is disabled in production.", "error")
-      return
-    }
-    if (devCode.trim() !== "TRADEVISOR2024") {
-      setDevError("Invalid developer code")
-      toast.addToast("Invalid developer code", "error")
-      return
-    }
-    // Generate or reuse dev subscriber
-    const devSub = {
-      id: "DEV_" + Date.now(),
-      subscriberId: "DEV_" + Date.now(),
-      orderId: "DEV-" + Date.now(),
-      email: "dev@tradevisor.ai",
-      code: "TRADEVISOR2024",
-      plan: "Developer (Lifetime)",
-      amount: "$0",
-      txId: "DEV-MODE",
-      status: "ACTIVE" as const,
-      startDate: new Date().toISOString(),
-      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
-    }
-    // Save to localStorage (vipSystem format)
-    const subs = JSON.parse(localStorage.getItem("tv_subscribers_v3") || "[]")
-    // Remove any existing dev entry
-    const cleaned = subs.filter((s: any) => !s.email?.includes("dev@tradevisor"))
-    cleaned.push(devSub)
-    localStorage.setItem("tv_subscribers_v3", JSON.stringify(cleaned))
-    // Also save to user logins
-    const logins = JSON.parse(localStorage.getItem("tradevisor_user_logins") || "[]")
-    const cleanLogins = logins.filter((l: any) => !l.email?.includes("dev@tradevisor"))
-    cleanLogins.push({ email: devSub.email, code: devSub.code })
-    localStorage.setItem("tradevisor_user_logins", JSON.stringify(cleanLogins))
-    // Set current session
-    localStorage.setItem("tradevisor_current_user_email", devSub.email)
-    localStorage.setItem("tradevisor_current_user_code", devSub.code)
-    localStorage.setItem("tradevisor_dev_mode", "true")
-    toast.addToast("Developer access granted! (offline mode)", "success")
-    setTimeout(() => window.location.reload(), 500)
-  }
-
-  const handleDevAccess = () => {
-    setDevError("")
-    if (!devCode) { setDevError("Enter developer code"); return }
-    setDevLoading(true)
-    devMutation.mutate({ devCode: devCode.trim() })
-  }
-
   if (isLoggedIn) {
     return <VIPDashboardFull email={savedEmail!} code={savedCode!} />
   }
@@ -319,37 +242,7 @@ function VIPDashboardInner() {
           </button>
         </div>
 
-        {/* Developer Access Toggle */}
-        {!showDev ? (
-          <button onClick={() => setShowDev(true)} className="w-full mt-4 flex items-center justify-center gap-1 text-[8px] text-[#222222] hover:text-[#d4a843]/50 transition-colors bg-transparent border-none cursor-pointer">
-            <Terminal size={9} /> Developer Access
-          </button>
-        ) : (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-            className="mt-4 bg-[#141414] border border-[#1f1f1f] rounded-xl p-3 sm:p-4 text-left">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Terminal size={14} className="text-[#d4a843]" />
-                <span className="text-xs text-[#d4a843] font-semibold">Developer Access</span>
-              </div>
-              <button onClick={() => { setShowDev(false); setDevError("") }} className="text-[#666666] hover:text-white"><X size={14} /></button>
-            </div>
-            <input type="password" placeholder="Enter developer code..." value={devCode}
-              onChange={e => { setDevCode(e.target.value); setDevError("") }}
-              onKeyDown={e => e.key === "Enter" && handleDevAccess()}
-              className="w-full bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl px-4 py-3 text-sm text-white font-mono text-center placeholder-[#444444] focus:border-[#d4a843]/30 focus:outline-none tracking-[0.2em] mb-3"
-            />
-            {devError && (
-              <p className="text-[10px] text-[#e11d48] mb-2 flex items-center gap-1"><AlertTriangle size={10} /> {devError}</p>
-            )}
-            <button onClick={handleDevAccess} disabled={devLoading}
-              className="w-full bg-[#d4a843] text-[#050505] font-bold py-3 rounded-xl hover:bg-[#e8c76a] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-              {devLoading ? <><Loader2 size={16} className="animate-spin" /> Unlocking...</> : <><Key size={14} /> Unlock VIP</>}
-            </button>
-          </motion.div>
-        )}
-
-        <button onClick={() => navigate("/")} className="w-full mt-4 text-[10px] text-[#666666] hover:text-[#a0a0a0]">
+        <button onClick={() => navigate('/')} className="w-full mt-4 text-[10px] text-[#666666] hover:text-[#a0a0a0]">
           Back to Home
         </button>
 
@@ -2057,3 +1950,4 @@ function VIP2GoldChartAITab() {
     </div>
   )
 }
+

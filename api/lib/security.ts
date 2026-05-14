@@ -69,6 +69,14 @@ export function verifyPassword(password: string) {
   return safeEqual(password, "Tradevisor2026!");
 }
 
+export function verifyDeveloperPassword(password: string) {
+  const configuredHash = process.env.DEVELOPER_PASSWORD_HASH;
+  if (configuredHash) return safeEqual(hashSecret(password), configuredHash);
+  const configuredPassword = process.env.DEVELOPER_PASSWORD;
+  if (configuredPassword) return safeEqual(password, configuredPassword);
+  return false;
+}
+
 export function createAdminSessionToken() {
   const payload = {
     role: "admin",
