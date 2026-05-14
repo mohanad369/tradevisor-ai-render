@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: tradevisor-ai
+    name: tradevisor-ai-render
     runtime: node
-    plan: free
-    region: frankfurt
+    plan: starter
+    region: ohio
     buildCommand: npm ci && npm run build
     startCommand: npm run start
-    healthCheckPath: /api/vip2/health
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -16,12 +16,14 @@ services:
       - key: DB_DIR
         value: /tmp/tradevisor-db
       - key: PUBLIC_SITE_ORIGIN
-        value: https://mohanad369.github.io
+        value: https://tradevisor-ai-render.onrender.com
       - key: PUBLIC_SITE_ORIGIN_WWW
-        value: https://tradevisorai369.b-cdn.net
+        value: https://tradevisor-ai-render.onrender.com
       - key: PUBLIC_EXTRA_SITE_ORIGINS
-        value: https://tradevisorai.com,https://www.tradevisorai.com
-      - key: VIP2_OPENAI_MODEL
-        value: gpt-4o-mini
-      - key: OPENAI_API_KEY
+        value: https://mohanad369.github.io,https://tradevisorai369.b-cdn.net,https://tradevisorai.com,https://www.tradevisorai.com
+      - key: ANTHROPIC_MODEL
+        value: claude-3-5-sonnet-20241022
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TWELVE_DATA_API_KEY
         sync: false

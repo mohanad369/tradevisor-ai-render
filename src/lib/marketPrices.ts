@@ -29,6 +29,7 @@ type TwelveQuote = {
 };
 
 const TWELVE_DATA_URL = "https://api.twelvedata.com/quote";
+const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "");
 
 export const MARKET_SYMBOLS: Record<string, string> = {
   "XAU/USD": "XAU/USD",
@@ -71,6 +72,9 @@ function normalizeQuote(pair: string, quote: TwelveQuote): MarketQuote | null {
 }
 
 export async function fetchMarketQuotes(pairs = Object.keys(MARKET_SYMBOLS)): Promise<Record<string, MarketQuote>> {
+  const serverQuotes = await fetchMarketQuotesFromServer(pairs);
+  if (Object.keys(serverQuotes).length > 0) return serverQuotes;
+
   const apiKey = import.meta.env.VITE_TWELVE_DATA_API_KEY;
   if (!apiKey) return {};
 
@@ -103,4 +107,17 @@ export async function fetchMarketQuotes(pairs = Object.keys(MARKET_SYMBOLS)): Pr
 export async function fetchMarketQuote(pair: string): Promise<MarketQuote | null> {
   const quotes = await fetchMarketQuotes([pair]);
   return quotes[pair] ?? null;
+}
+
+async function fetchMarketQuotesFromServer(pairs: string[]): Promise<Record<string, MarketQuote>> {
+  try {
+    const url = new URL(`${configuredApiOrigin || window.location.origin}/api/market/quotes`);
+    url.searchParams.set("pairs", pairs.join(","));
+    const response = await fetch(url);
+    if (!response.ok) return {};
+    const data = await response.json() as { quotes?: Record<string, MarketQuote> };
+    return data.quotes ?? {};
+  } catch {
+    return {};
+  }
 }

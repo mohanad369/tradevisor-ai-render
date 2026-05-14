@@ -6,6 +6,7 @@ import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
+import { fetchServerMarketQuotes } from "./lib/market";
 import { checkRateLimit, SECURITY_HEADERS } from "./lib/security";
 import { env } from "./lib/env";
 import { seedVIPCodes } from "../db/seed";
@@ -32,6 +33,17 @@ app.use(cors({
 }));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+app.get("/api/market/quotes", async (c) => {
+  const pairs = c.req.query("pairs")?.split(",").map((pair) => pair.trim()).filter(Boolean);
+  try {
+    const quotes = await fetchServerMarketQuotes(pairs);
+    return c.json({ ok: true, quotes });
+  } catch (error) {
+    console.error("[Market] quote fetch failed", error);
+    return c.json({ ok: false, error: "Market prices are unavailable" }, 503);
+  }
+});
 
 // 2. Security headers
 app.use(secureHeaders({ contentSecurityPolicy: {}, crossOriginEmbedderPolicy: false }));
