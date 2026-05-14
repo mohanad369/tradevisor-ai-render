@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   Shield, LogOut, Users, BarChart3, Settings, CreditCard, CheckCircle, XCircle,
   Mail, Key, Ban, RefreshCw, Copy, ChevronDown, ChevronUp, Trash2, Menu, X,
-  TrendingUp, Clock, Gift, Crown, ImageIcon, ExternalLink
+  TrendingUp, Clock, Gift, Crown, ImageIcon, ExternalLink, UserPlus
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { trpc } from '@/lib/trpc'
@@ -22,6 +22,11 @@ import { allowUnsafeLocalFallbacks } from '@/lib/runtime'
 const ADMIN_EMAIL = "mohanadmaria777@gmail.com"
 const ADMIN_PASSWORD = "Tradevisor2026!"
 const PENDING_KEY = "tradevisor_pending_users"
+const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "")
+
+type AdminGrantResponse =
+  | { success: true; email: string; code: string; expires: string; reused?: boolean }
+  | { error: string }
 
 // ─── Fallback: check if tRPC backend is available ───
 let trpcAvailable = true
@@ -84,6 +89,10 @@ export default function Admin() {
   const [toast, setToast] = useState<{msg: string; type: string} | null>(null)
   const [expandedSub, setExpandedSub] = useState<string | null>(null)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [giftEmail, setGiftEmail] = useState("")
+  const [giftMonths, setGiftMonths] = useState(1)
+  const [giftLoading, setGiftLoading] = useState(false)
+  const [giftResult, setGiftResult] = useState<Extract<AdminGrantResponse, { success: true }> | null>(null)
 
   // TradingView pending requests count
   const tvPendingCount = JSON.parse(localStorage.getItem("tradevisor_tv_notifications") || "[]").filter((r: any) => r.status === "pending").length
@@ -427,6 +436,41 @@ export default function Admin() {
     replaceCodesMutation.mutate()
   }
 
+  const handleGrantVipGift = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setGiftResult(null)
+    setGiftLoading(true)
+    try {
+      const apiOrigin = configuredApiOrigin || window.location.origin
+      const token = localStorage.getItem("tradevisor_admin_session") || ""
+      const response = await fetch(`${apiOrigin}/api/admin/grant-vip`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          email: giftEmail,
+          months: giftMonths,
+          plan: `Admin Gift ${giftMonths} Month${giftMonths === 1 ? "" : "s"}`,
+        }),
+      })
+      const data = await response.json().catch(() => null) as AdminGrantResponse | null
+      if (!response.ok || !data || "error" in data || !data.success) {
+        showToast(data && "error" in data ? data.error : "Could not create VIP code", "error")
+        return
+      }
+      setGiftResult(data)
+      setGiftEmail("")
+      showToast(`VIP code created for ${data.email}`, "success")
+      invalidateAll()
+    } catch {
+      showToast("Secure server is unavailable", "error")
+    } finally {
+      setGiftLoading(false)
+    }
+  }
+
   // ─── Monthly Subscription Codes Handlers ───
   const handleReplaceMonthlyCodes = () => {
     if (!confirm('DELETE all old MONTHLY subscription codes and create 100 NEW ones?\n\nActive subscribers will LOSE their codes!\n\nThis cannot be undone!')) return
@@ -624,6 +668,54 @@ export default function Admin() {
                   </div>
                 </div>
               )}
+              <div className="bg-[#0d0d0d] border border-[#d4a843]/20 rounded-xl p-4 mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <UserPlus size={16} className="text-[#d4a843]" />
+                  <h3 className="text-sm font-bold">Create VIP Code</h3>
+                </div>
+                <form onSubmit={handleGrantVipGift} className="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-2">
+                  <input
+                    type="email"
+                    value={giftEmail}
+                    onChange={(event) => {
+                      setGiftEmail(event.target.value)
+                      setGiftResult(null)
+                    }}
+                    placeholder="friend@email.com"
+                    className="bg-[#141414] border border-[#1f1f1f] rounded-xl px-4 py-3 text-white text-sm placeholder-[#666666] focus:outline-none focus:border-[#d4a843]"
+                  />
+                  <select
+                    value={giftMonths}
+                    onChange={(event) => setGiftMonths(Number(event.target.value))}
+                    className="bg-[#141414] border border-[#1f1f1f] rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#d4a843]"
+                  >
+                    <option value={1}>1 month</option>
+                    <option value={3}>3 months</option>
+                    <option value={6}>6 months</option>
+                    <option value={12}>12 months</option>
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={giftLoading || !giftEmail}
+                    className="bg-[#d4a843] text-[#050505] font-bold px-4 py-3 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                  >
+                    {giftLoading ? <RefreshCw size={14} className="animate-spin" /> : <Key size={14} />}
+                    Create
+                  </button>
+                </form>
+                {giftResult && (
+                  <div className="mt-3 bg-[#141414] border border-[#d4a843]/25 rounded-xl p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] text-[#a0a0a0]">VIP code for {giftResult.email}</p>
+                      <code className="text-[#d4a843] text-base font-bold tracking-[0.16em]">{giftResult.code}</code>
+                      <p className="text-[10px] text-[#666666]">Expires: {new Date(giftResult.expires).toLocaleDateString()}</p>
+                    </div>
+                    <button onClick={() => handleCopy(giftResult.code)} className="w-9 h-9 rounded-lg bg-[#1f1f1f] hover:bg-[#2a2a2a] flex items-center justify-center">
+                      <Copy size={14} className="text-[#d4a843]" />
+                    </button>
+                  </div>
+                )}
+              </div>
               <h3 className="text-sm font-bold mb-3">Recent Subscribers</h3>
               <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl p-4 space-y-2">
                 {(subscribers || []).slice().reverse().slice(0, 5).map(sub => (

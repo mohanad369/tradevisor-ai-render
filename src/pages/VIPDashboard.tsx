@@ -12,7 +12,7 @@ import {
   Flame, Calendar, Hash, GraduationCap, User,
   CheckCircle, XCircle, Trophy, TrendingDown as TrendDown, Users,
   PieChart, LineChart, Gauge, ChevronUp, ChevronLeft, ChevronRight,
-  Bookmark, Menu, UserPlus
+  Bookmark, Menu
 } from "lucide-react"
 import { useNavigate } from "react-router"
 import { trpc } from "@/lib/trpc"
@@ -264,10 +264,6 @@ function VIPDashboardInner() {
 
 type TabId = "analyzer" | "signals" | "daily" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
 
-type DeveloperGrantResponse =
-  | { success: true; email: string; code: string; expires: string; reused?: boolean }
-  | { error: string }
-
 const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "analyzer", label: "Analyzer", icon: Brain },
   { id: "signals", label: "Signals", icon: Zap },
@@ -291,11 +287,9 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
 
   const [activeTab, setActiveTab] = useState<TabId>("analyzer")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [showDeveloperGrant, setShowDeveloperGrant] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
   const subscriber = getSubscribers().find(s => s.email === email && s.code === code)
-  const isDeveloperMode = localStorage.getItem("tradevisor_dev_mode") === "true"
 
   const logoutMutation = trpc.vip.logout.useMutation({
     onSuccess: () => { /* silently kill session */ },
@@ -309,7 +303,6 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
     localStorage.removeItem("tradevisor_current_user_code")
     localStorage.removeItem("tradevisor_session_token")
     localStorage.removeItem("tradevisor_dev_mode")
-    localStorage.removeItem("tradevisor_developer_password")
     toast.addToast("Logged out successfully.", "info")
     setTimeout(() => window.location.reload(), 400)
   }
@@ -335,13 +328,6 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
             <span className="hidden lg:block text-[10px] text-[#666666] max-w-[180px] truncate">{email}</span>
-            {isDeveloperMode && (
-              <button onClick={() => setShowDeveloperGrant(true)}
-                className="w-8 h-8 rounded-full bg-[#d4a843]/10 border border-[#d4a843]/30 text-[#d4a843] hover:bg-[#d4a843]/20 flex items-center justify-center transition-all"
-                title="Create VIP code">
-                <UserPlus size={14} />
-              </button>
-            )}
             <button onClick={() => navigate("/")}
               className="text-[10px] text-[#666666] hover:text-white px-2 sm:px-3 py-1.5 rounded-lg hover:bg-[#141414] transition-all">
               Home
@@ -353,10 +339,6 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
           </div>
         </div>
       </header>
-
-      {showDeveloperGrant && (
-        <DeveloperGrantModal onClose={() => setShowDeveloperGrant(false)} />
-      )}
 
       {/* Mobile Tab Menu */}
       {mobileMenuOpen && (
@@ -440,124 +422,6 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
 /* ═══════════════════════════════════════════
    TAB 1: AI Chart Analyzer — Mobile Responsive
    ═══════════════════════════════════════════ */
-
-function DeveloperGrantModal({ onClose }: { onClose: () => void }) {
-  const [friendEmail, setFriendEmail] = useState("")
-  const [months, setMonths] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [result, setResult] = useState<Extract<DeveloperGrantResponse, { success: true }> | null>(null)
-  const toast = useToast()
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "") || window.location.origin
-
-  const createCode = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setError("")
-    setResult(null)
-    setLoading(true)
-
-    const password = localStorage.getItem("tradevisor_developer_password") || ""
-    try {
-      const response = await fetch(`${apiOrigin}/api/developer/grant-vip`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          password,
-          email: friendEmail,
-          months,
-          plan: `Developer Gift ${months} Month${months === 1 ? "" : "s"}`,
-        }),
-      })
-      const data = await response.json().catch(() => null) as DeveloperGrantResponse | null
-      if (!response.ok || !data || "error" in data || !data.success) {
-        setError(data && "error" in data ? data.error : "Unable to create VIP code.")
-        return
-      }
-      setResult(data)
-      toast.addToast("VIP code created.", "success")
-    } catch {
-      setError("Secure server is unavailable. Try again later.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const copyCode = async () => {
-    if (!result?.code) return
-    await navigator.clipboard.writeText(result.code)
-    toast.addToast("VIP code copied.", "success")
-  }
-
-  return (
-    <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-[#0d0d0d] border border-[#d4a843]/30 rounded-2xl p-5 relative">
-        <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-[#141414] text-[#666666] hover:text-white flex items-center justify-center">
-          <X size={14} />
-        </button>
-
-        <div className="mb-5">
-          <div className="w-11 h-11 rounded-xl bg-[#d4a843]/10 border border-[#d4a843]/20 flex items-center justify-center mb-3">
-            <UserPlus size={20} className="text-[#d4a843]" />
-          </div>
-          <h3 className="text-lg font-bold text-white">Create VIP Code</h3>
-          <p className="text-[#666666] text-xs">Developer-only access for invited users.</p>
-        </div>
-
-        <form onSubmit={createCode} className="space-y-3">
-          <div>
-            <label className="text-[#a0a0a0] text-xs mb-1.5 block">Friend Email</label>
-            <input
-              type="email"
-              value={friendEmail}
-              onChange={(event) => {
-                setFriendEmail(event.target.value)
-                setError("")
-                setResult(null)
-              }}
-              placeholder="friend@email.com"
-              className="w-full bg-[#141414] border border-[#1f1f1f] rounded-xl px-4 py-3 text-white text-sm placeholder-[#555] focus:outline-none focus:border-[#d4a843]"
-            />
-          </div>
-
-          <div>
-            <label className="text-[#a0a0a0] text-xs mb-1.5 block">VIP Duration</label>
-            <select
-              value={months}
-              onChange={(event) => setMonths(Number(event.target.value))}
-              className="w-full bg-[#141414] border border-[#1f1f1f] rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#d4a843]"
-            >
-              <option value={1}>1 month</option>
-              <option value={3}>3 months</option>
-              <option value={6}>6 months</option>
-              <option value={12}>12 months</option>
-            </select>
-          </div>
-
-          {error && <p className="text-[#e11d48] text-xs bg-[#e11d48]/10 border border-[#e11d48]/20 rounded-xl p-3">{error}</p>}
-
-          <button disabled={loading || !friendEmail}
-            className="w-full bg-[#d4a843] text-[#050505] font-bold py-3 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
-            {loading ? "Creating..." : "Create VIP Code"}
-          </button>
-        </form>
-
-        {result && (
-          <div className="mt-4 bg-[#141414] border border-[#d4a843]/25 rounded-xl p-3">
-            <p className="text-[#a0a0a0] text-[10px] mb-1">VIP code for {result.email}</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-[#d4a843] text-lg font-bold tracking-[0.16em]">{result.code}</code>
-              <button onClick={copyCode} className="w-9 h-9 rounded-lg bg-[#1f1f1f] hover:bg-[#2a2a2a] flex items-center justify-center">
-                <Copy size={14} className="text-[#d4a843]" />
-              </button>
-            </div>
-            <p className="text-[#666666] text-[10px] mt-1">Expires: {new Date(result.expires).toLocaleDateString()}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 function getDefaultDecimals(asset: Asset): number {
   if (asset.type === "forex") return asset.id === "usdjpy" || asset.id === "gbpjpy" ? 3 : 5
@@ -2087,4 +1951,5 @@ function VIP2GoldChartAITab() {
     </div>
   )
 }
+
 

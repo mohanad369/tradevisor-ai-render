@@ -7,7 +7,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { fetchServerMarketQuotes } from "./lib/market";
-import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyDeveloperPassword, verifyPassword } from "./lib/security";
+import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
 import { env } from "./lib/env";
 import { seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
@@ -68,21 +68,22 @@ app.post("/api/developer/login", async (c) => {
   }
 });
 
-app.post("/api/developer/grant-vip", async (c) => {
+app.post("/api/admin/grant-vip", async (c) => {
   const ip = getClientIp(c.req.raw);
-  const limit = checkRateLimit(`developer-grant:${ip}`, 12);
+  const limit = checkRateLimit(`admin-grant:${ip}`, 12);
   if (!limit.allowed) return c.json({ error: "Too many VIP code requests", retryAfter: limit.retryAfter }, 429);
 
+  const authorization = c.req.header("authorization") || "";
+  const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (!verifyAdminSessionToken(token)) return c.json({ error: "Admin authentication required" }, 401);
+
   const body = await c.req.json().catch(() => null) as {
-    password?: string;
     email?: string;
     months?: number;
     plan?: string;
   } | null;
 
-  if (!body?.password || !verifyDeveloperPassword(body.password)) {
-    return c.json({ error: "Invalid developer credentials" }, 401);
-  }
+  if (!body) return c.json({ error: "Request body is required" }, 400);
 
   const email = body.email?.trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
