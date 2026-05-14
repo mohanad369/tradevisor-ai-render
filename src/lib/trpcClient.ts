@@ -20,6 +20,10 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: `${apiOrigin}/api/trpc`,
       transformer: superjson,
+      headers() {
+        const token = typeof window !== "undefined" ? localStorage.getItem("tradevisor_admin_session") : null;
+        return token ? { authorization: `Bearer ${token}` } : {};
+      },
     }),
   ],
 });

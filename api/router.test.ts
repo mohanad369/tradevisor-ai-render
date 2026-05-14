@@ -6,6 +6,7 @@ describe("appRouter", () => {
     const caller = appRouter.createCaller({
       req: new Request("http://localhost/api/trpc"),
       resHeaders: new Headers(),
+      isAdmin: false,
     });
 
     await expect(caller.ping()).resolves.toEqual({ ok: true });

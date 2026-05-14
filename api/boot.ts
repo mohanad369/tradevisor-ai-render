@@ -7,7 +7,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { fetchServerMarketQuotes } from "./lib/market";
-import { checkRateLimit, SECURITY_HEADERS } from "./lib/security";
+import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyPassword } from "./lib/security";
 import { env } from "./lib/env";
 import { seedVIPCodes } from "../db/seed";
 
@@ -34,7 +34,24 @@ app.use(cors({
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 
+app.post("/api/admin/login", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`admin-login:${ip}`, 5);
+  if (!limit.allowed) return c.json({ error: "Too many login attempts", retryAfter: limit.retryAfter }, 429);
+
+  const body = await c.req.json().catch(() => null) as { password?: string } | null;
+  if (!body?.password || !verifyPassword(body.password)) {
+    return c.json({ error: "Invalid credentials" }, 401);
+  }
+
+  return c.json({ token: createAdminSessionToken() });
+});
+
 app.get("/api/market/quotes", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`market:${ip}`, 90);
+  if (!limit.allowed) return c.json({ error: "Too many requests", retryAfter: limit.retryAfter }, 429);
+
   const pairs = c.req.query("pairs")?.split(",").map((pair) => pair.trim()).filter(Boolean);
   try {
     const quotes = await fetchServerMarketQuotes(pairs);
@@ -58,8 +75,8 @@ app.use(bodyLimit({ maxSize: 8 * 1024 * 1024 }));
 
 // 4. Rate limiting
 app.use("/api/trpc/*", async (c, next) => {
-  const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "unknown";
-  const limit = checkRateLimit(ip);
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`trpc:${ip}`, 30);
   if (!limit.allowed) return c.json({ error: "Too many requests", retryAfter: limit.retryAfter }, 429);
   return next();
 });
@@ -71,12 +88,11 @@ app.use("/api/trpc/*", async (c) => {
     req: c.req.raw,
     router: appRouter,
     createContext,
-    onError({ error, path, type, input }) {
+    onError({ error, path, type }) {
       console.error(`[tRPC] ${type} ${path} failed:`, {
         message: error.message,
         code: error.code,
         cause: error.cause,
-        input,
       });
     },
   });
@@ -106,4 +122,8 @@ if (env.IS_PRODUCTION) {
   serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
     console.log(`Server running on port ${port}`);
   });
+}
+
+function getClientIp(req: Request) {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
 }

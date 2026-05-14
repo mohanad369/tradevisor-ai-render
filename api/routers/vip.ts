@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "../../db/db";
 import { vipPayments, vipSubscribers, vipCodes, vipSessions, referrals } from "../../db/schema";
-import { createRouter, publicQuery } from "../middleware";
+import { adminQuery, createRouter, publicQuery } from "../middleware";
 
 function generateUUID(): string {
   return 'sub_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
@@ -16,8 +16,8 @@ export const vipRouter = createRouter({
       planName: z.string().min(1),
       amount: z.string().min(1),
       email: z.string().email(),
-      txId: z.string().min(1),
-      screenshot: z.string().optional(),
+      txId: z.string().min(6).max(150),
+      screenshot: z.string().max(7_000_000).optional(),
     }))
     .mutation(async ({ input }) => {
       try {
@@ -43,17 +43,17 @@ export const vipRouter = createRouter({
       }
     }),
 
-  getPayments: publicQuery.query(async () => {
+  getPayments: adminQuery.query(async () => {
     return await db.select().from(vipPayments).orderBy(vipPayments.submittedAt);
   }),
 
-  getPendingPayments: publicQuery.query(async () => {
+  getPendingPayments: adminQuery.query(async () => {
     return await db.select().from(vipPayments)
       .where(eq(vipPayments.status, "PENDING"))
       .orderBy(vipPayments.submittedAt);
   }),
 
-  approvePayment: publicQuery
+  approvePayment: adminQuery
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {
       const [payment] = await db.select().from(vipPayments)
@@ -97,7 +97,7 @@ export const vipRouter = createRouter({
       return { success: true, code: availableCode.code, email: payment.email };
     }),
 
-  rejectPayment: publicQuery
+  rejectPayment: adminQuery
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(vipPayments)
@@ -106,18 +106,18 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  deletePayment: publicQuery
+  deletePayment: adminQuery
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {
       await db.delete(vipPayments).where(eq(vipPayments.orderId, input.orderId));
       return { success: true };
     }),
 
-  getSubscribers: publicQuery.query(async () => {
+  getSubscribers: adminQuery.query(async () => {
     return await db.select().from(vipSubscribers).orderBy(vipSubscribers.startDate);
   }),
 
-  revokeSubscriber: publicQuery
+  revokeSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(vipSubscribers)
@@ -126,7 +126,7 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  reactivateSubscriber: publicQuery
+  reactivateSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(vipSubscribers)
@@ -135,7 +135,7 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  renewSubscriber: publicQuery
+  renewSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       const [sub] = await db.select().from(vipSubscribers)
@@ -153,7 +153,7 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  deleteSubscriber: publicQuery
+  deleteSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       const [sub] = await db.select().from(vipSubscribers)
@@ -171,11 +171,11 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  getCodes: publicQuery.query(async () => {
+  getCodes: adminQuery.query(async () => {
     return await db.select().from(vipCodes);
   }),
 
-  replaceAllCodes: publicQuery
+  replaceAllCodes: adminQuery
     .mutation(async () => {
       await db.delete(vipCodes);
 
@@ -294,12 +294,12 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  getSessions: publicQuery.query(async () => {
+  getSessions: adminQuery.query(async () => {
     return await db.select().from(vipSessions).where(eq(vipSessions.active, true)).orderBy(desc(vipSessions.lastSeenAt));
   }),
 
   // ─── Developer Access — bypass with hardcoded master code ───
-  devAccess: publicQuery
+  devAccess: adminQuery
     .input(z.object({ devCode: z.string() }))
     .mutation(async ({ input }) => {
       if (input.devCode !== "TRADEVISOR2024") {
@@ -361,9 +361,9 @@ export const vipRouter = createRouter({
       referrerEmail: z.string().email(),
       invitedEmail: z.string().email(),
       invitedName: z.string().optional(),
-      txId: z.string().min(1),
+      txId: z.string().min(6).max(150),
       amount: z.string().default("$88"),
-      screenshot: z.string().optional(),
+      screenshot: z.string().max(7_000_000).optional(),
     }))
     .mutation(async ({ input }) => {
       try {
@@ -387,17 +387,17 @@ export const vipRouter = createRouter({
       }
     }),
 
-  getReferrals: publicQuery.query(async () => {
+  getReferrals: adminQuery.query(async () => {
     return await db.select().from(referrals).orderBy(desc(referrals.submittedAt));
   }),
 
-  getPendingReferrals: publicQuery.query(async () => {
+  getPendingReferrals: adminQuery.query(async () => {
     return await db.select().from(referrals)
       .where(eq(referrals.status, "PENDING"))
       .orderBy(desc(referrals.submittedAt));
   }),
 
-  approveReferral: publicQuery
+  approveReferral: adminQuery
     .input(z.object({ referralId: z.string() }))
     .mutation(async ({ input }) => {
       const [ref] = await db.select().from(referrals)
@@ -434,7 +434,7 @@ export const vipRouter = createRouter({
       return { success: true, referrerEmail: ref.referrerEmail };
     }),
 
-  rejectReferral: publicQuery
+  rejectReferral: adminQuery
     .input(z.object({ referralId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(referrals)
@@ -443,7 +443,7 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  deleteReferral: publicQuery
+  deleteReferral: adminQuery
     .input(z.object({ referralId: z.string() }))
     .mutation(async ({ input }) => {
       await db.delete(referrals).where(eq(referrals.referralId, input.referralId));
@@ -465,7 +465,7 @@ export const vipRouter = createRouter({
       };
     }),
 
-  getStats: publicQuery.query(async () => {
+  getStats: adminQuery.query(async () => {
     const payments = await db.select().from(vipPayments);
     const subscribers = await db.select().from(vipSubscribers);
     const codes = await db.select().from(vipCodes);
