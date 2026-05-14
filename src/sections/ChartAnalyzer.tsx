@@ -52,7 +52,7 @@ export default function ChartAnalyzer() {
 
   const assetDecimals = getDefaultDecimals(selectedAsset);
 
-  // Fetch real price from GoldAPI when gold is selected
+  // Fetch live gold price when gold is selected.
   useEffect(() => {
     if (selectedAsset.name === "XAU/USD (Gold)") {
       getCachedPrice("XAU", 30000)
@@ -98,9 +98,7 @@ export default function ChartAnalyzer() {
             const fresh = await getCachedPrice("XAU", 30000);
             priceBase = fresh.price;
             setRealPrice(fresh.price);
-          } catch {
-            /* use fallback base price */
-          }
+          } catch { /* analysis can still use chart structure without a live price */ }
         }
       }
 
@@ -157,7 +155,7 @@ export default function ChartAnalyzer() {
                 type="number"
                 value={manualPrice}
                 onChange={(e) => setManualPrice(e.target.value)}
-                placeholder={realPrice ? realPrice.toFixed(2) : "4724.57"}
+                placeholder={realPrice ? realPrice.toFixed(2) : "Live price"}
                 className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-lg px-3 py-1.5 text-sm text-white placeholder-[#666666] focus:outline-none focus:border-[#d4a843] min-w-0"
               />
               <span className="text-[#666666] text-xs">USD</span>

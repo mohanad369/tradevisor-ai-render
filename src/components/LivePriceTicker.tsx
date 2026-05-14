@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
-import { trpc } from "@/lib/trpc";
 import { fetchMarketQuotes } from "@/lib/marketPrices";
 
 interface GoldPrice {
@@ -15,27 +14,7 @@ interface GoldPrice {
 export default function LivePriceTicker() {
   const [prices, setPrices] = useState<Record<string, GoldPrice>>({});
   const [loading, setLoading] = useState(true);
-
-  // Use tRPC to fetch gold price from backend (Yahoo Finance, no CORS)
-  const { data: goldData } = trpc.vip.getGoldPrice.useQuery(undefined, {
-    refetchInterval: 5000, // Refresh every 5 seconds
-    retry: 2,
-  });
-
-  useEffect(() => {
-    if (goldData) {
-      setPrices({
-        XAU: {
-          price: goldData.price,
-          change: goldData.change,
-          changePercent: goldData.changePercent,
-          high: goldData.high,
-          low: goldData.low,
-        },
-      });
-      setLoading(false);
-    }
-  }, [goldData]);
+  const [error, setError] = useState(false);
 
   // Client-side live price fallback for static hosting and Android builds.
   useEffect(() => {
@@ -45,30 +24,31 @@ export default function LivePriceTicker() {
       try {
         const quotes = await fetchMarketQuotes();
         const quote = quotes["XAU/USD"];
-        if (!quote) return;
-        const price = quote.price || 0;
-        const changePercent = quote.change || 0;
-        const change = price * (changePercent / 100);
+        if (!quote) throw new Error("Gold quote unavailable");
 
         if (mounted) {
           setPrices({
             XAU: {
-              price,
-              change,
-              changePercent,
-              high: price + Math.abs(change),
-              low: price - Math.abs(change),
+              price: quote.price,
+              change: quote.changeAmount,
+              changePercent: quote.change,
+              high: quote.high,
+              low: quote.low,
             },
           });
           setLoading(false);
+          setError(false);
         }
       } catch {
-        // silently fail
+        if (mounted) {
+          setLoading(false);
+          setError(true);
+        }
       }
     }
 
     fetchGoldQuote();
-    const interval = setInterval(fetchGoldQuote, 60_000);
+    const interval = setInterval(fetchGoldQuote, 15_000);
 
     return () => {
       mounted = false;
@@ -94,8 +74,10 @@ export default function LivePriceTicker() {
       {loading && !gold ? (
         <div className="flex items-center gap-1.5">
           <Activity size={14} className="text-[#d4a843] animate-spin" />
-          <span className="text-white font-bold text-base">---</span>
+          <span className="text-white font-bold text-base">Connecting</span>
         </div>
+      ) : error && !gold ? (
+        <span className="text-[#e11d48] text-xs font-bold">PRICE API OFFLINE</span>
       ) : (
         <>
           <span className="text-white font-bold text-base">

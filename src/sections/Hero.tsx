@@ -17,7 +17,7 @@ const SIGNALS = [
   { type: "SELL" as const, price: 67250.00, time: "5 min ago", pair: "BTC/USD", conf: 87 },
   { type: "BUY" as const, price: 1.0850, time: "8 min ago", pair: "EUR/USD", conf: 91 },
   { type: "SELL" as const, price: 145.20, time: "12 min ago", pair: "USD/JPY", conf: 82 },
-  { type: "BUY" as const, price: 38520.00, time: "15 min ago", pair: "US30", conf: 89 },
+  { type: "BUY" as const, price: 3900.00, time: "15 min ago", pair: "ETH/USD", conf: 89 },
 ]
 
 const ASSETS = [
@@ -26,7 +26,7 @@ const ASSETS = [
   { pair: "EUR/USD", price: 1.0850, change: 0.56, dir: "up" as const },
   { pair: "GBP/USD", price: 1.2650, change: 0.31, dir: "up" as const },
   { pair: "USD/JPY", price: 145.20, change: -0.15, dir: "down" as const },
-  { pair: "US30", price: 38520.00, change: 0.78, dir: "up" as const },
+  { pair: "ETH/USD", price: 3900.00, change: 0.78, dir: "up" as const },
 ]
 
 function applyQuotes<T extends { pair: string; price: number }>(items: T[], quotes: Record<string, MarketQuote>) {
@@ -71,12 +71,13 @@ function useMarketData() {
   return {
     assets: applyQuotes(ASSETS, quotes),
     signals: applyQuotes(SIGNALS, quotes),
-    goldPrice: quotes["XAU/USD"]?.price || ASSETS[0].price,
+    goldPrice: quotes["XAU/USD"]?.price ?? null,
     updatedAt,
   }
 }
 
-function formatGoldPrice(price: number) {
+function formatGoldPrice(price: number | null) {
+  if (price === null) return "Connecting"
   return price.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -95,7 +96,7 @@ export default function Hero() {
         <ProfitHeader />
         <LiveChart goldPrice={marketData.goldPrice} />
         <StatsGrid />
-        <SignalsFeed signals={marketData.signals} />
+        <SignalsFeed signals={marketData.signals} updatedAt={marketData.updatedAt} />
         <AssetsGrid assets={marketData.assets} updatedAt={marketData.updatedAt} />
       </div>
     </section>
@@ -233,7 +234,7 @@ function ProfitHeader() {
    LIVE CANDLESTICK CHART (Canvas)
    ═══════════════════════════════════════════ */
 
-function LiveChart({ goldPrice }: { goldPrice: number }) {
+function LiveChart({ goldPrice }: { goldPrice: number | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -395,7 +396,7 @@ function LiveChart({ goldPrice }: { goldPrice: number }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] sm:text-xs text-[#d4a843] font-mono font-black">
-              ${formatGoldPrice(goldPrice)}
+              {goldPrice === null ? formatGoldPrice(goldPrice) : `$${formatGoldPrice(goldPrice)}`}
             </span>
             <motion.div className="flex items-center gap-1 bg-[#22c55e]/10 border border-[#22c55e]/30 rounded-full px-2 py-0.5"
               animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }}>
@@ -466,8 +467,9 @@ function StatsGrid() {
    SIGNALS FEED
    ═══════════════════════════════════════════ */
 
-function SignalsFeed({ signals }: { signals: typeof SIGNALS }) {
+function SignalsFeed({ signals, updatedAt }: { signals: typeof SIGNALS; updatedAt: number | null }) {
   const { t } = useLanguage()
+  const isLive = Boolean(updatedAt)
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 mb-6">
       <div className="flex items-center justify-between mb-3">
@@ -501,7 +503,9 @@ function SignalsFeed({ signals }: { signals: typeof SIGNALS }) {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-mono font-bold text-white">${sig.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="text-[10px] font-mono font-bold text-white">
+                {isLive ? `$${sig.price.toLocaleString(undefined, { minimumFractionDigits: sig.price > 1000 ? 2 : 4, maximumFractionDigits: sig.price > 1000 ? 2 : 5 })}` : "Connecting"}
+              </p>
               <div className="flex items-center gap-1">
                 <div className="w-8 h-1 bg-[#1f1f1f] rounded-full overflow-hidden">
                   <motion.div className="h-full rounded-full"
@@ -532,7 +536,7 @@ function AssetsGrid({ assets, updatedAt }: { assets: typeof ASSETS; updatedAt: n
           <Globe size={12} className="text-[#d4a843]" /> {t("hero.tradingAssets")}
         </h2>
         <span className="text-[9px] text-[#666666] font-mono">
-          {updatedAt ? "LIVE API" : "FALLBACK"}
+          {updatedAt ? "LIVE API" : "CONNECTING"}
         </span>
       </div>
 
@@ -550,7 +554,7 @@ function AssetsGrid({ assets, updatedAt }: { assets: typeof ASSETS; updatedAt: n
             </div>
             <motion.p className="text-sm font-black font-mono text-[#d4a843]"
               animate={{ opacity: [0.75, 1, 0.75] }} transition={{ duration: 3, repeat: Infinity, delay: i * 0.5 }}>
-              ${a.price.toLocaleString(undefined, { minimumFractionDigits: a.price > 1000 ? 0 : 4, maximumFractionDigits: a.price > 1000 ? 0 : 4 })}
+              {updatedAt ? `$${a.price.toLocaleString(undefined, { minimumFractionDigits: a.price > 1000 ? 2 : 4, maximumFractionDigits: a.price > 1000 ? 2 : 5 })}` : "Connecting"}
             </motion.p>
             <MiniSparkline dir={a.dir} />
           </motion.div>
