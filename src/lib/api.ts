@@ -1,12 +1,21 @@
 // Backend proxy base — all API calls go through here (keys hidden on server)
-const API_BASE_URL = "https://56d482e2b32b1ba7-182-92-80-50.serveousercontent.com/api";
+const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "");
+const API_BASE_URL = `${configuredApiOrigin || ""}/api`;
+const API_TIMEOUT_MS = 12_000;
+
+export function isBackendConfigured(): boolean {
+  return Boolean(configuredApiOrigin);
+}
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    signal: controller.signal,
     body: JSON.stringify(body),
-  });
+  }).finally(() => window.clearTimeout(timeout));
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Request failed" }));
     throw new Error(err.detail || err.error || `HTTP ${res.status}`);
@@ -15,7 +24,11 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    signal: controller.signal,
+  }).finally(() => window.clearTimeout(timeout));
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Request failed" }));
     throw new Error(err.detail || err.error || `HTTP ${res.status}`);
@@ -28,6 +41,7 @@ export interface AnalyzeChartPayload {
   assetName: string;
   strategyName: string;
   timeframe: string;
+  currentPrice?: number;
 }
 
 export interface AnalyzeChartResult {

@@ -1,10 +1,12 @@
 /*
  * api/lib/anthropic.ts — AI Chart Analysis Engine
  *
- * Uses image fingerprinting + asset-aware price generation to simulate
- * realistic AI analysis. Replace with actual Claude/Anthropic API call
- * when you have a real API key.
+ * Uses Claude Vision when ANTHROPIC_API_KEY is configured, then falls back to
+ * image fingerprinting + asset-aware price generation if the provider fails.
  */
+
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 
 function hashString(str: string): number {
   let hash = 0;
@@ -55,7 +57,11 @@ export async function analyzeChartWithAI(
   assetName: string,
   strategyName: string,
   timeframe: string,
+  currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
+  const liveResult = await analyzeChartWithClaude(base64Image, assetName, strategyName, timeframe, currentPrice);
+  if (liveResult) return liveResult;
+
   // Simulate network latency (real API feel)
   await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
 
@@ -70,8 +76,8 @@ export async function analyzeChartWithAI(
     const signal = isBuy ? "BUY" : "SELL";
 
     // AI calculates realistic entry price from "current market" simulation
-    const currentPrice = asset.base + (rng() - 0.5) * asset.range;
-    const entry = Math.round(currentPrice / asset.tickSize) * asset.tickSize;
+    const basePrice = currentPrice && currentPrice > 0 ? currentPrice : asset.base + (rng() - 0.5) * asset.range;
+    const entry = Math.round(basePrice / asset.tickSize) * asset.tickSize;
 
     // AI calculates stop loss based on strategy volatility model
     const slDistance = entry * strategy.slPct;
@@ -165,4 +171,193 @@ export async function analyzeChartWithAI(
   } catch {
     return null;
   }
+}
+
+async function analyzeChartWithClaude(
+  base64Image: string,
+  assetName: string,
+  strategyName: string,
+  timeframe: string,
+  currentPrice?: number,
+): Promise<Record<string, unknown> | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const mediaType = detectMediaType(base64Image);
+    const prompt = [
+      "You are Tradevisor AI's senior chart-analysis agent.",
+      "Analyze the uploaded trading chart image and return ONLY valid JSON.",
+      "Do not include markdown, commentary, or extra text.",
+      "Use the six-agent workflow internally: news context, validation, market momentum, chart trade analysis, supervisor checks, and final risk management.",
+      "The final numbers must be realistic for the asset and current market price.",
+      `Asset: ${assetName}`,
+      `Strategy: ${strategyName}`,
+      `Timeframe: ${timeframe}`,
+      currentPrice ? `Current market price: ${currentPrice}` : "Current market price: not supplied",
+      "Required JSON schema:",
+      JSON.stringify({
+        signal: "BUY or SELL",
+        confidence: 85,
+        entry: 0,
+        stopLoss: 0,
+        takeProfit1: 0,
+        takeProfit2: 0,
+        takeProfit3: 0,
+        riskReward1: "1:1.5",
+        riskReward2: "1:2.5",
+        riskReward3: "1:4.0",
+        riskPips: 0,
+        riskAmount: 0,
+        strategyUsed: strategyName,
+        timeToHold: "30 minutes - 4 hours",
+        lotSize1000: "0.01",
+        lotSize5000: "0.05",
+        lotSize10000: "0.10",
+        maxRiskPercent: 1.5,
+        reasons: ["reason"],
+        srLevels: [{ level: 0, type: "support", strength: "Strong" }],
+        fibonacci: [{ level: 0.618, price: 0 }],
+        candlePatterns: [{ name: "Pattern", signal: "bullish", reliability: "High" }],
+        volume: { trend: "normal", signal: "Volume note" },
+        trend: "Trend summary",
+        marketStructure: "Market structure summary",
+        keyLevel: "Key level summary",
+        confluenceScore: 85
+      }),
+      "Rules:",
+      "- For BUY, stopLoss must be below entry and all take profits above entry.",
+      "- For SELL, stopLoss must be above entry and all take profits below entry.",
+      "- Risk/reward must be mathematically consistent.",
+      "- If the chart is unclear, lower confidence and keep risk conservative.",
+    ].join("\n");
+
+    const response = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+        max_tokens: 1800,
+        temperature: 0.2,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: base64Image,
+                },
+              },
+              { type: "text", text: prompt },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Anthropic] request failed", response.status, await response.text());
+      return null;
+    }
+
+    const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
+    const text = data.content?.find((item) => item.type === "text")?.text;
+    if (!text) return null;
+
+    const parsed = parseJsonObject(text);
+    return normalizeClaudeResult(parsed, assetName, strategyName, timeframe);
+  } catch (error) {
+    console.error("[Anthropic] analysis failed", error);
+    return null;
+  }
+}
+
+function detectMediaType(base64Image: string) {
+  if (base64Image.startsWith("/9j/")) return "image/jpeg";
+  if (base64Image.startsWith("iVBOR")) return "image/png";
+  if (base64Image.startsWith("R0lGOD")) return "image/gif";
+  if (base64Image.startsWith("UklGR")) return "image/webp";
+  return "image/png";
+}
+
+function parseJsonObject(text: string) {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) throw new Error("Claude returned no JSON object");
+    return JSON.parse(trimmed.slice(start, end + 1));
+  }
+}
+
+function normalizeClaudeResult(raw: Record<string, any>, assetName: string, strategyName: string, timeframe: string) {
+  const asset = getAssetProfile(assetName);
+  const signal = raw.signal === "SELL" ? "SELL" : "BUY";
+  const entry = numberOr(raw.entry, asset.base);
+  const stopLoss = numberOr(raw.stopLoss, signal === "BUY" ? entry - asset.range * 0.08 : entry + asset.range * 0.08);
+  const risk = Math.abs(entry - stopLoss) || asset.tickSize;
+  const tp1 = numberOr(raw.takeProfit1, signal === "BUY" ? entry + risk * 1.5 : entry - risk * 1.5);
+  const tp2 = numberOr(raw.takeProfit2, signal === "BUY" ? entry + risk * 2.5 : entry - risk * 2.5);
+  const tp3 = numberOr(raw.takeProfit3, signal === "BUY" ? entry + risk * 4 : entry - risk * 4);
+  const rr1 = ratio(entry, stopLoss, tp1);
+  const rr2 = ratio(entry, stopLoss, tp2);
+  const rr3 = ratio(entry, stopLoss, tp3);
+
+  return {
+    signal,
+    confidence: clamp(numberOr(raw.confidence, 78), 45, 98),
+    entry: round(entry, asset.decimals),
+    stopLoss: round(stopLoss, asset.decimals),
+    takeProfit1: round(tp1, asset.decimals),
+    takeProfit2: round(tp2, asset.decimals),
+    takeProfit3: round(tp3, asset.decimals),
+    riskReward1: raw.riskReward1 || `1:${rr1}`,
+    riskReward2: raw.riskReward2 || `1:${rr2}`,
+    riskReward3: raw.riskReward3 || `1:${rr3}`,
+    riskPips: round(risk, asset.decimals),
+    riskAmount: round(numberOr(raw.riskAmount, risk * asset.pipVal), 2),
+    strategyUsed: raw.strategyUsed || strategyName,
+    timeToHold: raw.timeToHold || `${timeframe} setup`,
+    lotSize1000: String(raw.lotSize1000 || "0.01"),
+    lotSize5000: String(raw.lotSize5000 || "0.05"),
+    lotSize10000: String(raw.lotSize10000 || "0.10"),
+    maxRiskPercent: numberOr(raw.maxRiskPercent, 1.5),
+    reasons: Array.isArray(raw.reasons) && raw.reasons.length ? raw.reasons.slice(0, 8) : ["Claude chart analysis completed."],
+    srLevels: Array.isArray(raw.srLevels) ? raw.srLevels.slice(0, 5) : [{ level: entry, type: "pivot", strength: "Key" }],
+    fibonacci: Array.isArray(raw.fibonacci) ? raw.fibonacci.slice(0, 6) : [],
+    candlePatterns: Array.isArray(raw.candlePatterns) && raw.candlePatterns.length ? raw.candlePatterns.slice(0, 4) : [{ name: "AI Detected Pattern", signal: signal === "BUY" ? "bullish" : "bearish", reliability: "Medium" }],
+    volume: raw.volume || { trend: "normal", signal: "Volume read from chart image." },
+    trend: raw.trend || "AI trend read from chart image",
+    marketStructure: raw.marketStructure || "AI market structure read from chart image",
+    keyLevel: raw.keyLevel || `Key ${signal === "BUY" ? "support" : "resistance"} around ${entry}`,
+    confluenceScore: clamp(numberOr(raw.confluenceScore, raw.confidence || 78), 45, 98),
+  };
+}
+
+function numberOr(value: unknown, fallback: number) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function round(value: number, decimals: number) {
+  return Number(value.toFixed(decimals));
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function ratio(entry: number, stop: number, target: number) {
+  const risk = Math.abs(entry - stop);
+  if (!risk) return "1.5";
+  return (Math.abs(target - entry) / risk).toFixed(1);
 }

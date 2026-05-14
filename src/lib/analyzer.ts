@@ -5,6 +5,7 @@
  */
 
 import { analyzeWithOpenAI, isOpenAIConfigured } from "./openai";
+import { analyzeChart as analyzeChartOnBackend, isBackendConfigured } from "./api";
 import { runTradingAgentPipeline, type TradingAgentPipelineResult } from "./tradingAgents";
 
 function hashString(str: string): number {
@@ -96,6 +97,46 @@ export interface AnalysisResult {
   agents?: TradingAgentPipelineResult;
 }
 
+function withDefaultAnalysisFields(result: Partial<AnalysisResult>, strategyName: string): AnalysisResult {
+  const signal = result.signal === "SELL" ? "SELL" : "BUY";
+  const entry = Number(result.entry || 0);
+  const stopLoss = Number(result.stopLoss || 0);
+  const takeProfit1 = Number(result.takeProfit1 || 0);
+  const takeProfit2 = Number(result.takeProfit2 || 0);
+  const takeProfit3 = Number(result.takeProfit3 || 0);
+  const risk = Math.abs(entry - stopLoss);
+
+  return {
+    signal,
+    confidence: Number(result.confidence || 70),
+    entry,
+    stopLoss,
+    takeProfit1,
+    takeProfit2,
+    takeProfit3,
+    riskReward1: result.riskReward1 || "1:1.5",
+    riskReward2: result.riskReward2 || "1:2.5",
+    riskReward3: result.riskReward3 || "1:4.0",
+    riskPips: Number(result.riskPips || risk || 0),
+    riskAmount: Number(result.riskAmount || (risk * 10).toFixed(2)),
+    strategyUsed: result.strategyUsed || strategyName,
+    timeToHold: result.timeToHold || "30 minutes - 4 hours",
+    lotSize1000: result.lotSize1000 || "0.01",
+    lotSize5000: result.lotSize5000 || "0.05",
+    lotSize10000: result.lotSize10000 || "0.10",
+    maxRiskPercent: Number(result.maxRiskPercent || 1.5),
+    reasons: result.reasons?.length ? result.reasons : ["AI chart analysis completed."],
+    srLevels: result.srLevels?.length ? result.srLevels : [{ level: entry, type: "pivot", strength: "Key" }],
+    fibonacci: result.fibonacci || [],
+    candlePatterns: result.candlePatterns?.length ? result.candlePatterns : [{ name: "AI Detected Pattern", signal: signal === "BUY" ? "bullish" : "bearish", reliability: "Medium" }],
+    volume: result.volume || { trend: "normal", signal: "Volume read from chart image." },
+    trend: result.trend || "AI trend read from chart",
+    marketStructure: result.marketStructure || "AI market structure read from chart",
+    keyLevel: result.keyLevel || `Key level around ${entry}`,
+    confluenceScore: Number(result.confluenceScore || result.confidence || 70),
+  };
+}
+
 export async function analyzeChartClientSide(
   base64Image: string,
   assetName: string,
@@ -104,6 +145,30 @@ export async function analyzeChartClientSide(
   /** Real market price from GoldAPI or manual input — if provided, uses it as base */
   realPrice?: number,
 ): Promise<AnalysisResult> {
+  // ===== TRY BACKEND CLAUDE VISION FIRST (API key stays server-side) =====
+  if (isBackendConfigured()) {
+    try {
+      const backendResult = await analyzeChartOnBackend({
+        imageBase64: base64Image,
+        assetName,
+        strategyName,
+        timeframe,
+        currentPrice: realPrice,
+      });
+      const result = withDefaultAnalysisFields(backendResult, strategyName) as AnalysisResult;
+      result.agents = runTradingAgentPipeline({
+        analysis: result,
+        assetName,
+        strategyName,
+        timeframe,
+        marketPrice: realPrice,
+      });
+      return result;
+    } catch (err: any) {
+      console.warn("Backend Claude analysis failed, falling back:", err.message);
+    }
+  }
+
   // ===== TRY OPENAI FIRST (Real AI Analysis) =====
   const openaiAvailable = await isOpenAIConfigured();
   if (openaiAvailable) {

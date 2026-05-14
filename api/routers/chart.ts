@@ -11,6 +11,7 @@ export const chartRouter = createRouter({
         assetName: z.string().min(1).max(50).default("EUR/USD"),
         strategyName: z.string().min(1).max(50).default("Day Trading"),
         timeframe: z.string().min(1).max(10).default("1H"),
+        currentPrice: z.number().positive().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -32,6 +33,7 @@ export const chartRouter = createRouter({
         input.assetName,
         input.strategyName,
         input.timeframe,
+        input.currentPrice,
       );
 
       if (!result) {
