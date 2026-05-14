@@ -2683,9 +2683,6 @@ video {
 .tracking-\[0\.1em\] {
   letter-spacing: 0.1em;
 }
-.tracking-\[0\.2em\] {
-  letter-spacing: 0.2em;
-}
 .tracking-tight {
   letter-spacing: -0.025em;
 }
@@ -2698,10 +2695,6 @@ video {
 .text-\[\#050505\] {
   --tw-text-opacity: 1;
   color: rgb(5 5 5 / var(--tw-text-opacity, 1));
-}
-.text-\[\#222222\] {
-  --tw-text-opacity: 1;
-  color: rgb(34 34 34 / var(--tw-text-opacity, 1));
 }
 .text-\[\#22c55e\] {
   --tw-text-opacity: 1;
@@ -3512,14 +3505,6 @@ video {
 .hover\:text-\[\#d4a843\]:hover {
   --tw-text-opacity: 1;
   color: rgb(212 168 67 / var(--tw-text-opacity, 1));
-}
-
-.hover\:text-\[\#d4a843\]\/40:hover {
-  color: rgb(212 168 67 / 0.4);
-}
-
-.hover\:text-\[\#d4a843\]\/50:hover {
-  color: rgb(212 168 67 / 0.5);
 }
 
 .hover\:text-\[\#e11d48\]:hover {
