@@ -1,4 +1,5 @@
 const TWELVE_DATA_URL = "https://api.twelvedata.com/quote";
+const OANDA_API_BASE = (process.env.OANDA_API_BASE || "https://api-fxpractice.oanda.com").replace(/\/$/, "");
 const MASSIVE_API_BASES = Array.from(new Set([
   process.env.MASSIVE_API_BASE,
   "https://api.massive.com",
@@ -56,6 +57,19 @@ type MassiveLastTrade = {
   message?: string;
 };
 
+type OandaPricingResponse = {
+  prices?: Array<{
+    instrument?: string;
+    time?: string;
+    status?: string;
+    bids?: Array<{ price?: string }>;
+    asks?: Array<{ price?: string }>;
+    closeoutBid?: string;
+    closeoutAsk?: string;
+  }>;
+  errorMessage?: string;
+};
+
 function toNumber(value: string | undefined, fallback = 0) {
   const parsed = value ? Number(value) : NaN;
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -83,14 +97,75 @@ export async function fetchServerMarketQuotes(pairs = Object.keys(MARKET_SYMBOLS
   const requestedPairs = pairs.filter((pair) => MARKET_SYMBOLS[pair]);
   if (requestedPairs.length === 0) return {};
 
-  const massiveQuotes = await fetchMassiveQuotes(requestedPairs);
-  const missingPairs = requestedPairs.filter((pair) => !massiveQuotes[pair]);
-  if (missingPairs.length === 0) return massiveQuotes;
+  const oandaQuotes = await fetchOandaQuotes(requestedPairs);
+  const massivePairs = requestedPairs.filter((pair) => !oandaQuotes[pair]);
+  if (massivePairs.length === 0) return oandaQuotes;
+
+  const massiveQuotes = await fetchMassiveQuotes(massivePairs);
+  const missingPairs = massivePairs.filter((pair) => !massiveQuotes[pair]);
+  if (missingPairs.length === 0) return { ...oandaQuotes, ...massiveQuotes };
 
   const twelveQuotes = await fetchTwelveDataQuotes(missingPairs);
   const stillMissingPairs = missingPairs.filter((pair) => !twelveQuotes[pair]);
   const publicQuotes = await fetchPublicFallbackQuotes(stillMissingPairs);
-  return { ...massiveQuotes, ...twelveQuotes, ...publicQuotes };
+  return { ...oandaQuotes, ...massiveQuotes, ...twelveQuotes, ...publicQuotes };
+}
+
+async function fetchOandaQuotes(requestedPairs: string[]) {
+  const token = process.env.OANDA_API_KEY;
+  const accountId = process.env.OANDA_ACCOUNT_ID;
+  if (!token || !accountId) return {};
+
+  const instruments = requestedPairs
+    .map((pair) => pair === "XAU/USD" ? "XAU_USD" : pair.replace("/", "_"))
+    .join(",");
+
+  const url = new URL(`${OANDA_API_BASE}/v3/accounts/${accountId}/pricing`);
+  url.searchParams.set("instruments", instruments);
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    console.warn("[Market] OANDA pricing failed", response.status);
+    return {};
+  }
+
+  const data = await response.json() as OandaPricingResponse;
+  const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
+
+  for (const price of data.prices || []) {
+    const instrument = price.instrument || "";
+    const pair = instrument.replace("_", "/");
+    if (!requestedPairs.includes(pair)) continue;
+
+    const bid = Number(price.bids?.[0]?.price || price.closeoutBid);
+    const ask = Number(price.asks?.[0]?.price || price.closeoutAsk);
+    const mid = Number.isFinite(bid) && Number.isFinite(ask)
+      ? (bid + ask) / 2
+      : Number.isFinite(ask)
+        ? ask
+        : bid;
+    if (!Number.isFinite(mid) || mid <= 0) continue;
+
+    results[pair] = applyGoldOffset({
+      pair,
+      price: mid,
+      change: 0,
+      changeAmount: 0,
+      open: mid,
+      high: mid,
+      low: mid,
+      previousClose: mid,
+      isMarketOpen: price.status !== "non-tradeable",
+      timestamp: price.time ? Date.parse(price.time) : Date.now(),
+    });
+  }
+
+  return results;
 }
 
 async function fetchTwelveDataQuotes(requestedPairs: string[]) {

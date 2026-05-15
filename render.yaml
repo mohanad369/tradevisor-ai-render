@@ -37,6 +37,12 @@ services:
         sync: false
       - key: TWELVE_DATA_API_KEY
         sync: false
+      - key: OANDA_API_KEY
+        sync: false
+      - key: OANDA_ACCOUNT_ID
+        sync: false
+      - key: OANDA_API_BASE
+        value: https://api-fxpractice.oanda.com
       - key: MASSIVE_API_KEY
         sync: false
       - key: MASSIVE_API_BASE
