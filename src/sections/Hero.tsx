@@ -29,6 +29,8 @@ const ASSETS = [
   { pair: "ETH/USD", price: 3900.00, change: 0.78, dir: "up" as const },
 ]
 
+const HERO_PRICE_REFRESH_MS = 5_000
+
 function applyQuotes<T extends { pair: string; price: number }>(items: T[], quotes: Record<string, MarketQuote>) {
   return items.map((item) => {
     const quote = quotes[item.pair]
@@ -60,7 +62,7 @@ function useMarketData() {
     }
 
     load()
-    const interval = window.setInterval(load, 60_000)
+    const interval = window.setInterval(load, HERO_PRICE_REFRESH_MS)
 
     return () => {
       mounted = false

@@ -24,7 +24,7 @@ export interface MetalPrice {
 
 // Client-side cache
 const cache = new Map<string, { data: MetalPrice; expires: number }>();
-const CACHE_TTL = 5000; // 5 seconds
+const CACHE_TTL = 1000; // 1 second
 
 function toMetalPrice(price: number, change: number, changePercent: number, open: number, high: number, low: number, previousClose: number, timestamp: number): MetalPrice {
   const troyOzToGram = 31.1034768;

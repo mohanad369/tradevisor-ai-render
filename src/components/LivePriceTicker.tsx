@@ -11,6 +11,8 @@ interface GoldPrice {
   low: number;
 }
 
+const PRICE_REFRESH_MS = 1_000;
+
 export default function LivePriceTicker() {
   const [prices, setPrices] = useState<Record<string, GoldPrice>>({});
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ export default function LivePriceTicker() {
     }
 
     fetchGoldQuote();
-    const interval = setInterval(fetchGoldQuote, 15_000);
+    const interval = setInterval(fetchGoldQuote, PRICE_REFRESH_MS);
 
     return () => {
       mounted = false;
