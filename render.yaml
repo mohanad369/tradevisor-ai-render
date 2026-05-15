@@ -26,14 +26,18 @@ services:
       - key: DB_DIR
         value: /var/data
       - key: PUBLIC_SITE_ORIGIN
-        value: https://tradevisor-ai-render.onrender.com
+        value: https://tradevisortrading.com
       - key: PUBLIC_SITE_ORIGIN_WWW
-        value: https://tradevisor-ai-render.onrender.com
+        value: https://www.tradevisortrading.com
       - key: PUBLIC_EXTRA_SITE_ORIGINS
-        value: https://mohanad369.github.io,https://tradevisorai369.b-cdn.net,https://tradevisorai.com,https://www.tradevisorai.com
+        value: https://tradevisor-ai-render.onrender.com,https://mohanad369.github.io,https://tradevisorai369.b-cdn.net,https://tradevisorai.com,https://www.tradevisorai.com
       - key: ANTHROPIC_MODEL
         value: claude-3-5-sonnet-20241022
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: TWELVE_DATA_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_IPN_SECRET
         sync: false

@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "../../db/db";
-import { vipPayments, vipSubscribers, vipCodes, vipSessions, referrals } from "../../db/schema";
+import { paymentInvoices, vipPayments, vipSubscribers, vipCodes, vipSessions, referrals } from "../../db/schema";
 import { adminQuery, createRouter, publicQuery } from "../middleware";
+import { createNowPaymentsInvoice, isNowPaymentsConfigured } from "../lib/nowpayments";
 import { verifyUsdtTrc20Payment } from "../lib/tron";
 
 function generateUUID(): string {
@@ -48,6 +49,77 @@ async function activateVipFromPayment(payment: typeof vipPayments.$inferSelect) 
 }
 
 export const vipRouter = createRouter({
+
+  createCheckout: publicQuery
+    .input(z.object({
+      orderId: z.string().min(1),
+      planName: z.string().min(1),
+      amount: z.string().min(1),
+      email: z.string().email(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isNowPaymentsConfigured()) {
+        return {
+          success: false,
+          error: "Hosted crypto checkout is not configured yet. Please contact support.",
+        };
+      }
+
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const [existingInvoice] = await db.select().from(paymentInvoices)
+        .where(eq(paymentInvoices.orderId, input.orderId))
+        .limit(1);
+
+      if (existingInvoice) {
+        return {
+          success: true,
+          orderId: existingInvoice.orderId,
+          invoiceUrl: existingInvoice.invoiceUrl,
+          status: existingInvoice.status,
+        };
+      }
+
+      const forwardedProto = ctx.req.headers.get("x-forwarded-proto") || new URL(ctx.req.url).protocol.replace(":", "");
+      const forwardedHost = ctx.req.headers.get("x-forwarded-host") || ctx.req.headers.get("host") || new URL(ctx.req.url).host;
+      const siteOrigin = `${forwardedProto}://${forwardedHost}`;
+
+      const invoice = await createNowPaymentsInvoice({
+        orderId: input.orderId,
+        planName: input.planName,
+        amount: input.amount,
+        customerEmail: normalizedEmail,
+        siteOrigin,
+      });
+
+      await db.insert(paymentInvoices).values({
+        orderId: input.orderId,
+        provider: "NOWPAYMENTS",
+        providerInvoiceId: String(invoice.id),
+        invoiceUrl: invoice.invoice_url,
+        email: normalizedEmail,
+        planName: input.planName,
+        amount: input.amount,
+        status: "WAITING",
+        rawPayload: "",
+      });
+
+      await db.insert(vipPayments).values({
+        orderId: input.orderId,
+        planName: input.planName,
+        amount: input.amount,
+        email: normalizedEmail,
+        txId: `NOWPAYMENTS-${invoice.id}`,
+        status: "PENDING",
+        screenshot: "",
+      });
+
+      return {
+        success: true,
+        orderId: input.orderId,
+        invoiceUrl: invoice.invoice_url,
+        status: "WAITING",
+      };
+    }),
 
   submitPayment: publicQuery
     .input(z.object({

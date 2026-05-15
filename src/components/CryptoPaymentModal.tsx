@@ -13,8 +13,6 @@ interface Props {
   yearlyAmount?: string
 }
 
-const USDT_WALLET = "TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA"
-
 export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, yearlyAmount = "669" }: Props) {
   const [step, setStep] = useState<"select" | "wallet" | "upload" | "pending" | "success" | "error">("select")
   const [selectedAmount, setSelectedAmount] = useState(amount)
@@ -87,6 +85,22 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
     }
   })
 
+  const checkoutMutation = trpc.vip.createCheckout.useMutation({
+    onSuccess: (data) => {
+      if (data?.success && data.invoiceUrl) {
+        trackPaymentSubmit(selectedAmount)
+        window.location.href = data.invoiceUrl
+        return
+      }
+      setSubmitError(data?.error || "Payment checkout is unavailable. Please try again later.")
+      setStep("error")
+    },
+    onError: (err) => {
+      setSubmitError(err.message)
+      setStep("error")
+    }
+  })
+
   if (!isOpen) return null
 
   const handleCopy = (text: string) => {
@@ -115,6 +129,17 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
       email: email.trim(),
       txId: txId.trim(),
       screenshot: screenshot || undefined,
+    })
+  }
+
+  const handleStartCheckout = () => {
+    if (!email) return
+    setSubmitError("")
+    checkoutMutation.mutate({
+      orderId,
+      planName: selectedPlan,
+      amount: selectedAmount,
+      email: email.trim(),
     })
   }
 
@@ -178,42 +203,39 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                     <Bitcoin size={18} className="text-[#f2a900]" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-white">USDT (TRC20)</p>
-                    <p className="text-[10px] text-[#666666]">Crypto payment</p>
+                    <p className="text-sm font-semibold text-white">Secure Crypto Checkout</p>
+                    <p className="text-[10px] text-[#666666]">Pay through hosted payment page</p>
                   </div>
                 </button>
                 <div className="flex items-center gap-1.5 justify-center mt-4">
                   <Shield size={10} className="text-[#22c55e]" />
-                  <span className="text-[9px] text-[#666666]">Secure payment - Automatic TXID verification</span>
+                  <span className="text-[9px] text-[#666666]">Secure hosted checkout - Wallet hidden</span>
                 </div>
               </div>
             )}
 
-            {/* STEP 2: Wallet */}
+            {/* STEP 2: Hosted Checkout */}
             {step === "wallet" && (
               <div className="p-6">
                 <div className="text-center mb-4">
                   <h3 className="text-lg font-bold text-white">{selectedPlan}</h3>
                   <p className="text-2xl font-black text-[#f2a900]">${selectedAmount}</p>
-                  <p className="text-[9px] text-[#666666] mt-1">Send exact amount in USDT (TRC20)</p>
+                  <p className="text-[9px] text-[#666666] mt-1">Pay securely on the hosted checkout page</p>
                 </div>
                 <div className="bg-[#141414] border border-[#f2a900]/20 rounded-xl p-4 mb-4">
                   <p className="text-[10px] text-[#666666] mb-2">Order ID: <span className="text-[#d4a843] font-mono">{orderId}</span></p>
-                  <p className="text-[10px] text-[#666666] mb-2">Wallet Address (TRC20):</p>
-                  <div className="flex items-center gap-2 bg-[#0a0a0a] rounded-lg p-3">
-                    <code className="text-[10px] text-[#f2a900] font-mono flex-1 break-all">{USDT_WALLET}</code>
-                    <button onClick={() => handleCopy(USDT_WALLET)}
-                      className="p-1.5 rounded-md bg-[#1f1f1f] hover:bg-[#333] transition-colors flex-shrink-0">
-                      {copied ? <CheckCircle size={12} className="text-[#22c55e]" /> : <Copy size={12} className="text-[#a0a0a0]" />}
-                    </button>
-                  </div>
+                  <label className="text-[10px] text-[#666666] mb-1 block">Your Email</label>
+                  <input type="email" placeholder="your@email.com" value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="w-full bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl px-4 py-3 text-sm text-white placeholder-[#555555] focus:border-[#d4a843]/30 focus:outline-none" />
                 </div>
-                <div className="bg-[#e11d48]/5 border border-[#e11d48]/10 rounded-xl p-3 mb-4">
-                  <p className="text-[10px] text-[#e11d48] font-semibold flex items-center gap-1"><AlertTriangle size={12} /> Send ONLY USDT on TRC20 network</p>
+                <div className="bg-[#22c55e]/5 border border-[#22c55e]/10 rounded-xl p-3 mb-4">
+                  <p className="text-[10px] text-[#22c55e] font-semibold flex items-center gap-1"><Shield size={12} /> You will be redirected to checkout. VIP activates after payment confirmation.</p>
                 </div>
-                <button onClick={() => setStep("upload")}
-                  className="w-full bg-gradient-to-r from-[#f2a900] to-[#d4a843] text-[#050505] font-bold py-3 rounded-xl flex items-center justify-center gap-2">
-                  <CheckCircle size={16} /> I've Sent The Payment
+                <button onClick={handleStartCheckout} disabled={!email || checkoutMutation.isPending}
+                  className="w-full bg-gradient-to-r from-[#f2a900] to-[#d4a843] text-[#050505] font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
+                  {checkoutMutation.isPending ? <Clock size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                  {checkoutMutation.isPending ? "Creating Checkout..." : "Pay Now"}
                 </button>
                 <button onClick={() => setStep("select")} className="w-full mt-2 text-[10px] text-[#666666]">Back</button>
               </div>
@@ -306,7 +328,7 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                   <p className="text-[9px] text-[#666666] mt-1">Contact: <span className="text-[#d4a843]">mohanadmaria777@gmail.com</span></p>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setStep("upload")} className="flex-1 bg-[#d4a843] text-[#050505] font-bold py-3 rounded-xl">
+                  <button onClick={() => setStep("wallet")} className="flex-1 bg-[#d4a843] text-[#050505] font-bold py-3 rounded-xl">
                     Try Again
                   </button>
                   <button onClick={onClose} className="flex-1 bg-[#141414] border border-[#1f1f1f] text-white font-bold py-3 rounded-xl">

@@ -7,11 +7,12 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { fetchServerMarketQuotes } from "./lib/market";
+import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
 import { env } from "./lib/env";
 import { seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
-import { vipCodes, vipSubscribers } from "../db/schema";
+import { paymentInvoices, vipCodes, vipPayments, vipSubscribers } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
@@ -116,6 +117,41 @@ app.get("/api/market/quotes", async (c) => {
   }
 });
 
+app.post("/api/payments/nowpayments/ipn", async (c) => {
+  const rawBody = await c.req.text();
+  const signature = c.req.header("x-nowpayments-sig");
+
+  if (!verifyNowPaymentsIpn(rawBody, signature)) {
+    console.warn("[NOWPayments] Invalid IPN signature");
+    return c.json({ error: "Invalid signature" }, 401);
+  }
+
+  const payload = JSON.parse(rawBody) as any;
+  const orderId = String(payload.order_id || "");
+  const status = String(payload.payment_status || payload.invoice_status || "").toUpperCase();
+
+  if (!orderId) return c.json({ error: "Missing order_id" }, 400);
+
+  await db.update(paymentInvoices)
+    .set({ status, rawPayload: rawBody, updatedAt: new Date() })
+    .where(eq(paymentInvoices.orderId, orderId));
+
+  if (isPaidNowPaymentsStatus(status)) {
+    const [payment] = await db.select().from(vipPayments).where(eq(vipPayments.orderId, orderId));
+    if (payment?.status === "PENDING") {
+      const activated = await activatePaymentFromRecord(payment);
+      if (!activated.success) {
+        console.error("[NOWPayments] Paid invoice could not activate VIP", { orderId, error: activated.error });
+        return c.json({ ok: true, activated: false, error: activated.error });
+      }
+      console.log("[NOWPayments] VIP activated from hosted checkout", { orderId, email: activated.email });
+      return c.json({ ok: true, activated: true });
+    }
+  }
+
+  return c.json({ ok: true, activated: false });
+});
+
 // 2. Security headers
 app.use(secureHeaders({ contentSecurityPolicy: {}, crossOriginEmbedderPolicy: false }));
 
@@ -180,6 +216,37 @@ if (env.IS_PRODUCTION) {
 
 function getClientIp(req: Request) {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+}
+
+async function activatePaymentFromRecord(payment: typeof vipPayments.$inferSelect) {
+  const [availableCode] = await db.select().from(vipCodes).where(eq(vipCodes.used, false)).limit(1);
+  if (!availableCode) return { success: false, error: "No VIP codes available" };
+
+  await db.update(vipCodes).set({ used: true, assignedTo: payment.email }).where(eq(vipCodes.id, availableCode.id));
+
+  const now = new Date();
+  const isYearly = payment.planName.toLowerCase().includes("year");
+  const endDate = new Date(now);
+  endDate.setMonth(endDate.getMonth() + (isYearly ? 12 : 1));
+
+  await db.update(vipPayments)
+    .set({ status: "APPROVED", approvedAt: now, assignedCode: availableCode.code })
+    .where(eq(vipPayments.id, payment.id));
+
+  await db.insert(vipSubscribers).values({
+    subscriberId: `np_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+    orderId: payment.orderId,
+    email: payment.email,
+    code: availableCode.code,
+    plan: payment.planName,
+    amount: payment.amount,
+    txId: payment.txId,
+    status: "ACTIVE",
+    startDate: now,
+    endDate,
+  });
+
+  return { success: true, email: payment.email, code: availableCode.code };
 }
 
 async function grantDeveloperAccess() {
