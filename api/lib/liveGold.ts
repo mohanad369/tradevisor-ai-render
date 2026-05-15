@@ -166,8 +166,9 @@ function startRestFallback() {
 }
 
 function publishQuote(quote: LiveGoldQuote) {
-  latestQuote = quote;
-  emitter.emit("quote", quote);
+  const adjustedQuote = applyGoldOffset(quote);
+  latestQuote = adjustedQuote;
+  emitter.emit("quote", adjustedQuote);
 }
 
 function normalizeTimestamp(timestamp: number) {
@@ -175,4 +176,18 @@ function normalizeTimestamp(timestamp: number) {
   if (timestamp > 1_000_000_000_000_000) return Math.round(timestamp / 1_000_000);
   if (timestamp > 1_000_000_000_000) return timestamp;
   return timestamp * 1000;
+}
+
+function applyGoldOffset(quote: LiveGoldQuote): LiveGoldQuote {
+  const offset = Number(process.env.GOLD_PRICE_OFFSET || 0);
+  if (!Number.isFinite(offset) || offset === 0) return quote;
+
+  return {
+    ...quote,
+    price: quote.price + offset,
+    bid: quote.bid + offset,
+    ask: quote.ask + offset,
+    high: quote.high + offset,
+    low: quote.low + offset,
+  };
 }

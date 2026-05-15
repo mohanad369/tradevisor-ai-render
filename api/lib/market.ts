@@ -116,7 +116,7 @@ async function fetchTwelveDataQuotes(requestedPairs: string[]) {
     const quote = requestedPairs.length === 1 ? data : data[symbol];
     if (!quote || quote.message || quote.code) return;
     const normalized = normalizeQuote(pair, quote);
-    if (normalized) results[pair] = normalized;
+    if (normalized) results[pair] = applyGoldOffset(normalized);
   });
 
   return results;
@@ -143,7 +143,7 @@ async function fetchMassiveQuotes(requestedPairs: string[]) {
 
   const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
   entries.forEach(([pair, quote]) => {
-    if (quote) results[pair] = quote;
+    if (quote) results[pair] = applyGoldOffset(quote);
   });
   return results;
 }
@@ -226,6 +226,21 @@ function normalizeMassiveTimestamp(timestamp?: number) {
   return timestamp * 1000;
 }
 
+function applyGoldOffset<T extends { pair: string; price: number; open: number; high: number; low: number; previousClose: number }>(quote: T): T {
+  if (quote.pair !== "XAU/USD") return quote;
+  const offset = Number(process.env.GOLD_PRICE_OFFSET || 0);
+  if (!Number.isFinite(offset) || offset === 0) return quote;
+
+  return {
+    ...quote,
+    price: quote.price + offset,
+    open: quote.open + offset,
+    high: quote.high + offset,
+    low: quote.low + offset,
+    previousClose: quote.previousClose + offset,
+  };
+}
+
 async function fetchPublicFallbackQuotes(requestedPairs: string[]) {
   const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
   if (requestedPairs.includes("XAU/USD")) {
@@ -236,7 +251,7 @@ async function fetchPublicFallbackQuotes(requestedPairs: string[]) {
       console.warn("[Market] Yahoo gold fallback failed", error instanceof Error ? error.message : String(error));
       return null;
     });
-    if (goldQuote) results["XAU/USD"] = goldQuote;
+    if (goldQuote) results["XAU/USD"] = applyGoldOffset(goldQuote);
   }
   return results;
 }

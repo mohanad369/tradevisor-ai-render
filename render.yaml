@@ -43,6 +43,8 @@ services:
         value: https://api.massive.com
       - key: MASSIVE_WS_URL
         value: wss://socket.massive.com/forex
+      - key: GOLD_PRICE_OFFSET
+        value: 0
       - key: NOWPAYMENTS_API_KEY
         sync: false
       - key: NOWPAYMENTS_IPN_SECRET
