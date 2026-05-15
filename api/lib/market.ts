@@ -1,5 +1,9 @@
 const TWELVE_DATA_URL = "https://api.twelvedata.com/quote";
-const MASSIVE_API_BASE = (process.env.MASSIVE_API_BASE || "https://api.polygon.io").replace(/\/$/, "");
+const MASSIVE_API_BASES = Array.from(new Set([
+  process.env.MASSIVE_API_BASE,
+  "https://api.massive.com",
+  "https://api.polygon.io",
+].filter(Boolean).map((base) => base!.replace(/\/$/, ""))));
 
 const MARKET_SYMBOLS: Record<string, string> = {
   "XAU/USD": "XAU/USD",
@@ -84,7 +88,9 @@ export async function fetchServerMarketQuotes(pairs = Object.keys(MARKET_SYMBOLS
   if (missingPairs.length === 0) return massiveQuotes;
 
   const twelveQuotes = await fetchTwelveDataQuotes(missingPairs);
-  return { ...massiveQuotes, ...twelveQuotes };
+  const stillMissingPairs = missingPairs.filter((pair) => !twelveQuotes[pair]);
+  const publicQuotes = await fetchPublicFallbackQuotes(stillMissingPairs);
+  return { ...massiveQuotes, ...twelveQuotes, ...publicQuotes };
 }
 
 async function fetchTwelveDataQuotes(requestedPairs: string[]) {
@@ -144,38 +150,58 @@ async function fetchMassiveQuotes(requestedPairs: string[]) {
 
 async function fetchMassiveForexQuote(pair: string, apiKey: string) {
   const [from, to] = pair.split("/");
-  const url = new URL(`${MASSIVE_API_BASE}/v1/last_quote/currencies/${from}/${to}`);
-  url.searchParams.set("apiKey", apiKey);
+  let lastError: unknown;
 
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Massive forex API failed: ${response.status}`);
+  for (const apiBase of MASSIVE_API_BASES) {
+    try {
+      const url = new URL(`${apiBase}/v1/last_quote/currencies/${from}/${to}`);
+      url.searchParams.set("apiKey", apiKey);
 
-  const data = await response.json() as MassiveLastQuote;
-  const bid = Number(data.last?.bid);
-  const ask = Number(data.last?.ask);
-  const price = Number.isFinite(bid) && Number.isFinite(ask)
-    ? (bid + ask) / 2
-    : Number.isFinite(ask)
-      ? ask
-      : bid;
-  if (!Number.isFinite(price) || price <= 0) return null;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Massive forex API failed: ${response.status}`);
 
-  return buildMarketQuote(pair, price, data.last?.timestamp);
+      const data = await response.json() as MassiveLastQuote;
+      const bid = Number(data.last?.bid);
+      const ask = Number(data.last?.ask);
+      const price = Number.isFinite(bid) && Number.isFinite(ask)
+        ? (bid + ask) / 2
+        : Number.isFinite(ask)
+          ? ask
+          : bid;
+      if (!Number.isFinite(price) || price <= 0) return null;
+
+      return buildMarketQuote(pair, price, data.last?.timestamp);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Massive forex API failed");
 }
 
 async function fetchMassiveCryptoQuote(pair: string, apiKey: string) {
   const [from, to] = pair.split("/");
-  const url = new URL(`${MASSIVE_API_BASE}/v1/last/crypto/${from}/${to}`);
-  url.searchParams.set("apiKey", apiKey);
+  let lastError: unknown;
 
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Massive crypto API failed: ${response.status}`);
+  for (const apiBase of MASSIVE_API_BASES) {
+    try {
+      const url = new URL(`${apiBase}/v1/last/crypto/${from}/${to}`);
+      url.searchParams.set("apiKey", apiKey);
 
-  const data = await response.json() as MassiveLastTrade;
-  const price = Number(data.last?.price);
-  if (!Number.isFinite(price) || price <= 0) return null;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Massive crypto API failed: ${response.status}`);
 
-  return buildMarketQuote(pair, price, data.last?.timestamp);
+      const data = await response.json() as MassiveLastTrade;
+      const price = Number(data.last?.price);
+      if (!Number.isFinite(price) || price <= 0) return null;
+
+      return buildMarketQuote(pair, price, data.last?.timestamp);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Massive crypto API failed");
 }
 
 function buildMarketQuote(pair: string, price: number, timestamp?: number) {
@@ -198,4 +224,46 @@ function normalizeMassiveTimestamp(timestamp?: number) {
   if (timestamp > 1_000_000_000_000_000) return Math.round(timestamp / 1_000_000);
   if (timestamp > 1_000_000_000_000) return timestamp;
   return timestamp * 1000;
+}
+
+async function fetchPublicFallbackQuotes(requestedPairs: string[]) {
+  const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
+  if (requestedPairs.includes("XAU/USD")) {
+    const goldQuote = await fetchYahooGoldQuote().catch((error) => {
+      console.warn("[Market] Yahoo gold fallback failed", error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (goldQuote) results["XAU/USD"] = goldQuote;
+  }
+  return results;
+}
+
+async function fetchYahooGoldQuote() {
+  const response = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1m&range=1d", {
+    headers: { "user-agent": "Mozilla/5.0 Tradevisor Market Data" },
+  });
+  if (!response.ok) throw new Error(`Yahoo gold API failed: ${response.status}`);
+
+  const data = await response.json() as any;
+  const result = data.chart?.result?.[0];
+  const meta = result?.meta;
+  const price = Number(meta?.regularMarketPrice || meta?.previousClose || meta?.chartPreviousClose);
+  if (!Number.isFinite(price) || price <= 0) return null;
+
+  const previousClose = Number(meta?.previousClose || meta?.chartPreviousClose || price);
+  const changeAmount = price - previousClose;
+  const change = previousClose > 0 ? (changeAmount / previousClose) * 100 : 0;
+
+  return {
+    pair: "XAU/USD",
+    price,
+    change,
+    changeAmount,
+    open: Number(meta?.regularMarketOpen || previousClose || price),
+    high: Number(meta?.regularMarketDayHigh || price),
+    low: Number(meta?.regularMarketDayLow || price),
+    previousClose,
+    isMarketOpen: true,
+    timestamp: Number(meta?.regularMarketTime || 0) > 0 ? Number(meta.regularMarketTime) * 1000 : Date.now(),
+  };
 }

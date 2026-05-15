@@ -40,7 +40,7 @@ services:
       - key: MASSIVE_API_KEY
         sync: false
       - key: MASSIVE_API_BASE
-        value: https://api.polygon.io
+        value: https://api.massive.com
       - key: NOWPAYMENTS_API_KEY
         sync: false
       - key: NOWPAYMENTS_IPN_SECRET
