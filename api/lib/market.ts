@@ -229,13 +229,53 @@ function normalizeMassiveTimestamp(timestamp?: number) {
 async function fetchPublicFallbackQuotes(requestedPairs: string[]) {
   const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
   if (requestedPairs.includes("XAU/USD")) {
-    const goldQuote = await fetchYahooGoldQuote().catch((error) => {
+    const goldQuote = await fetchStooqGoldQuote().catch((error) => {
+      console.warn("[Market] Stooq spot gold fallback failed", error instanceof Error ? error.message : String(error));
+      return null;
+    }) || await fetchYahooGoldQuote().catch((error) => {
       console.warn("[Market] Yahoo gold fallback failed", error instanceof Error ? error.message : String(error));
       return null;
     });
     if (goldQuote) results["XAU/USD"] = goldQuote;
   }
   return results;
+}
+
+async function fetchStooqGoldQuote() {
+  const response = await fetch("https://stooq.com/q/l/?s=xauusd&f=sd2t2ohlcv&h&e=csv", {
+    headers: { "user-agent": "Mozilla/5.0 Tradevisor Market Data" },
+  });
+  if (!response.ok) throw new Error(`Stooq gold API failed: ${response.status}`);
+
+  const csv = await response.text();
+  const [, row] = csv.trim().split(/\r?\n/);
+  if (!row) return null;
+
+  const [symbol, date, time, openRaw, highRaw, lowRaw, closeRaw] = row.split(",");
+  if (symbol !== "XAUUSD") return null;
+
+  const price = Number(closeRaw);
+  if (!Number.isFinite(price) || price <= 0) return null;
+
+  const open = Number(openRaw);
+  const high = Number(highRaw);
+  const low = Number(lowRaw);
+  const timestamp = Date.parse(`${date}T${time}Z`);
+  const changeAmount = Number.isFinite(open) ? price - open : 0;
+  const change = Number.isFinite(open) && open > 0 ? (changeAmount / open) * 100 : 0;
+
+  return {
+    pair: "XAU/USD",
+    price,
+    change,
+    changeAmount,
+    open: Number.isFinite(open) ? open : price,
+    high: Number.isFinite(high) ? high : price,
+    low: Number.isFinite(low) ? low : price,
+    previousClose: Number.isFinite(open) ? open : price,
+    isMarketOpen: true,
+    timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+  };
 }
 
 async function fetchYahooGoldQuote() {
