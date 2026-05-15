@@ -12,6 +12,7 @@ interface GoldPrice {
 }
 
 const PRICE_REFRESH_MS = 1_000;
+const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "");
 
 export default function LivePriceTicker() {
   const [prices, setPrices] = useState<Record<string, GoldPrice>>({});
@@ -21,6 +22,7 @@ export default function LivePriceTicker() {
   // Client-side live price fallback for static hosting and Android builds.
   useEffect(() => {
     let mounted = true;
+    let eventSource: EventSource | null = null;
 
     async function fetchGoldQuote() {
       try {
@@ -52,9 +54,36 @@ export default function LivePriceTicker() {
     fetchGoldQuote();
     const interval = setInterval(fetchGoldQuote, PRICE_REFRESH_MS);
 
+    try {
+      const streamUrl = `${configuredApiOrigin || window.location.origin}/api/market/gold/stream`;
+      eventSource = new EventSource(streamUrl);
+      eventSource.addEventListener("quote", (event) => {
+        if (!mounted) return;
+        const quote = JSON.parse((event as MessageEvent).data);
+        setPrices({
+          XAU: {
+            price: quote.price,
+            change: quote.changeAmount,
+            changePercent: quote.change,
+            high: quote.high,
+            low: quote.low,
+          },
+        });
+        setLoading(false);
+        setError(false);
+      });
+      eventSource.onerror = () => {
+        eventSource?.close();
+        eventSource = null;
+      };
+    } catch {
+      // Polling fallback remains active.
+    }
+
     return () => {
       mounted = false;
       clearInterval(interval);
+      eventSource?.close();
     };
   }, []);
 

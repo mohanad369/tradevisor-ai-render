@@ -7,6 +7,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { sendVipCodeEmail } from "./lib/email";
+import { getLatestGoldQuote, onGoldQuote, startLiveGoldFeed } from "./lib/liveGold";
 import { fetchServerMarketQuotes } from "./lib/market";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
@@ -116,6 +117,39 @@ app.get("/api/market/quotes", async (c) => {
     console.error("[Market] quote fetch failed", error);
     return c.json({ ok: false, error: "Market prices are unavailable" }, 503);
   }
+});
+
+app.get("/api/market/gold/stream", () => {
+  startLiveGoldFeed();
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+
+      send("hello", { ok: true });
+      const latest = getLatestGoldQuote();
+      if (latest) send("quote", latest);
+
+      const unsubscribe = onGoldQuote((quote) => send("quote", quote));
+      const heartbeat = setInterval(() => send("ping", { t: Date.now() }), 15_000);
+
+      return () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+      };
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+    },
+  });
 });
 
 app.post("/api/payments/nowpayments/ipn", async (c) => {

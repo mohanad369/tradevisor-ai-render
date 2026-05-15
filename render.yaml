@@ -41,6 +41,8 @@ services:
         sync: false
       - key: MASSIVE_API_BASE
         value: https://api.massive.com
+      - key: MASSIVE_WS_URL
+        value: wss://socket.massive.com/forex
       - key: NOWPAYMENTS_API_KEY
         sync: false
       - key: NOWPAYMENTS_IPN_SECRET
