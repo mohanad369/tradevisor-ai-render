@@ -6,6 +6,7 @@ import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
+import { sendVipCodeEmail } from "./lib/email";
 import { fetchServerMarketQuotes } from "./lib/market";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
@@ -144,8 +145,21 @@ app.post("/api/payments/nowpayments/ipn", async (c) => {
         console.error("[NOWPayments] Paid invoice could not activate VIP", { orderId, error: activated.error });
         return c.json({ ok: true, activated: false, error: activated.error });
       }
-      console.log("[NOWPayments] VIP activated from hosted checkout", { orderId, email: activated.email });
-      return c.json({ ok: true, activated: true });
+
+      const emailResult = await sendVipCodeEmail({
+        to: activated.email,
+        code: activated.code,
+        plan: payment.planName,
+        orderId: payment.orderId,
+        expiresAt: activated.expiresAt,
+      });
+
+      console.log("[NOWPayments] VIP activated from hosted checkout", {
+        orderId,
+        email: activated.email,
+        emailSent: emailResult.sent,
+      });
+      return c.json({ ok: true, activated: true, emailSent: emailResult.sent });
     }
   }
 
@@ -220,7 +234,7 @@ function getClientIp(req: Request) {
 
 async function activatePaymentFromRecord(payment: typeof vipPayments.$inferSelect) {
   const [availableCode] = await db.select().from(vipCodes).where(eq(vipCodes.used, false)).limit(1);
-  if (!availableCode) return { success: false, error: "No VIP codes available" };
+  if (!availableCode) return { success: false as const, error: "No VIP codes available" };
 
   await db.update(vipCodes).set({ used: true, assignedTo: payment.email }).where(eq(vipCodes.id, availableCode.id));
 
@@ -246,7 +260,7 @@ async function activatePaymentFromRecord(payment: typeof vipPayments.$inferSelec
     endDate,
   });
 
-  return { success: true, email: payment.email, code: availableCode.code };
+  return { success: true as const, email: payment.email, code: availableCode.code, expiresAt: endDate };
 }
 
 async function grantDeveloperAccess() {
