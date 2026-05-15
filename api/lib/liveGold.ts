@@ -22,6 +22,7 @@ let started = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let restTimer: ReturnType<typeof setInterval> | null = null;
 let reconnectAttempt = 0;
+const GOLD_REST_FALLBACK_MS = clampNumber(process.env.GOLD_REST_FALLBACK_MS || process.env.MARKET_CACHE_TTL_MS, 5_000, 1_000, 60_000);
 
 const MASSIVE_WS_URLS = Array.from(new Set([
   process.env.MASSIVE_WS_URL,
@@ -155,20 +156,26 @@ function startRestFallback() {
         low: quote.low,
         timestamp: quote.timestamp,
         source: "rest",
-      });
+      }, true);
     } catch (error) {
       console.warn("[Market] Live gold REST fallback failed", error instanceof Error ? error.message : String(error));
     }
   };
 
   void refresh();
-  restTimer = setInterval(refresh, 1_000);
+  restTimer = setInterval(refresh, GOLD_REST_FALLBACK_MS);
 }
 
-function publishQuote(quote: LiveGoldQuote) {
-  const adjustedQuote = applyGoldOffset(quote);
+function publishQuote(quote: LiveGoldQuote, alreadyAdjusted = false) {
+  const adjustedQuote = alreadyAdjusted ? quote : applyGoldOffset(quote);
   latestQuote = adjustedQuote;
   emitter.emit("quote", adjustedQuote);
+}
+
+function clampNumber(value: string | undefined, fallback: number, min: number, max: number) {
+  const parsed = value ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
 }
 
 function normalizeTimestamp(timestamp: number) {

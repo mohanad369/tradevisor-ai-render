@@ -51,6 +51,10 @@ services:
         value: wss://socket.massive.com/forex
       - key: GOLD_PRICE_OFFSET
         value: 0
+      - key: MARKET_CACHE_TTL_MS
+        value: 5000
+      - key: GOLD_REST_FALLBACK_MS
+        value: 5000
       - key: NOWPAYMENTS_API_KEY
         sync: false
       - key: NOWPAYMENTS_IPN_SECRET

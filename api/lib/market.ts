@@ -15,6 +15,25 @@ const MARKET_SYMBOLS: Record<string, string> = {
   "USD/JPY": "USD/JPY",
 };
 
+const MARKET_CACHE_TTL_MS = clampNumber(process.env.MARKET_CACHE_TTL_MS, 5_000, 1_000, 60_000);
+const STALE_MARKET_CACHE_MS = clampNumber(process.env.STALE_MARKET_CACHE_MS, 120_000, 10_000, 600_000);
+
+type MarketQuote = {
+  pair: string;
+  price: number;
+  change: number;
+  changeAmount: number;
+  open: number;
+  high: number;
+  low: number;
+  previousClose: number;
+  isMarketOpen: boolean;
+  timestamp: number;
+};
+
+const marketCache = new Map<string, { quote: MarketQuote; fetchedAt: number }>();
+let inFlightQuotes: Promise<Record<string, MarketQuote>> | null = null;
+
 type TwelveQuote = {
   open?: string;
   high?: string;
@@ -70,12 +89,18 @@ type OandaPricingResponse = {
   errorMessage?: string;
 };
 
+function clampNumber(value: string | undefined, fallback: number, min: number, max: number) {
+  const parsed = value ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
+}
+
 function toNumber(value: string | undefined, fallback = 0) {
   const parsed = value ? Number(value) : NaN;
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function normalizeQuote(pair: string, quote: TwelveQuote) {
+function normalizeQuote(pair: string, quote: TwelveQuote): MarketQuote | null {
   const price = toNumber(quote.close || quote.price, NaN);
   if (!Number.isFinite(price) || price <= 0) return null;
 
@@ -93,10 +118,72 @@ function normalizeQuote(pair: string, quote: TwelveQuote) {
   };
 }
 
-export async function fetchServerMarketQuotes(pairs = Object.keys(MARKET_SYMBOLS)) {
+export async function fetchServerMarketQuotes(pairs = Object.keys(MARKET_SYMBOLS)): Promise<Record<string, MarketQuote>> {
   const requestedPairs = pairs.filter((pair) => MARKET_SYMBOLS[pair]);
   if (requestedPairs.length === 0) return {};
 
+  const now = Date.now();
+  const results: Record<string, MarketQuote> = {};
+  const staleResults: Record<string, MarketQuote> = {};
+  const missingPairs: string[] = [];
+
+  for (const pair of requestedPairs) {
+    const cached = marketCache.get(pair);
+    if (!cached) {
+      missingPairs.push(pair);
+      continue;
+    }
+
+    const age = now - cached.fetchedAt;
+    if (age <= MARKET_CACHE_TTL_MS) {
+      results[pair] = cached.quote;
+    } else {
+      staleResults[pair] = cached.quote;
+      missingPairs.push(pair);
+    }
+  }
+
+  if (missingPairs.length === 0) return results;
+
+  try {
+    const freshQuotes = await fetchFreshMarketQuotes(missingPairs);
+    const fetchedAt = Date.now();
+    for (const [pair, quote] of Object.entries(freshQuotes)) {
+      marketCache.set(pair, { quote, fetchedAt });
+      results[pair] = quote;
+    }
+  } catch (error) {
+    console.warn("[Market] fresh quote fetch failed, using stale cache when possible", error instanceof Error ? error.message : String(error));
+  }
+
+  for (const pair of missingPairs) {
+    if (results[pair]) continue;
+    const cached = marketCache.get(pair);
+    if (cached && Date.now() - cached.fetchedAt <= STALE_MARKET_CACHE_MS) {
+      results[pair] = cached.quote;
+    } else if (staleResults[pair]) {
+      results[pair] = staleResults[pair];
+    }
+  }
+
+  return results;
+}
+
+async function fetchFreshMarketQuotes(requestedPairs: string[]): Promise<Record<string, MarketQuote>> {
+  if (inFlightQuotes) {
+    const quotes = await inFlightQuotes;
+    return pickQuotes(quotes, requestedPairs);
+  }
+
+  inFlightQuotes = fetchFreshMarketQuotesUncached(requestedPairs);
+  try {
+    return await inFlightQuotes;
+  } finally {
+    inFlightQuotes = null;
+  }
+}
+
+async function fetchFreshMarketQuotesUncached(requestedPairs: string[]): Promise<Record<string, MarketQuote>> {
   const oandaQuotes = await fetchOandaQuotes(requestedPairs);
   const massivePairs = requestedPairs.filter((pair) => !oandaQuotes[pair]);
   if (massivePairs.length === 0) return oandaQuotes;
@@ -111,7 +198,15 @@ export async function fetchServerMarketQuotes(pairs = Object.keys(MARKET_SYMBOLS
   return { ...oandaQuotes, ...massiveQuotes, ...twelveQuotes, ...publicQuotes };
 }
 
-async function fetchOandaQuotes(requestedPairs: string[]) {
+function pickQuotes(quotes: Record<string, MarketQuote>, pairs: string[]): Record<string, MarketQuote> {
+  const results: Record<string, MarketQuote> = {};
+  for (const pair of pairs) {
+    if (quotes[pair]) results[pair] = quotes[pair];
+  }
+  return results;
+}
+
+async function fetchOandaQuotes(requestedPairs: string[]): Promise<Record<string, MarketQuote>> {
   const token = process.env.OANDA_API_KEY;
   const accountId = process.env.OANDA_ACCOUNT_ID;
   if (!token || !accountId) return {};
@@ -135,7 +230,7 @@ async function fetchOandaQuotes(requestedPairs: string[]) {
   }
 
   const data = await response.json() as OandaPricingResponse;
-  const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
+  const results: Record<string, MarketQuote> = {};
 
   for (const price of data.prices || []) {
     const instrument = price.instrument || "";
@@ -168,7 +263,7 @@ async function fetchOandaQuotes(requestedPairs: string[]) {
   return results;
 }
 
-async function fetchTwelveDataQuotes(requestedPairs: string[]) {
+async function fetchTwelveDataQuotes(requestedPairs: string[]): Promise<Record<string, MarketQuote>> {
   const apiKey = process.env.TWELVE_DATA_API_KEY || process.env.VITE_TWELVE_DATA_API_KEY;
   if (!apiKey) {
     if (requestedPairs.length > 0) console.warn("[Market] TWELVE_DATA_API_KEY is not configured");
@@ -184,7 +279,7 @@ async function fetchTwelveDataQuotes(requestedPairs: string[]) {
   if (!response.ok) throw new Error(`Market API failed: ${response.status}`);
 
   const data = await response.json() as Record<string, TwelveQuote> & TwelveQuote;
-  const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
+  const results: Record<string, MarketQuote> = {};
 
   requestedPairs.forEach((pair) => {
     const symbol = MARKET_SYMBOLS[pair];
@@ -197,7 +292,7 @@ async function fetchTwelveDataQuotes(requestedPairs: string[]) {
   return results;
 }
 
-async function fetchMassiveQuotes(requestedPairs: string[]) {
+async function fetchMassiveQuotes(requestedPairs: string[]): Promise<Record<string, MarketQuote>> {
   const apiKey = process.env.MASSIVE_API_KEY;
   if (!apiKey) return {};
 
@@ -216,7 +311,7 @@ async function fetchMassiveQuotes(requestedPairs: string[]) {
     }
   }));
 
-  const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
+  const results: Record<string, MarketQuote> = {};
   entries.forEach(([pair, quote]) => {
     if (quote) results[pair] = applyGoldOffset(quote);
   });
@@ -279,7 +374,7 @@ async function fetchMassiveCryptoQuote(pair: string, apiKey: string) {
   throw lastError instanceof Error ? lastError : new Error("Massive crypto API failed");
 }
 
-function buildMarketQuote(pair: string, price: number, timestamp?: number) {
+function buildMarketQuote(pair: string, price: number, timestamp?: number): MarketQuote {
   return {
     pair,
     price,
@@ -316,8 +411,8 @@ function applyGoldOffset<T extends { pair: string; price: number; open: number; 
   };
 }
 
-async function fetchPublicFallbackQuotes(requestedPairs: string[]) {
-  const results: Record<string, ReturnType<typeof normalizeQuote>> = {};
+async function fetchPublicFallbackQuotes(requestedPairs: string[]): Promise<Record<string, MarketQuote>> {
+  const results: Record<string, MarketQuote> = {};
   if (requestedPairs.includes("XAU/USD")) {
     const goldQuote = await fetchStooqGoldQuote().catch((error) => {
       console.warn("[Market] Stooq spot gold fallback failed", error instanceof Error ? error.message : String(error));
@@ -331,7 +426,7 @@ async function fetchPublicFallbackQuotes(requestedPairs: string[]) {
   return results;
 }
 
-async function fetchStooqGoldQuote() {
+async function fetchStooqGoldQuote(): Promise<MarketQuote | null> {
   const response = await fetch("https://stooq.com/q/l/?s=xauusd&f=sd2t2ohlcv&h&e=csv", {
     headers: { "user-agent": "Mozilla/5.0 Tradevisor Market Data" },
   });
@@ -368,7 +463,7 @@ async function fetchStooqGoldQuote() {
   };
 }
 
-async function fetchYahooGoldQuote() {
+async function fetchYahooGoldQuote(): Promise<MarketQuote | null> {
   const response = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1m&range=1d", {
     headers: { "user-agent": "Mozilla/5.0 Tradevisor Market Data" },
   });

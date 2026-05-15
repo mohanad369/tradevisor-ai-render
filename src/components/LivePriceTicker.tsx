@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { fetchMarketQuotes } from "@/lib/marketPrices";
@@ -11,13 +11,14 @@ interface GoldPrice {
   low: number;
 }
 
-const PRICE_REFRESH_MS = 1_000;
+const PRICE_REFRESH_MS = 10_000;
 const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "");
 
 export default function LivePriceTicker() {
   const [prices, setPrices] = useState<Record<string, GoldPrice>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const streamHealthyRef = useRef(false);
 
   // Client-side live price fallback for static hosting and Android builds.
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function LivePriceTicker() {
     let eventSource: EventSource | null = null;
 
     async function fetchGoldQuote() {
+      if (streamHealthyRef.current) return;
       try {
         const quotes = await fetchMarketQuotes();
         const quote = quotes["XAU/USD"];
@@ -59,6 +61,7 @@ export default function LivePriceTicker() {
       eventSource = new EventSource(streamUrl);
       eventSource.addEventListener("quote", (event) => {
         if (!mounted) return;
+        streamHealthyRef.current = true;
         const quote = JSON.parse((event as MessageEvent).data);
         setPrices({
           XAU: {
@@ -73,6 +76,7 @@ export default function LivePriceTicker() {
         setError(false);
       });
       eventSource.onerror = () => {
+        streamHealthyRef.current = false;
         eventSource?.close();
         eventSource = null;
       };
@@ -82,6 +86,7 @@ export default function LivePriceTicker() {
 
     return () => {
       mounted = false;
+      streamHealthyRef.current = false;
       clearInterval(interval);
       eventSource?.close();
     };
