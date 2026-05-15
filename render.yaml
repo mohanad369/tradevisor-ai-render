@@ -37,6 +37,10 @@ services:
         sync: false
       - key: TWELVE_DATA_API_KEY
         sync: false
+      - key: MASSIVE_API_KEY
+        sync: false
+      - key: MASSIVE_API_BASE
+        value: https://api.polygon.io
       - key: NOWPAYMENTS_API_KEY
         sync: false
       - key: NOWPAYMENTS_IPN_SECRET
