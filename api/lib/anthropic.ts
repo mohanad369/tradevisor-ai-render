@@ -10,12 +10,42 @@ const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 
+type ProviderAttempt = {
+  at: string;
+  configured: boolean;
+  ok?: boolean;
+  status?: number;
+  error?: string;
+};
+
+const providerAttempts: { claude: ProviderAttempt | null; openai: ProviderAttempt | null } = {
+  claude: null,
+  openai: null,
+};
+
 function getClaudeApiKey(): string | undefined {
-  return process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLOUD_API_KEY;
+  return process.env.ANTHROPIC_API_KEY?.trim() || process.env.CLAUDE_API_KEY?.trim() || process.env.CLOUD_API_KEY?.trim();
 }
 
 function getClaudeModel(): string {
   return process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || DEFAULT_MODEL;
+}
+
+export function getAIProviderRuntimeStatus() {
+  return {
+    claude: {
+      configured: Boolean(getClaudeApiKey()),
+      model: getClaudeModel(),
+      acceptedEnvNames: ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "CLOUD_API_KEY"],
+      lastAttempt: providerAttempts.claude,
+    },
+    openai: {
+      configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
+      model: process.env.OPENAI_MODEL || process.env.VIP2_OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+      acceptedEnvNames: ["OPENAI_API_KEY"],
+      lastAttempt: providerAttempts.openai,
+    },
+  };
 }
 
 function hashString(str: string): number {
@@ -202,6 +232,7 @@ async function analyzeChartWithClaude(
   currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
   const apiKey = getClaudeApiKey();
+  providerAttempts.claude = { at: new Date().toISOString(), configured: Boolean(apiKey) };
   if (!apiKey) return null;
 
   try {
@@ -296,10 +327,12 @@ async function analyzeChartWithClaude(
     });
 
     if (!response.ok) {
+      providerAttempts.claude = { at: new Date().toISOString(), configured: true, ok: false, status: response.status };
       console.error("[Anthropic] request failed", response.status, await response.text());
       return null;
     }
 
+    providerAttempts.claude = { at: new Date().toISOString(), configured: true, ok: true, status: response.status };
     const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
     const text = data.content?.find((item) => item.type === "text")?.text;
     if (!text) return null;
@@ -307,6 +340,12 @@ async function analyzeChartWithClaude(
     const parsed = parseJsonObject(text);
     return normalizeClaudeResult(parsed, assetName, strategyName, timeframe);
   } catch (error) {
+    providerAttempts.claude = {
+      at: new Date().toISOString(),
+      configured: true,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
     console.error("[Anthropic] analysis failed", error);
     return null;
   }
@@ -319,7 +358,8 @@ async function analyzeChartWithOpenAI(
   timeframe: string,
   currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  providerAttempts.openai = { at: new Date().toISOString(), configured: Boolean(apiKey) };
   if (!apiKey) return null;
 
   try {
@@ -352,16 +392,24 @@ async function analyzeChartWithOpenAI(
     });
 
     if (!response.ok) {
+      providerAttempts.openai = { at: new Date().toISOString(), configured: true, ok: false, status: response.status };
       console.error("[OpenAI] request failed", response.status, await response.text());
       return null;
     }
 
+    providerAttempts.openai = { at: new Date().toISOString(), configured: true, ok: true, status: response.status };
     const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
     const text = data.choices?.[0]?.message?.content;
     if (!text) return null;
 
     return normalizeClaudeResult(parseJsonObject(text), assetName, strategyName, timeframe);
   } catch (error) {
+    providerAttempts.openai = {
+      at: new Date().toISOString(),
+      configured: true,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
     console.error("[OpenAI] analysis failed", error);
     return null;
   }

@@ -10,6 +10,7 @@ import { sendVipCodeEmail } from "./lib/email";
 import { getLatestGoldQuote, onGoldQuote, startLiveGoldFeed } from "./lib/liveGold";
 import { fetchServerMarketQuotes } from "./lib/market";
 import { fetchMarketNewsContext } from "./lib/news";
+import { getAIProviderRuntimeStatus } from "./lib/anthropic";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
 import { env } from "./lib/env";
@@ -40,6 +41,8 @@ app.use(cors({
 }));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+app.get("/api/ai/status", (c) => c.json({ ok: true, providers: getAIProviderRuntimeStatus() }));
 
 app.post("/api/admin/login", async (c) => {
   const ip = getClientIp(c.req.raw);
