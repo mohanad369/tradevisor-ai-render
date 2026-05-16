@@ -28,7 +28,9 @@ function getClaudeApiKey(): string | undefined {
 }
 
 function getClaudeModel(): string {
-  return process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || DEFAULT_MODEL;
+  const configuredModel = (process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || "").trim();
+  if (!configuredModel || configuredModel === "claude-3-5-sonnet-20241022") return DEFAULT_MODEL;
+  return configuredModel;
 }
 
 export function getAIProviderRuntimeStatus() {
