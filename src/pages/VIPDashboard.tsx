@@ -31,6 +31,8 @@ import { ToastProvider, useToast } from "@/components/ToastNotifications"
 import CryptoPaymentModal from "@/components/CryptoPaymentModal"
 import { allowUnsafeLocalFallbacks } from "@/lib/runtime"
 import AIAgentsWorkflow from "@/sections/AIAgentsWorkflow"
+import LanguageToggle from "@/components/LanguageToggle"
+import { useLanguage, type Language } from "@/lib/language"
 
 /* ═══════════════════════════════════════════
    VIP Dashboard — Mobile-First Responsive
@@ -280,6 +282,74 @@ const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "account", label: "Account", icon: Settings },
 ]
 
+const vipAr: Record<string, string> = {
+  analyzer: "المحلل",
+  agents: "الوكلاء",
+  signals: "الإشارات",
+  daily: "اليومي",
+  tv: "الشارتات",
+  calculator: "حاسبة اللوت",
+  partner: "الشراكة",
+  brokers: "الوسطاء",
+  performance: "الإحصائيات",
+  goldai: "ذهب AI",
+  education: "التعليم",
+  account: "الحساب",
+  "VIP Dashboard": "لوحة VIP",
+  ACTIVE: "فعال",
+  "DEVELOPER MODE": "وضع المطور",
+  Home: "الرئيسية",
+  Exit: "خروج",
+  "AI Chart Analyzer": "محلل الشارت بالذكاء الاصطناعي",
+  "Upload any chart. AI detects Entry, SL, and TP automatically.": "ارفع أي شارت، والذكاء يحدد الدخول والستوب والأهداف تلقائيا.",
+  "TF:": "الإطار:",
+  "Price:": "السعر:",
+  "Analyze Chart with AI": "حلل الشارت بالذكاء الاصطناعي",
+  "Re-Analyze": "إعادة التحليل",
+  "How did this trade turn out?": "كيف كانت نتيجة الصفقة؟",
+  "Trade WON": "الصفقة ربحت",
+  "Trade LOST": "الصفقة خسرت",
+  "Drop chart image here": "اترك صورة الشارت هنا",
+  "Upload your chart screenshot": "ارفع صورة الشارت",
+  "Drag & drop or click • PNG, JPG, WEBP": "اسحب الصورة أو اضغط • PNG, JPG, WEBP",
+  "GPT-4o Vision": "رؤية GPT-4o",
+  "AI Analyzing Your Chart...": "الذكاء يحلل الشارت...",
+  "Reading price action • Detecting patterns": "قراءة حركة السعر • كشف النماذج",
+  "Setup Quality": "جودة الصفقة",
+  "Danger Entry": "دخول خطر",
+  "Clean Setup": "صفقة واضحة",
+  "Needs Confirmation": "تحتاج تأكيد",
+  "safety score": "درجة الأمان",
+  "Before Entry": "قبل الدخول",
+  "No Trade Now": "لا تدخل الآن",
+  "Wait or Reduce Size": "انتظر أو خفف الحجم",
+  "This entry is currently risky. The warning is based on the full AI review, market momentum, chart structure, six-agent checks, and final risk management.": "الدخول حاليا خطر. التحذير مبني على مراجعة الذكاء، زخم السوق، بنية الشارت، فحص الوكلاء الستة، وإدارة المخاطر.",
+  "AI Indicators": "مؤشرات الذكاء",
+  Confluence: "التوافق",
+  Trend: "الاتجاه",
+  Volume: "الحجم",
+  Structure: "البنية",
+  "Price Levels": "مستويات السعر",
+  Entry: "الدخول",
+  "Stop Loss": "وقف الخسارة",
+  Risk: "المخاطر",
+  "Max Risk": "أقصى مخاطرة",
+  "Risk Distance": "مسافة الخطر",
+  "Hold Time": "مدة الصفقة",
+  "Best R:R": "أفضل عائد/خطر",
+  "Lot Size": "حجم اللوت",
+  "S/R Levels": "الدعم/المقاومة",
+  Fibonacci: "فيبوناتشي",
+  "Ready for AI Analysis": "جاهز للتحليل",
+  "Upload Your Chart": "ارفع الشارت",
+  "Click 'Analyze Chart with AI' to detect Entry, SL, and TP.": "اضغط تحليل الشارت ليحدد الدخول والستوب والأهداف.",
+  "Upload a chart for AI technical analysis.": "ارفع شارت للحصول على تحليل فني بالذكاء.",
+}
+
+function vipText(language: Language, text: string) {
+  return language === "ar" ? vipAr[text] || text : text
+}
+
 function VIPDashboardFull({ email, code }: { email: string; code: string }) {
   // ─── Track VIP login & page view ───
   useEffect(() => {
@@ -291,6 +361,8 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
   const subscriber = getSubscribers().find(s => s.email === email && s.code === code)
   const isDeveloperMode = localStorage.getItem("tradevisor_dev_mode") === "true"
 
@@ -322,15 +394,15 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
             <h1 className="text-sm sm:text-base font-bold flex items-center gap-1.5 sm:gap-2">
               <Crown size={16} className="text-[#d4a843] sm:hidden" />
               <Crown size={18} className="text-[#d4a843] hidden sm:block" />
-              <span className="hidden sm:inline">VIP Dashboard</span>
+              <span className="hidden sm:inline">{vt("VIP Dashboard")}</span>
               <span className="sm:hidden">VIP</span>
             </h1>
             <span className="hidden sm:inline-flex text-[9px] bg-[#22c55e]/10 text-[#22c55e] px-2 py-0.5 rounded-full font-bold border border-[#22c55e]/20">
-              ACTIVE
+              {vt("ACTIVE")}
             </span>
             {isDeveloperMode && (
               <span className="hidden sm:inline-flex text-[9px] bg-[#d4a843]/10 text-[#d4a843] px-2 py-0.5 rounded-full font-bold border border-[#d4a843]/20">
-                DEVELOPER MODE
+                {vt("DEVELOPER MODE")}
               </span>
             )}
           </div>
@@ -338,11 +410,11 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
             <span className="hidden lg:block text-[10px] text-[#666666] max-w-[180px] truncate">{email}</span>
             <button onClick={() => navigate("/")}
               className="text-[10px] text-[#666666] hover:text-white px-2 sm:px-3 py-1.5 rounded-lg hover:bg-[#141414] transition-all">
-              Home
+              {vt("Home")}
             </button>
             <button onClick={handleLogout}
               className="flex items-center gap-1 text-[10px] text-[#e11d48] hover:text-[#ff6b8a] px-2 sm:px-3 py-1.5 rounded-lg hover:bg-[#e11d48]/10 transition-all">
-              <LogOut size={10} /> <span className="hidden sm:inline">Exit</span>
+              <LogOut size={10} /> <span className="hidden sm:inline">{vt("Exit")}</span>
             </button>
           </div>
         </div>
@@ -359,7 +431,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
                   className={`flex items-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
                     activeTab === tab.id ? "bg-[#d4a843]/15 text-[#d4a843] border border-[#d4a843]/30" : "text-[#a0a0a0] hover:bg-[#141414]"
                   }`}>
-                  <Icon size={13} /> {tab.label}
+                  <Icon size={13} /> {vt(tab.id)}
                 </button>
               )
             })}
@@ -378,7 +450,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
                   className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all ${
                     activeTab === tab.id ? "border-[#d4a843] text-[#d4a843]" : "border-transparent text-[#666666] hover:text-[#a0a0a0]"
                   }`}>
-                  <Icon size={13} /> {tab.label}
+                  <Icon size={13} /> {vt(tab.id)}
                 </button>
               )
             })}
@@ -396,7 +468,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
                 className={`flex items-center gap-1 px-3 py-2.5 text-[11px] font-medium whitespace-nowrap border-b-2 transition-all snap-start ${
                   activeTab === tab.id ? "border-[#d4a843] text-[#d4a843]" : "border-transparent text-[#666666]"
                 }`}>
-                <Icon size={12} /> {tab.label}
+                <Icon size={12} /> {vt(tab.id)}
               </button>
             )
           })}
@@ -424,6 +496,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
         {/* Jarvis AI Assistant — VIP Mode */}
         <Jarvis />
       </main>
+      <LanguageToggle />
     </div>
   )
 }
@@ -466,6 +539,8 @@ function getSavedTrades(): SavedTrade[] {
 
 function AIAnalyzerTab() {
   const toast = useToast()
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [selectedAsset, setSelectedAsset] = useState<Asset>(assets[4])
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy>(strategies[1])
@@ -543,8 +618,8 @@ function AIAnalyzerTab() {
   return (
     <div>
       <div className="mb-4 sm:mb-6">
-        <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 mb-1"><Brain size={16} className="text-[#d4a843] sm:hidden" /><Brain size={18} className="text-[#d4a843] hidden sm:block" /> AI Chart Analyzer</h2>
-        <p className="text-[11px] sm:text-xs text-[#666666]">Upload any chart. AI detects Entry, SL, and TP automatically.</p>
+        <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 mb-1"><Brain size={16} className="text-[#d4a843] sm:hidden" /><Brain size={18} className="text-[#d4a843] hidden sm:block" /> {vt("AI Chart Analyzer")}</h2>
+        <p className="text-[11px] sm:text-xs text-[#666666]">{vt("Upload any chart. AI detects Entry, SL, and TP automatically.")}</p>
       </div>
 
       {/* Controls */}
@@ -581,7 +656,7 @@ function AIAnalyzerTab() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-[#1f1f1f]">
-          <span className="text-[#666666] text-[10px] sm:text-xs mr-0.5 sm:mr-1">TF:</span>
+          <span className="text-[#666666] text-[10px] sm:text-xs mr-0.5 sm:mr-1">{vt("TF:")}</span>
           {selectedStrategy.timeframes.map(tf => (
             <button key={tf} onClick={() => { setSelectedTimeframe(tf); setResult(null); }}
               className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-medium transition-all ${selectedTimeframe === tf ? "bg-[#d4a843]/15 text-[#d4a843] border border-[#d4a843]/30" : "bg-transparent text-[#666666] border border-transparent hover:text-[#a0a0a0]"}`}>
@@ -596,7 +671,7 @@ function AIAnalyzerTab() {
       {selectedAsset.name === "XAU/USD (Gold)" && (
         <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
           <DollarSign size={14} className="text-[#d4a843] flex-shrink-0 sm:hidden" /><DollarSign size={16} className="text-[#d4a843] flex-shrink-0 hidden sm:block" />
-          <label className="text-[#a0a0a0] text-[10px] sm:text-xs whitespace-nowrap">Price:</label>
+          <label className="text-[#a0a0a0] text-[10px] sm:text-xs whitespace-nowrap">{vt("Price:")}</label>
           <input type="number" value={manualPrice} onChange={e => setManualPrice(e.target.value)}
             placeholder={realPrice ? realPrice.toFixed(2) : "4724.57"}
             className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-white placeholder-[#666666] focus:outline-none focus:border-[#d4a843] min-w-0" />
@@ -616,26 +691,26 @@ function AIAnalyzerTab() {
             {uploadedImage && !result && !isAnalyzing && (
               <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze}
                 className="w-full bg-[#d4a843] text-[#050505] font-semibold py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#e8c76a] hover:scale-[1.01] transition-all text-sm">
-                <Sparkles size={16} className="sm:hidden" /><Sparkles size={18} className="hidden sm:block" /> Analyze Chart with AI
+                <Sparkles size={16} className="sm:hidden" /><Sparkles size={18} className="hidden sm:block" /> {vt("Analyze Chart with AI")}
               </motion.button>
             )}
             {result && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2 sm:space-y-3">
                 <button onClick={handleAnalyze}
                   className="w-full border border-[#1f1f1f] text-[#a0a0a0] font-semibold py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 hover:border-[#d4a843] hover:text-white transition-all text-sm">
-                  <Brain size={16} className="sm:hidden" /><Brain size={18} className="hidden sm:block" /> Re-Analyze
+                  <Brain size={16} className="sm:hidden" /><Brain size={18} className="hidden sm:block" /> {vt("Re-Analyze")}
                 </button>
                 {/* Win/Loss Buttons */}
                 <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl p-3 sm:p-4">
-                  <p className="text-[11px] sm:text-xs text-[#a0a0a0] text-center mb-2 sm:mb-3">How did this trade turn out?</p>
+                  <p className="text-[11px] sm:text-xs text-[#a0a0a0] text-center mb-2 sm:mb-3">{vt("How did this trade turn out?")}</p>
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <button onClick={() => handleTradeResult(true)}
                       className="flex items-center justify-center gap-1.5 sm:gap-2 bg-[#22c55e]/10 border border-[#22c55e]/20 text-[#22c55e] font-bold py-2.5 sm:py-3 rounded-xl hover:bg-[#22c55e]/20 transition-all text-xs sm:text-sm">
-                      <CheckCircle size={14} className="sm:hidden" /><CheckCircle size={16} className="hidden sm:block" /> Trade WON
+                      <CheckCircle size={14} className="sm:hidden" /><CheckCircle size={16} className="hidden sm:block" /> {vt("Trade WON")}
                     </button>
                     <button onClick={() => handleTradeResult(false)}
                       className="flex items-center justify-center gap-1.5 sm:gap-2 bg-[#e11d48]/10 border border-[#e11d48]/20 text-[#e11d48] font-bold py-2.5 sm:py-3 rounded-xl hover:bg-[#e11d48]/20 transition-all text-xs sm:text-sm">
-                      <XCircle size={14} className="sm:hidden" /><XCircle size={16} className="hidden sm:block" /> Trade LOST
+                      <XCircle size={14} className="sm:hidden" /><XCircle size={16} className="hidden sm:block" /> {vt("Trade LOST")}
                     </button>
                   </div>
                 </div>
@@ -655,16 +730,18 @@ function AIAnalyzerTab() {
 }
 
 function AnalyzingOverlay({ asset, strategy, tf }: { asset: string; strategy: string; tf: string }) {
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
   return (
     <div className="absolute inset-0 z-30 bg-[#050505]/95 flex flex-col items-center justify-center px-4">
       <Loader2 size={36} className="text-[#d4a843] animate-spin mb-3 sm:hidden" />
       <Loader2 size={44} className="text-[#d4a843] animate-spin mb-4 hidden sm:block" />
       <div className="flex items-center gap-2 mb-2">
         <Zap size={14} className="text-[#d4a843] sm:hidden" /><Zap size={16} className="text-[#d4a843] hidden sm:block" />
-        <span className="text-[#d4a843] text-[10px] sm:text-xs font-medium uppercase tracking-wider">GPT-4o Vision</span>
+        <span className="text-[#d4a843] text-[10px] sm:text-xs font-medium uppercase tracking-wider">{vt("GPT-4o Vision")}</span>
       </div>
-      <p className="text-white font-semibold text-base sm:text-lg mb-1 text-center">AI Analyzing Your Chart...</p>
-      <p className="text-[#666666] text-xs sm:text-sm mb-1 text-center">Reading price action &bull; Detecting patterns</p>
+      <p className="text-white font-semibold text-base sm:text-lg mb-1 text-center">{vt("AI Analyzing Your Chart...")}</p>
+      <p className="text-[#666666] text-xs sm:text-sm mb-1 text-center">{vt("Reading price action • Detecting patterns")}</p>
       <p className="text-[#666666] text-[10px] sm:text-xs text-center">{asset} &bull; {strategy} &bull; {tf}</p>
       <div className="mt-4 sm:mt-5 w-48 sm:w-56 h-1 bg-[#1f1f1f] rounded-full overflow-hidden">
         <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 2, ease: "easeInOut" }} className="h-full bg-[#d4a843] rounded-full" />
@@ -676,6 +753,8 @@ function AnalyzingOverlay({ asset, strategy, tf }: { asset: string; strategy: st
 function ChartUploadArea({ onImageUpload, uploadedImage, onClear }: { onImageUpload: (src: string) => void; uploadedImage: string | null; onClear: () => void }) {
   const [dragActive, setDragActive] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation()
@@ -722,8 +801,8 @@ function ChartUploadArea({ onImageUpload, uploadedImage, onClear }: { onImageUpl
         {dragActive ? <Upload size={24} className="text-[#d4a843] sm:hidden" /> : <Camera size={24} className="text-[#666666] sm:hidden" />}
         {dragActive ? <Upload size={32} className="text-[#d4a843] hidden sm:block" /> : <Camera size={32} className="text-[#666666] hidden sm:block" />}
       </div>
-      <p className="text-white font-semibold text-sm sm:text-base mb-2">{dragActive ? "Drop chart image here" : "Upload your chart screenshot"}</p>
-      <p className="text-[#666666] text-xs sm:text-sm mb-3 sm:mb-4">Drag & drop or click &bull; PNG, JPG, WEBP</p>
+      <p className="text-white font-semibold text-sm sm:text-base mb-2">{dragActive ? vt("Drop chart image here") : vt("Upload your chart screenshot")}</p>
+      <p className="text-[#666666] text-xs sm:text-sm mb-3 sm:mb-4">{vt("Drag & drop or click • PNG, JPG, WEBP")}</p>
       <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
         {["TradingView", "MT4", "MT5", "Any platform"].map(p => (
           <span key={p} className="text-[#666666] text-[9px] sm:text-[10px] bg-[#141414] border border-[#1f1f1f] rounded-full px-2 sm:px-2.5 py-0.5 sm:py-1">{p}</span>
@@ -783,6 +862,8 @@ function AnalysisOverlayVIP({ result, assetDecimals }: { result: AnalysisResult;
 function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult; assetDecimals: number }) {
   const isBuy = result.signal === "BUY"
   const formatPrice = (p: number) => p.toFixed(assetDecimals)
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }}
@@ -810,13 +891,13 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         <VIPTradeSafetyNotice result={result} />
         {/* AI Indicators */}
         <div>
-          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Gauge size={10} className="text-[#d4a843] sm:hidden" /><Gauge size={11} className="text-[#d4a843] hidden sm:block" /> AI Indicators</h4>
+          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Gauge size={10} className="text-[#d4a843] sm:hidden" /><Gauge size={11} className="text-[#d4a843] hidden sm:block" /> {vt("AI Indicators")}</h4>
           <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
             {[
-              { label: "Confluence", value: `${result.confluenceScore}/100`, color: result.confluenceScore > 75 ? "text-[#22c55e]" : "text-[#d4a843]" },
-              { label: "Trend", value: result.trend, color: result.trend.includes("Up") ? "text-[#22c55e]" : "text-[#e11d48]" },
-              { label: "Volume", value: result.volume.signal.length > 12 ? result.volume.signal.substring(0, 12) + "..." : result.volume.signal, color: "text-[#3b82f6]" },
-              { label: "Structure", value: result.marketStructure.length > 15 ? result.marketStructure.substring(0, 15) + "..." : result.marketStructure, color: "text-[#a855f7]" },
+              { label: vt("Confluence"), value: `${result.confluenceScore}/100`, color: result.confluenceScore > 75 ? "text-[#22c55e]" : "text-[#d4a843]" },
+              { label: vt("Trend"), value: result.trend, color: result.trend.includes("Up") ? "text-[#22c55e]" : "text-[#e11d48]" },
+              { label: vt("Volume"), value: result.volume.signal.length > 12 ? result.volume.signal.substring(0, 12) + "..." : result.volume.signal, color: "text-[#3b82f6]" },
+              { label: vt("Structure"), value: result.marketStructure.length > 15 ? result.marketStructure.substring(0, 15) + "..." : result.marketStructure, color: "text-[#a855f7]" },
             ].map(item => (
               <div key={item.label} className="bg-[#141414] rounded-lg sm:rounded-xl p-1.5 sm:p-2">
                 <div className="text-[#666666] text-[8px] sm:text-[9px] uppercase tracking-wider mb-0.5 sm:mb-1">{item.label}</div>
@@ -828,11 +909,11 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         <VIPAgentAnalysisFlow result={result} />
         {/* Price Levels */}
         <div>
-          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Target size={10} className="text-[#d4a843]" /> Price Levels</h4>
+          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Target size={10} className="text-[#d4a843]" /> {vt("Price Levels")}</h4>
           <div className="space-y-1 sm:space-y-1.5">
             {[
-              { label: "Entry", price: formatPrice(result.entry), color: "#d4a843", icon: Crosshair },
-              { label: "Stop Loss", price: `${formatPrice(result.stopLoss)} (-${result.riskPips})`, color: "#e11d48", icon: Shield },
+              { label: vt("Entry"), price: formatPrice(result.entry), color: "#d4a843", icon: Crosshair },
+              { label: vt("Stop Loss"), price: `${formatPrice(result.stopLoss)} (-${result.riskPips})`, color: "#e11d48", icon: Shield },
               { label: "TP1", price: `${formatPrice(result.takeProfit1)} ${result.riskReward1}`, color: "#22c55e", icon: TrendingUp },
               { label: "TP2", price: `${formatPrice(result.takeProfit2)} ${result.riskReward2}`, color: "#22c55e", icon: TrendingUp },
               { label: "TP3", price: `${formatPrice(result.takeProfit3)} ${result.riskReward3}`, color: "#22c55e", icon: TrendingUp },
@@ -850,9 +931,9 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         </div>
         {/* Risk */}
         <div className="border-t border-[#1f1f1f] pt-2 sm:pt-3">
-          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Shield size={10} className="text-[#d4a843]" /> Risk</h4>
+          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Shield size={10} className="text-[#d4a843]" /> {vt("Risk")}</h4>
           <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-            {[{ label: "Max Risk", value: `${result.maxRiskPercent}%`, color: "text-[#d4a843]" }, { label: "Risk Distance", value: `${result.riskPips}`, color: "text-white" }, { label: "Hold Time", value: result.timeToHold, color: "text-white" }, { label: "Best R:R", value: result.riskReward3, color: "text-[#22c55e]" }].map(item => (
+            {[{ label: vt("Max Risk"), value: `${result.maxRiskPercent}%`, color: "text-[#d4a843]" }, { label: vt("Risk Distance"), value: `${result.riskPips}`, color: "text-white" }, { label: vt("Hold Time"), value: result.timeToHold, color: "text-white" }, { label: vt("Best R:R"), value: result.riskReward3, color: "text-[#22c55e]" }].map(item => (
               <div key={item.label} className="bg-[#141414] rounded-lg sm:rounded-xl p-1.5 sm:p-2">
                 <div className="text-[#666666] text-[8px] sm:text-[9px] uppercase tracking-wider mb-0.5">{item.label}</div>
                 <div className={`${item.color} font-bold text-[10px] sm:text-xs`}>{item.value}</div>
@@ -862,7 +943,7 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         </div>
         {/* Lot Size */}
         <div className="border-t border-[#1f1f1f] pt-2 sm:pt-3">
-          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Layers size={10} className="text-[#d4a843]" /> Lot Size</h4>
+          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Layers size={10} className="text-[#d4a843]" /> {vt("Lot Size")}</h4>
           <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
             {[{ balance: "$1K", lot: result.lotSize1000 }, { balance: "$5K", lot: result.lotSize5000 }, { balance: "$10K", lot: result.lotSize10000 }].map(item => (
               <div key={item.balance} className="bg-[#141414] rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-center">
@@ -874,7 +955,7 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         </div>
         {/* S/R */}
         <div className="border-t border-[#1f1f1f] pt-2 sm:pt-3">
-          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Activity size={10} className="text-[#d4a843]" /> S/R Levels</h4>
+          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Activity size={10} className="text-[#d4a843]" /> {vt("S/R Levels")}</h4>
           <div className="space-y-1">
             {result.srLevels.slice(0, 4).map((sr, i) => (
               <div key={i} className="flex items-center justify-between bg-[#141414] rounded-lg sm:rounded-xl px-2 sm:px-3 py-1.5 sm:py-2">
@@ -889,7 +970,7 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         </div>
         {/* Fibonacci */}
         <div className="border-t border-[#1f1f1f] pt-2 sm:pt-3">
-          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Percent size={10} className="text-[#d4a843]" /> Fibonacci</h4>
+          <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Percent size={10} className="text-[#d4a843]" /> {vt("Fibonacci")}</h4>
           <div className="flex gap-0.5 sm:gap-1">
             {result.fibonacci.map(fib => (
               <div key={fib.level} className="flex-1 bg-[#141414] rounded-md sm:rounded-lg px-1 sm:px-2 py-1.5 sm:py-2 text-center">
@@ -906,6 +987,8 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
 
 function VIPTradeSafetyNotice({ result }: { result: AnalysisResult }) {
   const action = result.agents?.finalPlan?.action
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
   if (!action || action === "approve_plan") return null
 
   const isRejected = action === "reject"
@@ -917,10 +1000,10 @@ function VIPTradeSafetyNotice({ result }: { result: AnalysisResult }) {
         </div>
         <div className="min-w-0">
           <div className={`text-xs sm:text-sm font-bold ${isRejected ? "text-[#e11d48]" : "text-[#d4a843]"}`}>
-            {isRejected ? "No Trade Now" : "Wait or Reduce Size"}
+            {isRejected ? vt("No Trade Now") : vt("Wait or Reduce Size")}
           </div>
           <p className="text-[#a0a0a0] text-[10px] sm:text-[11px] leading-relaxed mt-1">
-            This entry is currently risky. The warning is based on the full AI review, market momentum, chart structure, six-agent checks, and final risk management.
+            {vt("This entry is currently risky. The warning is based on the full AI review, market momentum, chart structure, six-agent checks, and final risk management.")}
           </p>
           {result.agents?.finalPlan.notes.slice(0, 2).map((note) => (
             <div key={note} className="text-[#666666] text-[9px] sm:text-[10px] leading-relaxed mt-1">{note}</div>
@@ -933,12 +1016,14 @@ function VIPTradeSafetyNotice({ result }: { result: AnalysisResult }) {
 
 function VIPSetupQualityCard({ result }: { result: AnalysisResult }) {
   const setupQuality = result.agents?.finalPlan?.setupQuality
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
   if (!setupQuality) return null
 
   const isDanger = setupQuality.verdict === "danger"
   const isClean = setupQuality.verdict === "clean"
   const color = isDanger ? "#e11d48" : isClean ? "#22c55e" : "#d4a843"
-  const label = isDanger ? "Danger Entry" : isClean ? "Clean Setup" : "Needs Confirmation"
+  const label = isDanger ? vt("Danger Entry") : isClean ? vt("Clean Setup") : vt("Needs Confirmation")
 
   return (
     <div className="bg-[#111111] border border-[#1f1f1f] rounded-xl p-3">
@@ -948,13 +1033,13 @@ function VIPSetupQualityCard({ result }: { result: AnalysisResult }) {
             <Gauge size={14} style={{ color }} />
           </div>
           <div className="min-w-0">
-            <div className="text-white text-xs sm:text-sm font-bold">Setup Quality</div>
+            <div className="text-white text-xs sm:text-sm font-bold">{vt("Setup Quality")}</div>
             <div className="text-[#666666] text-[8px] sm:text-[9px] uppercase tracking-wider">{label}</div>
           </div>
         </div>
         <div className="text-right flex-shrink-0">
           <div className="text-sm sm:text-base font-black" style={{ color }}>{setupQuality.score}/100</div>
-          <div className="text-[#666666] text-[8px] sm:text-[9px]">safety score</div>
+          <div className="text-[#666666] text-[8px] sm:text-[9px]">{vt("safety score")}</div>
         </div>
       </div>
       <p className="text-[#a0a0a0] text-[10px] sm:text-[11px] leading-relaxed">{setupQuality.summary}</p>
@@ -966,7 +1051,7 @@ function VIPSetupQualityCard({ result }: { result: AnalysisResult }) {
         </div>
       )}
       <div className="mt-2 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg p-2">
-        <div className="text-[#d4a843] text-[8px] sm:text-[9px] font-bold uppercase tracking-wider mb-1">Before Entry</div>
+        <div className="text-[#d4a843] text-[8px] sm:text-[9px] font-bold uppercase tracking-wider mb-1">{vt("Before Entry")}</div>
         {setupQuality.confirmationChecklist.slice(0, 2).map((item) => (
           <div key={item} className="text-[#a0a0a0] text-[9px] sm:text-[10px] leading-relaxed">- {item}</div>
         ))}
@@ -1109,6 +1194,8 @@ function readAgentValue(agent: unknown, section: string, key: string): string | 
 }
 
 function EmptyResultCard({ uploadedImage, asset, strategy, tf }: { uploadedImage: boolean; asset: string; strategy: string; tf: string }) {
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
   return (
     <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl sm:rounded-2xl p-5 sm:p-6 h-full flex flex-col items-center justify-center text-center" style={{ minHeight: 300 }}>
@@ -1116,9 +1203,9 @@ function EmptyResultCard({ uploadedImage, asset, strategy, tf }: { uploadedImage
         <Brain size={18} className="text-[#d4a843]/40 sm:hidden" />
         <Brain size={24} className="text-[#d4a843]/40 hidden sm:block" />
       </div>
-      <p className="text-white text-sm sm:text-base font-medium mb-1">{uploadedImage ? "Ready for AI Analysis" : "Upload Your Chart"}</p>
+      <p className="text-white text-sm sm:text-base font-medium mb-1">{uploadedImage ? vt("Ready for AI Analysis") : vt("Upload Your Chart")}</p>
       <p className="text-[#666666] text-[10px] sm:text-xs max-w-xs leading-relaxed mb-2 sm:mb-3 px-4">
-        {uploadedImage ? "Click 'Analyze Chart with AI' to detect Entry, SL, and TP." : "Upload a chart for AI technical analysis."}
+        {uploadedImage ? vt("Click 'Analyze Chart with AI' to detect Entry, SL, and TP.") : vt("Upload a chart for AI technical analysis.")}
       </p>
       {uploadedImage && <div className="flex items-center gap-1.5 sm:gap-2 text-[#d4a843] text-[9px] sm:text-[10px]"><TrendingUp size={10} /><span>{asset} &bull; {strategy} &bull; {tf}</span></div>}
     </motion.div>
