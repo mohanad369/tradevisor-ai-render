@@ -7,12 +7,12 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { sendVipCodeEmail } from "./lib/email";
+import { analyzeChartWithAI, getAIProviderRuntimeStatus } from "./lib/anthropic";
 import { getLatestGoldQuote, onGoldQuote, startLiveGoldFeed } from "./lib/liveGold";
 import { fetchServerMarketQuotes } from "./lib/market";
 import { fetchMarketNewsContext } from "./lib/news";
-import { getAIProviderRuntimeStatus } from "./lib/anthropic";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
-import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
+import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, validateBase64Image, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
 import { env } from "./lib/env";
 import { seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
@@ -229,6 +229,41 @@ app.use(async (c, next) => {
 
 // 3. Body size limit
 app.use(bodyLimit({ maxSize: 8 * 1024 * 1024 }));
+
+app.post("/api/chart/analyze", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`chart-rest:${ip}`, 20);
+  if (!limit.allowed) return c.json({ error: "Too many chart analysis requests", retryAfter: limit.retryAfter }, 429);
+
+  const input = await c.req.json().catch(() => null) as {
+    imageBase64?: string;
+    assetName?: string;
+    strategyName?: string;
+    timeframe?: string;
+    currentPrice?: number;
+  } | null;
+
+  if (!input?.imageBase64 || input.imageBase64.length < 100) {
+    return c.json({ error: "Valid chart image is required" }, 400);
+  }
+
+  let base64Data = input.imageBase64;
+  if (base64Data.includes(",")) base64Data = base64Data.split(",")[1];
+
+  const validation = validateBase64Image(base64Data);
+  if (!validation.valid) return c.json({ error: validation.error || "Invalid image" }, 400);
+
+  const result = await analyzeChartWithAI(
+    base64Data,
+    input.assetName || "XAU/USD (Gold)",
+    input.strategyName || "Day Trading",
+    input.timeframe || "1H",
+    input.currentPrice,
+  );
+
+  if (!result) return c.json({ error: "AI analysis failed. Please try again with a clearer chart image." }, 503);
+  return c.json(result);
+});
 
 // 4. Rate limiting
 app.use("/api/trpc/*", async (c, next) => {
