@@ -43,6 +43,34 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
       </div>
 
       <div className="p-5 space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar">
+        {result.aiConsensus && (
+          <div className={`rounded-xl border p-3 ${
+            result.aiConsensus.status === "aligned"
+              ? "bg-[#22c55e]/5 border-[#22c55e]/20"
+              : result.aiConsensus.status === "mixed"
+                ? "bg-[#d4a843]/5 border-[#d4a843]/25"
+                : "bg-[#141414] border-[#1f1f1f]"
+          }`}>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <Bot size={13} className="text-[#d4a843]" />
+                <span className="text-white text-xs font-semibold uppercase tracking-wider">AI Consensus</span>
+              </div>
+              <span className={`text-[10px] font-bold uppercase ${
+                result.aiConsensus.status === "aligned" ? "text-[#22c55e]" : "text-[#d4a843]"
+              }`}>
+                {result.aiConsensus.status.replaceAll("_", " ")}
+              </span>
+            </div>
+            <div className="text-[#a0a0a0] text-[11px] leading-relaxed">
+              {result.aiConsensus.models.join(" + ")} • Primary: {result.aiConsensus.primaryModel}
+            </div>
+            {result.aiConsensus.notes.slice(0, 2).map((note) => (
+              <div key={note} className="text-[#666666] text-[11px] leading-relaxed mt-1">{note}</div>
+            ))}
+          </div>
+        )}
+
         {/* Price Levels */}
         <div>
           <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">

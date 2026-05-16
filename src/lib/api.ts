@@ -4,7 +4,7 @@ const API_BASE_URL = `${configuredApiOrigin || ""}/api`;
 const API_TIMEOUT_MS = 12_000;
 
 export function isBackendConfigured(): boolean {
-  return Boolean(configuredApiOrigin);
+  return typeof window !== "undefined" && window.location.protocol.startsWith("http");
 }
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
@@ -72,6 +72,14 @@ export interface AnalyzeChartResult {
   marketStructure: string;
   keyLevel: string;
   confluenceScore: number;
+  analysisSource?: string;
+  aiConsensus?: {
+    status: "aligned" | "mixed" | "single_model" | "fallback";
+    models: string[];
+    primaryModel: string;
+    secondaryModel?: string;
+    notes: string[];
+  };
 }
 
 export async function analyzeChart(payload: AnalyzeChartPayload): Promise<AnalyzeChartResult> {

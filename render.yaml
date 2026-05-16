@@ -35,6 +35,10 @@ services:
         value: claude-3-5-sonnet-20241022
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
       - key: TWELVE_DATA_API_KEY
         sync: false
       - key: OANDA_API_KEY

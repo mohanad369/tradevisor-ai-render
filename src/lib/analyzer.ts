@@ -94,6 +94,14 @@ export interface AnalysisResult {
   marketStructure: string;
   keyLevel: string;
   confluenceScore: number;
+  analysisSource?: string;
+  aiConsensus?: {
+    status: "aligned" | "mixed" | "single_model" | "fallback";
+    models: string[];
+    primaryModel: string;
+    secondaryModel?: string;
+    notes: string[];
+  };
   agents?: TradingAgentPipelineResult;
 }
 
@@ -134,6 +142,8 @@ function withDefaultAnalysisFields(result: Partial<AnalysisResult>, strategyName
     marketStructure: result.marketStructure || "AI market structure read from chart",
     keyLevel: result.keyLevel || `Key level around ${entry}`,
     confluenceScore: Number(result.confluenceScore || result.confidence || 70),
+    analysisSource: result.analysisSource,
+    aiConsensus: result.aiConsensus,
   };
 }
 

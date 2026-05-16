@@ -7,6 +7,8 @@
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 
 function hashString(str: string): number {
   let hash = 0;
@@ -59,7 +61,11 @@ export async function analyzeChartWithAI(
   timeframe: string,
   currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
-  const liveResult = await analyzeChartWithClaude(base64Image, assetName, strategyName, timeframe, currentPrice);
+  const [claudeResult, openAiResult] = await Promise.all([
+    analyzeChartWithClaude(base64Image, assetName, strategyName, timeframe, currentPrice),
+    analyzeChartWithOpenAI(base64Image, assetName, strategyName, timeframe, currentPrice),
+  ]);
+  const liveResult = combineModelResults(claudeResult, openAiResult);
   if (liveResult) return liveResult;
 
   // Simulate network latency (real API feel)
@@ -167,6 +173,13 @@ export async function analyzeChartWithAI(
       marketStructure: isBuy ? (rng() > 0.5 ? "Higher Highs & Higher Lows" : "Break of Structure") : (rng() > 0.5 ? "Lower Highs & Lower Lows" : "Liquidity Sweep Complete"),
       keyLevel: `${isBuy ? "Support" : "Resistance"} at ${parseFloat((isBuy ? sl - riskAmount * 0.3 : sl + riskAmount * 0.3).toFixed(asset.decimals))} — tested ${2 + Math.floor(rng() * 3)}×`,
       confluenceScore,
+      analysisSource: "deterministic-fallback",
+      aiConsensus: {
+        status: "fallback",
+        models: ["deterministic-fallback"],
+        primaryModel: "deterministic-fallback",
+        notes: ["Live AI providers were unavailable, so Tradevisor used its conservative fallback model."],
+      },
     };
   } catch {
     return null;
@@ -279,12 +292,165 @@ async function analyzeChartWithClaude(
   }
 }
 
+async function analyzeChartWithOpenAI(
+  base64Image: string,
+  assetName: string,
+  strategyName: string,
+  timeframe: string,
+  currentPrice?: number,
+): Promise<Record<string, unknown> | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const mediaType = detectMediaType(base64Image);
+    const prompt = buildSharedAnalysisPrompt(assetName, strategyName, timeframe, currentPrice);
+    const response = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || process.env.VIP2_OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+        temperature: 0.15,
+        max_tokens: 1800,
+        messages: [
+          {
+            role: "system",
+            content: "You are Tradevisor AI's second-opinion chart-analysis agent. Return only valid JSON.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64Image}` } },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[OpenAI] request failed", response.status, await response.text());
+      return null;
+    }
+
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) return null;
+
+    return normalizeClaudeResult(parseJsonObject(text), assetName, strategyName, timeframe);
+  } catch (error) {
+    console.error("[OpenAI] analysis failed", error);
+    return null;
+  }
+}
+
 function detectMediaType(base64Image: string) {
   if (base64Image.startsWith("/9j/")) return "image/jpeg";
   if (base64Image.startsWith("iVBOR")) return "image/png";
   if (base64Image.startsWith("R0lGOD")) return "image/gif";
   if (base64Image.startsWith("UklGR")) return "image/webp";
   return "image/png";
+}
+
+function buildSharedAnalysisPrompt(assetName: string, strategyName: string, timeframe: string, currentPrice?: number) {
+  return [
+    "Analyze the uploaded trading chart image and return ONLY valid JSON.",
+    "Use the six-agent workflow internally: news context, validation, market momentum, chart trade analysis, supervisor checks, and final risk management.",
+    "The final numbers must be realistic for the asset and current market price.",
+    `Asset: ${assetName}`,
+    `Strategy: ${strategyName}`,
+    `Timeframe: ${timeframe}`,
+    currentPrice ? `Current market price: ${currentPrice}` : "Current market price: not supplied",
+    "Required JSON schema:",
+    JSON.stringify({
+      signal: "BUY or SELL",
+      confidence: 85,
+      entry: 0,
+      stopLoss: 0,
+      takeProfit1: 0,
+      takeProfit2: 0,
+      takeProfit3: 0,
+      riskReward1: "1:1.5",
+      riskReward2: "1:2.5",
+      riskReward3: "1:4.0",
+      riskPips: 0,
+      riskAmount: 0,
+      strategyUsed: strategyName,
+      timeToHold: "30 minutes - 4 hours",
+      lotSize1000: "0.01",
+      lotSize5000: "0.05",
+      lotSize10000: "0.10",
+      maxRiskPercent: 1.5,
+      reasons: ["reason"],
+      srLevels: [{ level: 0, type: "support", strength: "Strong" }],
+      fibonacci: [{ level: 0.618, price: 0 }],
+      candlePatterns: [{ name: "Pattern", signal: "bullish", reliability: "High" }],
+      volume: { trend: "normal", signal: "Volume note" },
+      trend: "Trend summary",
+      marketStructure: "Market structure summary",
+      keyLevel: "Key level summary",
+      confluenceScore: 85,
+    }),
+    "Rules:",
+    "- For BUY, stopLoss must be below entry and all take profits above entry.",
+    "- For SELL, stopLoss must be above entry and all take profits below entry.",
+    "- Risk/reward must be mathematically consistent.",
+    "- If the chart is unclear, lower confidence and keep risk conservative.",
+  ].join("\n");
+}
+
+function combineModelResults(claudeResult: Record<string, unknown> | null, openAiResult: Record<string, unknown> | null) {
+  if (claudeResult && openAiResult) {
+    const sameSignal = claudeResult.signal === openAiResult.signal;
+    const primary = {
+      ...claudeResult,
+      confidence: sameSignal
+        ? Math.min(98, Math.round((Number(claudeResult.confidence || 70) + Number(openAiResult.confidence || 70)) / 2) + 3)
+        : Math.min(Number(claudeResult.confidence || 70), 72),
+      analysisSource: "claude-openai-consensus",
+      aiConsensus: {
+        status: sameSignal ? "aligned" : "mixed",
+        models: ["Claude", "OpenAI"],
+        primaryModel: "Claude",
+        secondaryModel: "OpenAI",
+        notes: sameSignal
+          ? ["Claude and OpenAI agree on trade direction.", "Final risk agent may approve if reward/risk and workflow checks pass."]
+          : ["Claude and OpenAI disagree on direction.", "Final risk agent should restrict the setup until clearer confirmation."],
+      },
+    };
+    return primary;
+  }
+
+  if (claudeResult) {
+    return {
+      ...claudeResult,
+      analysisSource: "claude",
+      aiConsensus: {
+        status: "single_model",
+        models: ["Claude"],
+        primaryModel: "Claude",
+        notes: ["Claude produced the active chart analysis. OpenAI was not configured or unavailable."],
+      },
+    };
+  }
+
+  if (openAiResult) {
+    return {
+      ...openAiResult,
+      analysisSource: "openai",
+      aiConsensus: {
+        status: "single_model",
+        models: ["OpenAI"],
+        primaryModel: "OpenAI",
+        notes: ["OpenAI produced the active chart analysis. Claude was not configured or unavailable."],
+      },
+    };
+  }
+
+  return null;
 }
 
 function parseJsonObject(text: string) {

@@ -172,6 +172,7 @@ function marketContextAgent(decisionOutput: Record<string, any>, input: Pipeline
         shortTermChangePercent: input.analysis.signal === "BUY" ? 0.8 : -0.8,
         volatilityPercent: 1.1,
         timestamp: new Date().toISOString(),
+        aiConsensus: input.analysis.aiConsensus,
       },
     },
   };
@@ -275,11 +276,13 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     return total + sideMultiplier * (target.price - trade.entryPrice) * (target.closePercent / 100);
   }, 0);
   const rewardRiskRatio = risk > 0 ? Number((blendedReward / risk).toFixed(2)) : 0;
+  const mixedAiConsensus = input.analysis.aiConsensus?.status === "mixed";
   const closed = supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
-  const restricted = supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
+  const restricted = mixedAiConsensus || supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
   const action = closed ? "reject" : restricted ? "wait_or_reduce_size" : "approve_plan";
   const confidence = action === "approve_plan" && input.analysis.confidence >= 82 ? "high" : "medium";
   const notes = [
+    ...(input.analysis.aiConsensus?.notes || []),
     "Risk is defined with a clear stop loss.",
     "Targets are based on chart analysis, momentum, and supervision checks.",
     "Final plan includes staged exits and position size.",
