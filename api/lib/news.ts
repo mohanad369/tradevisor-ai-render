@@ -32,6 +32,7 @@ type GdeltArticle = {
 };
 
 const GDELT_DOC_URL = "https://api.gdeltproject.org/api/v2/doc/doc";
+const GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search";
 const NEWS_CACHE_MS = 2 * 60 * 1000;
 const newsCache = new Map<string, { value: MarketNewsContext; fetchedAt: number }>();
 
@@ -65,12 +66,18 @@ export async function fetchMarketNewsContext(assetName: string): Promise<MarketN
       .slice(0, 8)
       .map((article) => classifyArticle(article, normalizedAsset));
 
-    const context = buildContext(normalizedAsset, headlines, "live");
+    const context = buildContext(normalizedAsset, headlines, "live", "gdelt-doc-api");
     newsCache.set(normalizedAsset, { value: context, fetchedAt: Date.now() });
     return context;
   } catch (error) {
     console.warn("[NewsAgent] live news fetch failed", error instanceof Error ? error.message : String(error));
-    const context = buildContext(normalizedAsset, buildFallbackHeadlines(normalizedAsset), "fallback");
+    const rssHeadlines = await fetchGoogleNewsRss(normalizedAsset).catch((rssError) => {
+      console.warn("[NewsAgent] Google News RSS failed", rssError instanceof Error ? rssError.message : String(rssError));
+      return [];
+    });
+    const context = rssHeadlines.length
+      ? buildContext(normalizedAsset, rssHeadlines, "live", "google-news-rss")
+      : buildContext(normalizedAsset, buildFallbackHeadlines(normalizedAsset), "fallback", "tradevisor-fallback");
     newsCache.set(normalizedAsset, { value: context, fetchedAt: Date.now() });
     return context;
   }
@@ -121,7 +128,69 @@ function classifyArticle(article: GdeltArticle, assetName: string): MarketNewsIt
   };
 }
 
-function buildContext(assetName: string, headlines: MarketNewsItem[], status: "live" | "fallback"): MarketNewsContext {
+async function fetchGoogleNewsRss(assetName: string): Promise<MarketNewsItem[]> {
+  const url = new URL(GOOGLE_NEWS_RSS_URL);
+  url.searchParams.set("q", buildGoogleNewsQuery(assetName));
+  url.searchParams.set("hl", "en-US");
+  url.searchParams.set("gl", "US");
+  url.searchParams.set("ceid", "US:en");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  const response = await fetch(url, {
+    headers: { "user-agent": "TradevisorAI/1.0 market-news-agent" },
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
+
+  if (!response.ok) throw new Error(`Google News RSS ${response.status}`);
+  const xml = await response.text();
+  return parseGoogleNewsItems(xml, assetName).slice(0, 8);
+}
+
+function buildGoogleNewsQuery(assetName: string) {
+  if (assetName.toUpperCase().includes("XAU") || assetName.toLowerCase().includes("gold")) {
+    return `gold XAUUSD Federal Reserve dollar yields inflation`;
+  }
+  if (assetName.toUpperCase().includes("BTC")) return `bitcoin BTC ETF regulation liquidity Federal Reserve`;
+  if (assetName.toUpperCase().includes("ETH")) return `ethereum ETH ETF regulation liquidity Federal Reserve`;
+  return `${assetName} forex central bank rates dollar yields`;
+}
+
+function parseGoogleNewsItems(xml: string, assetName: string): MarketNewsItem[] {
+  const itemMatches = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)];
+  return itemMatches.map((match) => {
+    const block = match[1] || "";
+    const title = decodeXml(readXmlTag(block, "title") || "Market update");
+    const url = decodeXml(readXmlTag(block, "link") || "");
+    const source = decodeXml(readXmlTag(block, "source") || extractDomain(url) || "google-news");
+    const publishedAt = normalizeGdeltDate(decodeXml(readXmlTag(block, "pubDate") || ""));
+    return classifyArticle({ title, url, domain: source, seendate: publishedAt }, assetName);
+  }).filter((item) => item.title && item.url);
+}
+
+function readXmlTag(block: string, tag: string) {
+  const match = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return match?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, "").trim();
+}
+
+function decodeXml(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
+}
+
+function extractDomain(value: string) {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function buildContext(assetName: string, headlines: MarketNewsItem[], status: "live" | "fallback", sourceName: string): MarketNewsContext {
   const positive = headlines.filter((item) => item.sentiment === "positive").length;
   const negative = headlines.filter((item) => item.sentiment === "negative").length;
   const highRisk = headlines.filter((item) => item.riskLevel === "high").length;
@@ -136,7 +205,7 @@ function buildContext(assetName: string, headlines: MarketNewsItem[], status: "l
   return {
     assetName,
     generatedAt: new Date().toISOString(),
-    source: "gdelt-doc-api",
+    source: sourceName,
     status,
     marketMood,
     riskLevel,
