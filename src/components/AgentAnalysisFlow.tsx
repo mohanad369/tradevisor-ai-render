@@ -1,63 +1,67 @@
 import { motion } from "framer-motion"
 import { Activity, Bot, Building2, CheckCircle2, Crosshair, Gauge, Mail, Shield } from "lucide-react"
 import type { AnalysisResult } from "@/lib/analyzer"
+import { useLanguage } from "@/lib/language"
 
 export default function AgentAnalysisFlow({ result }: { result: AnalysisResult }) {
-  const finalAction = result.agents?.finalPlan?.action?.replaceAll("_", " ") || "trade plan ready"
-  const riskGate = readAgentValue(result.agents?.finalRisk, "finalDecision", "riskGate") || "risk checked"
+  const { language } = useLanguage()
+  const isArabic = language === "ar"
+  const copy = isArabic ? arCopy : enCopy
+  const finalAction = formatAgentOutput(result.agents?.finalPlan?.action || "trade plan ready", isArabic)
+  const riskGate = formatAgentOutput(readAgentValue(result.agents?.finalRisk, "finalDecision", "riskGate") || "risk checked", isArabic)
   const agentRows = [
     {
       id: "01",
-      name: "News Agent",
-      task: "Scans market news and volatility context.",
-      output: readAgentValue(result.agents?.news, "nextAgentPayload", "recommendedAction") || "news scored",
+      name: copy.news.name,
+      task: copy.news.task,
+      output: formatAgentOutput(readAgentValue(result.agents?.news, "nextAgentPayload", "recommendedAction") || "news scored", isArabic),
       icon: Mail,
       color: "#38bdf8",
     },
     {
       id: "02",
-      name: "Bank Agent",
-      task: "Checks central-bank tone, USD pressure, yields, and institutional liquidity intent.",
-      output: readAgentValue(result.agents?.bankPolicy, "nextAgentPayload", "bankBias") || "bank context checked",
+      name: copy.bank.name,
+      task: copy.bank.task,
+      output: formatAgentOutput(readAgentValue(result.agents?.bankPolicy, "nextAgentPayload", "bankBias") || "bank context checked", isArabic),
       icon: Building2,
       color: "#60a5fa",
     },
     {
       id: "03",
-      name: "Validation Agent",
-      task: "Checks weak or conflicting data before the next step.",
-      output: readAgentValue(result.agents?.decision, "nextAgentPayload", "recommendedAction") || "data validated",
+      name: copy.validation.name,
+      task: copy.validation.task,
+      output: formatAgentOutput(readAgentValue(result.agents?.decision, "nextAgentPayload", "recommendedAction") || "data validated", isArabic),
       icon: CheckCircle2,
       color: "#22c55e",
     },
     {
       id: "04",
-      name: "Momentum Agent",
-      task: "Reads pressure, trend strength, and current market momentum.",
-      output: readAgentValue(result.agents?.marketContext, "nextAgentPayload", "recommendedAction") || "momentum aligned",
+      name: copy.momentum.name,
+      task: copy.momentum.task,
+      output: formatAgentOutput(readAgentValue(result.agents?.marketContext, "nextAgentPayload", "recommendedAction") || "momentum aligned", isArabic),
       icon: Activity,
       color: "#f59e0b",
     },
     {
       id: "05",
-      name: "Chart Agent",
-      task: "Maps asset, entry, stop loss, and take-profit levels.",
-      output: readAgentValue(result.agents?.chartTrade, "nextAgentPayload", "recommendedAction") || "chart mapped",
+      name: copy.chart.name,
+      task: copy.chart.task,
+      output: formatAgentOutput(readAgentValue(result.agents?.chartTrade, "nextAgentPayload", "recommendedAction") || "chart mapped", isArabic),
       icon: Crosshair,
       color: "#a78bfa",
     },
     {
       id: "06",
-      name: "Supervisor Agent",
-      task: "Checks that every agent output is connected and valid.",
-      output: readAgentValue(result.agents?.supervisor, "nextAgentPayload", "supervisorStatus") || "workflow connected",
+      name: copy.supervisor.name,
+      task: copy.supervisor.task,
+      output: formatAgentOutput(readAgentValue(result.agents?.supervisor, "nextAgentPayload", "supervisorStatus") || "workflow connected", isArabic),
       icon: Gauge,
       color: "#eab308",
     },
     {
       id: "07",
-      name: "Risk Agent",
-      task: "Final gate for risk, position size, stop, and targets.",
+      name: copy.risk.name,
+      task: copy.risk.task,
       output: riskGate,
       icon: Shield,
       color: "#fb7185",
@@ -68,19 +72,19 @@ export default function AgentAnalysisFlow({ result }: { result: AnalysisResult }
     <div className="border-t border-[#1f1f1f] pt-2 sm:pt-3">
       <div className="flex items-center justify-between gap-2 mb-2">
         <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1">
-          <Bot size={10} className="text-[#d4a843]" /> How AI Agents Worked
+          <Bot size={10} className="text-[#d4a843]" /> {copy.title}
         </h4>
         <span className="text-[8px] sm:text-[9px] text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-full px-2 py-0.5">
-          Linked
+          {copy.linked}
         </span>
       </div>
 
       <div className="rounded-xl border border-[#d4a843]/20 bg-[#0f0f0f] p-2 sm:p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="text-[#a0a0a0] text-[9px] sm:text-[10px] leading-relaxed">
-            The trade moved through news, bank-policy, validation, momentum, chart, supervisor, and risk agents before the final plan.
+            {copy.summary}
           </div>
-          <div className={`text-[9px] sm:text-[10px] font-bold capitalize ${finalAction.includes("approve") ? "text-[#22c55e]" : "text-[#d4a843]"}`}>
+          <div className={`text-[9px] sm:text-[10px] font-bold capitalize ${isApprovedAction(result.agents?.finalPlan?.action) ? "text-[#22c55e]" : "text-[#d4a843]"}`}>
             {finalAction}
           </div>
         </div>
@@ -122,7 +126,7 @@ export default function AgentAnalysisFlow({ result }: { result: AnalysisResult }
                     </div>
                     <p className="text-[#777777] text-[9px] leading-relaxed mt-0.5">{agent.task}</p>
                     <div className="text-[9px] font-bold mt-1 truncate" style={{ color: agent.color }}>
-                      {String(agent.output).replaceAll("_", " ")}
+                      {agent.output}
                     </div>
                   </div>
                 </div>
@@ -141,4 +145,63 @@ function readAgentValue(agent: unknown, section: string, key: string): string | 
   if (!value || typeof value !== "object") return undefined
   const nested = (value as Record<string, unknown>)[key]
   return typeof nested === "string" ? nested : undefined
+}
+
+function isApprovedAction(action: string | undefined) {
+  return action === "approve_plan" || action === "approve" || action === "trade plan ready"
+}
+
+function formatAgentOutput(value: string, isArabic: boolean) {
+  const normalized = value.replaceAll("_", " ").trim().toLowerCase()
+  if (!isArabic) return normalized
+  const translations: Record<string, string> = {
+    "approve plan": "الخطة مقبولة",
+    approve: "مقبول",
+    reject: "مرفوض",
+    wait: "انتظار",
+    "wait or reduce size": "انتظار أو تخفيض حجم الصفقة",
+    "trade plan ready": "خطة الصفقة جاهزة",
+    "risk checked": "تم فحص المخاطر",
+    "news scored": "تم تقييم الأخبار",
+    "bank context checked": "تم فحص سياق البنوك",
+    "data validated": "تم التحقق من البيانات",
+    "momentum aligned": "الزخم متوافق",
+    "chart mapped": "تم ربط الشارت",
+    "workflow connected": "مسار الوكلاء متصل",
+    bullish: "ميل صاعد",
+    bearish: "ميل هابط",
+    neutral: "حيادي",
+    restricted: "مقيّد",
+    degraded: "بحاجة مراجعة",
+    connected: "متصل",
+    valid: "صالح",
+    "no trade": "لا توجد صفقة الآن",
+  }
+  return translations[normalized] || normalized
+}
+
+const enCopy = {
+  title: "How AI Agents Worked",
+  linked: "Linked",
+  summary: "The trade moved through news, bank-policy, validation, momentum, chart, supervisor, and risk agents before the final plan.",
+  news: { name: "News Agent", task: "Scans market news and volatility context." },
+  bank: { name: "Bank Agent", task: "Checks central-bank tone, USD pressure, yields, and institutional liquidity intent." },
+  validation: { name: "Validation Agent", task: "Checks weak or conflicting data before the next step." },
+  momentum: { name: "Momentum Agent", task: "Reads pressure, trend strength, and current market momentum." },
+  chart: { name: "Chart Agent", task: "Maps asset, entry, stop loss, and take-profit levels." },
+  supervisor: { name: "Supervisor Agent", task: "Checks that every agent output is connected and valid." },
+  risk: { name: "Risk Agent", task: "Final gate for risk, position size, stop, and targets." },
+}
+
+const arCopy = {
+  title: "كيف عمل وكلاء الذكاء",
+  linked: "متصل",
+  summary: "مرت الصفقة عبر وكيل الأخبار، وكيل البنوك، التحقق، الزخم، الشارت، المشرف، وإدارة المخاطر قبل إصدار الخطة النهائية.",
+  news: { name: "وكيل الأخبار", task: "يفحص أخبار السوق وسياق التذبذب." },
+  bank: { name: "وكيل البنوك", task: "يفحص لهجة البنوك المركزية، ضغط الدولار، العوائد، ونية السيولة المؤسسية." },
+  validation: { name: "وكيل التحقق", task: "يتأكد من ضعف أو تعارض البيانات قبل الخطوة التالية." },
+  momentum: { name: "وكيل الزخم", task: "يقرأ الضغط، قوة الاتجاه، وزخم السوق الحالي." },
+  chart: { name: "وكيل الشارت", task: "يربط الأصل مع الدخول والستوب ومستويات الأهداف." },
+  supervisor: { name: "وكيل المشرف", task: "يتأكد أن مخرجات كل الوكلاء متصلة وصالحة." },
+  risk: { name: "وكيل المخاطر", task: "البوابة النهائية للمخاطر، حجم الصفقة، الستوب، والأهداف." },
 }
