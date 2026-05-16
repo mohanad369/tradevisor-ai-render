@@ -16,6 +16,13 @@ import Privacy from './pages/Privacy.tsx'
 import CandlePredictor from './pages/CandlePredictor.tsx'
 import VIPDashboard from './pages/VIPDashboard.tsx'
 
+const cleanPathRoutes = new Set(['/admin', '/developer', '/login', '/privacy', '/candles', '/vip'])
+const currentPath = window.location.pathname.replace(/\/$/, '') || '/'
+
+if (cleanPathRoutes.has(currentPath) && !window.location.hash) {
+  window.history.replaceState(null, '', `/#${currentPath}`)
+}
+
 const router = createHashRouter([
   { path: '/', element: <App /> },
   { path: '/login', element: <Login /> },
