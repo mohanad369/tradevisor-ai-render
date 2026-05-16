@@ -17,12 +17,16 @@ type ProviderAttempt = {
   ok?: boolean;
   status?: number;
   error?: string;
+  availableModelCount?: number;
+  availableModelSample?: string[];
 };
 
 const providerAttempts: { claude: ProviderAttempt | null; openai: ProviderAttempt | null } = {
   claude: null,
   openai: null,
 };
+
+let claudeModelCache: { at: number; status: number; ids: string[]; error?: string } | null = null;
 
 function getClaudeApiKey(): string | undefined {
   return process.env.ANTHROPIC_API_KEY?.trim() || process.env.CLAUDE_API_KEY?.trim() || process.env.CLOUD_API_KEY?.trim();
@@ -38,9 +42,50 @@ function getClaudeModelCandidates(): string[] {
   return Array.from(new Set([
     getClaudeModel(),
     DEFAULT_MODEL,
+    "claude-sonnet-4-5-20250929",
     "claude-3-7-sonnet-20250219",
     "claude-3-5-haiku-20241022",
     "claude-3-haiku-20240307",
+  ]));
+}
+
+async function fetchAvailableClaudeModels(apiKey: string): Promise<string[]> {
+  const now = Date.now();
+  if (claudeModelCache && now - claudeModelCache.at < 10 * 60 * 1000) return claudeModelCache.ids;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/models", {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+    });
+    const body = await response.json().catch(() => null) as { data?: Array<{ id?: string }> } | null;
+    const ids = response.ok ? (body?.data || []).map((model) => model.id).filter((id): id is string => Boolean(id)) : [];
+    claudeModelCache = {
+      at: now,
+      status: response.status,
+      ids,
+      error: response.ok ? undefined : JSON.stringify(body).slice(0, 300),
+    };
+    return ids;
+  } catch (error) {
+    claudeModelCache = {
+      at: now,
+      status: 0,
+      ids: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+    return [];
+  }
+}
+
+async function getRuntimeClaudeModelCandidates(apiKey: string): Promise<string[]> {
+  const availableModels = await fetchAvailableClaudeModels(apiKey);
+  return Array.from(new Set([
+    getClaudeModel(),
+    ...availableModels,
+    ...getClaudeModelCandidates(),
   ]));
 }
 
@@ -50,6 +95,14 @@ export function getAIProviderRuntimeStatus() {
       configured: Boolean(getClaudeApiKey()),
       model: getClaudeModel(),
       acceptedEnvNames: ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "CLOUD_API_KEY"],
+      modelDiscovery: claudeModelCache
+        ? {
+            status: claudeModelCache.status,
+            count: claudeModelCache.ids.length,
+            sample: claudeModelCache.ids.slice(0, 8),
+            error: claudeModelCache.error,
+          }
+        : null,
       lastAttempt: providerAttempts.claude,
     },
     openai: {
@@ -309,7 +362,8 @@ async function analyzeChartWithClaude(
       "- If the chart is unclear, lower confidence and keep risk conservative.",
     ].join("\n");
 
-    for (const model of getClaudeModelCandidates()) {
+    const modelCandidates = await getRuntimeClaudeModelCandidates(apiKey);
+    for (const model of modelCandidates) {
       const response = await fetch(ANTHROPIC_URL, {
         method: "POST",
         headers: {
@@ -342,13 +396,29 @@ async function analyzeChartWithClaude(
 
       if (!response.ok) {
         const failureText = await response.text();
-        providerAttempts.claude = { at: new Date().toISOString(), configured: true, model, ok: false, status: response.status };
+        providerAttempts.claude = {
+          at: new Date().toISOString(),
+          configured: true,
+          model,
+          ok: false,
+          status: response.status,
+          availableModelCount: claudeModelCache?.ids.length,
+          availableModelSample: claudeModelCache?.ids.slice(0, 5),
+        };
         console.error("[Anthropic] request failed", { model, status: response.status, body: failureText });
         if (response.status === 404) continue;
         return null;
       }
 
-      providerAttempts.claude = { at: new Date().toISOString(), configured: true, model, ok: true, status: response.status };
+      providerAttempts.claude = {
+        at: new Date().toISOString(),
+        configured: true,
+        model,
+        ok: true,
+        status: response.status,
+        availableModelCount: claudeModelCache?.ids.length,
+        availableModelSample: claudeModelCache?.ids.slice(0, 5),
+      };
       const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
       const text = data.content?.find((item) => item.type === "text")?.text;
       if (!text) return null;
