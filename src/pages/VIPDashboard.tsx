@@ -12,7 +12,7 @@ import {
   Flame, Calendar, Hash, GraduationCap, User,
   CheckCircle, XCircle, Trophy, TrendingDown as TrendDown, Users,
   PieChart, LineChart, Gauge, ChevronUp, ChevronLeft, ChevronRight,
-  Bookmark, Menu
+  Bookmark, Menu, Bot
 } from "lucide-react"
 import { useNavigate } from "react-router"
 import { trpc } from "@/lib/trpc"
@@ -30,6 +30,7 @@ import type { Strategy, Asset } from "@/data/strategies"
 import { ToastProvider, useToast } from "@/components/ToastNotifications"
 import CryptoPaymentModal from "@/components/CryptoPaymentModal"
 import { allowUnsafeLocalFallbacks } from "@/lib/runtime"
+import AIAgentsWorkflow from "@/sections/AIAgentsWorkflow"
 
 /* ═══════════════════════════════════════════
    VIP Dashboard — Mobile-First Responsive
@@ -262,10 +263,11 @@ function VIPDashboardInner() {
    FULL VIP DASHBOARD — Mobile Responsive
    ═══════════════════════════════════════════ */
 
-type TabId = "analyzer" | "signals" | "daily" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
+type TabId = "analyzer" | "agents" | "signals" | "daily" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
 
 const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "analyzer", label: "Analyzer", icon: Brain },
+  { id: "agents", label: "AI Agents", icon: Bot },
   { id: "signals", label: "Signals", icon: Zap },
   { id: "daily", label: "Daily", icon: Calendar },
   { id: "tv", label: "Charts", icon: LineChart },
@@ -290,6 +292,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
   const navigate = useNavigate()
   const toast = useToast()
   const subscriber = getSubscribers().find(s => s.email === email && s.code === code)
+  const isDeveloperMode = localStorage.getItem("tradevisor_dev_mode") === "true"
 
   const logoutMutation = trpc.vip.logout.useMutation({
     onSuccess: () => { /* silently kill session */ },
@@ -325,6 +328,11 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
             <span className="hidden sm:inline-flex text-[9px] bg-[#22c55e]/10 text-[#22c55e] px-2 py-0.5 rounded-full font-bold border border-[#22c55e]/20">
               ACTIVE
             </span>
+            {isDeveloperMode && (
+              <span className="hidden sm:inline-flex text-[9px] bg-[#d4a843]/10 text-[#d4a843] px-2 py-0.5 rounded-full font-bold border border-[#d4a843]/20">
+                DEVELOPER MODE
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
             <span className="hidden lg:block text-[10px] text-[#666666] max-w-[180px] truncate">{email}</span>
@@ -400,6 +408,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             {activeTab === "analyzer" && <AIAnalyzerTab />}
+            {activeTab === "agents" && <AIAgentsWorkflow />}
             {activeTab === "signals" && <AISignalsTab />}
             {activeTab === "daily" && <DailyPicksTab />}
             {activeTab === "tv" && <TradingViewLiveTab />}
