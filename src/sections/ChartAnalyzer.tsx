@@ -146,7 +146,7 @@ export default function ChartAnalyzer() {
           <div className="flex items-center justify-center gap-2 mb-3">
             <Brain size={20} className="text-[#d4a843]" />
             <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">{t("analyzer.eyebrow")}</span>
-            <span className="text-[10px] bg-[#d4a843]/20 text-[#d4a843] px-2 py-0.5 rounded-full font-medium">GPT-4o</span>
+            <span className="text-[10px] bg-[#d4a843]/20 text-[#d4a843] px-2 py-0.5 rounded-full font-medium">Claude + GPT-4o</span>
           </div>
           <h2 className="text-white text-4xl font-bold mb-3">{t("analyzer.title")}</h2>
           <p className="text-[#a0a0a0] text-base max-w-2xl mx-auto">
@@ -244,7 +244,7 @@ export default function ChartAnalyzer() {
                   <Loader2 size={44} className="text-[#d4a843] animate-spin mb-4" />
                   <div className="flex items-center gap-2 mb-2">
                     <Zap size={16} className="text-[#d4a843]" />
-                    <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">Powered by GPT-4o Vision</span>
+                    <span className="text-[#d4a843] text-xs font-medium uppercase tracking-wider">Powered by Claude + GPT-4o Vision</span>
                   </div>
                   <p className="text-white font-semibold text-lg mb-1">{t("analyzer.analyzing")}</p>
                   <p className="text-[#666666] text-sm mb-1">{t("analyzer.analyzingSteps")}</p>

@@ -7,6 +7,14 @@ import {
 import type { AnalysisResult } from "@/lib/analyzer";
 import AgentAnalysisFlow from "@/components/AgentAnalysisFlow";
 
+function getProviderLabel(result: AnalysisResult) {
+  if (result.aiConsensus?.models?.length) return result.aiConsensus.models.join(" + ");
+  if (result.analysisSource === "claude-openai-consensus") return "Claude + OpenAI";
+  if (result.analysisSource === "claude") return "Claude";
+  if (result.analysisSource === "openai") return "OpenAI";
+  return "Tradevisor AI";
+}
+
 /* ═══════════════════════════════════════════════════════════
    AnalysisResultPanel — displays AI-generated analysis
    ═══════════════════════════════════════════════════════════ */
@@ -15,6 +23,7 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
   const isBuy = result.signal === "BUY";
   const formatPrice = (price: number) => price.toFixed(assetDecimals);
   const [chatOpen, setChatOpen] = useState(false);
+  const providerLabel = getProviderLabel(result);
 
   return (
     <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, ease: "easeOut" }} className="bg-[#0a0a0a] border border-[#1f1f1f] rounded-2xl overflow-hidden relative">
@@ -33,12 +42,12 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
                   <span className={`relative inline-flex rounded-full h-2 w-2 ${isBuy ? "bg-[#22c55e]" : "bg-[#e11d48]"}`} />
                 </span>
               </div>
-              <div className="text-[#666666] text-xs">{result.strategyUsed} • AI-Detected</div>
+              <div className="text-[#666666] text-xs">{result.strategyUsed} • {providerLabel}</div>
             </div>
           </div>
           <div className="text-right">
             <div className="text-white text-lg font-bold">{result.confidence}%</div>
-            <div className="text-[#666666] text-[10px]">AI Confidence</div>
+            <div className="text-[#666666] text-[10px]">{providerLabel} Confidence</div>
           </div>
         </div>
       </div>

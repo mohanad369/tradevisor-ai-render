@@ -314,7 +314,7 @@ const vipAr: Record<string, string> = {
   "Drop chart image here": "اترك صورة الشارت هنا",
   "Upload your chart screenshot": "ارفع صورة الشارت",
   "Drag & drop or click • PNG, JPG, WEBP": "اسحب الصورة أو اضغط • PNG, JPG, WEBP",
-  "GPT-4o Vision": "رؤية GPT-4o",
+  "Claude + GPT-4o Vision": "رؤية Claude + GPT-4o",
   "AI Analyzing Your Chart...": "الذكاء يحلل الشارت...",
   "Reading price action • Detecting patterns": "قراءة حركة السعر • كشف النماذج",
   "Setup Quality": "جودة الصفقة",
@@ -802,7 +802,7 @@ function AnalyzingOverlay({ asset, strategy, tf }: { asset: string; strategy: st
       <Loader2 size={44} className="text-[#d4a843] animate-spin mb-4 hidden sm:block" />
       <div className="flex items-center gap-2 mb-2">
         <Zap size={14} className="text-[#d4a843] sm:hidden" /><Zap size={16} className="text-[#d4a843] hidden sm:block" />
-        <span className="text-[#d4a843] text-[10px] sm:text-xs font-medium uppercase tracking-wider">{vt("GPT-4o Vision")}</span>
+        <span className="text-[#d4a843] text-[10px] sm:text-xs font-medium uppercase tracking-wider">{vt("Claude + GPT-4o Vision")}</span>
       </div>
       <p className="text-white font-semibold text-base sm:text-lg mb-1 text-center">{vt("AI Analyzing Your Chart...")}</p>
       <p className="text-[#666666] text-xs sm:text-sm mb-1 text-center">{vt("Reading price action • Detecting patterns")}</p>
@@ -942,11 +942,20 @@ function AnalysisOverlayVIP({ result, assetDecimals }: { result: AnalysisResult;
 }
 
 
+function getVIPProviderLabel(result: AnalysisResult) {
+  if (result.aiConsensus?.models?.length) return result.aiConsensus.models.join(" + ");
+  if (result.analysisSource === "claude-openai-consensus") return "Claude + OpenAI";
+  if (result.analysisSource === "claude") return "Claude";
+  if (result.analysisSource === "openai") return "OpenAI";
+  return "Tradevisor AI";
+}
+
 function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult; assetDecimals: number }) {
   const isBuy = result.signal === "BUY"
   const formatPrice = (p: number) => p.toFixed(assetDecimals)
   const { language } = useLanguage()
   const vt = (text: string) => vipText(language, text)
+  const providerLabel = getVIPProviderLabel(result)
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }}
@@ -960,12 +969,12 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
             </div>
             <div>
               <span className={`text-base sm:text-lg font-bold ${isBuy ? "text-[#22c55e]" : "text-[#e11d48]"}`}>{result.signal}</span>
-              <div className="text-[#666666] text-[9px] sm:text-[10px]">{result.strategyUsed} &bull; AI</div>
+              <div className="text-[#666666] text-[9px] sm:text-[10px]">{result.strategyUsed} &bull; {providerLabel}</div>
             </div>
           </div>
           <div className="text-right">
             <div className="text-white text-base sm:text-lg font-bold">{result.confidence}%</div>
-            <div className="text-[#666666] text-[9px] sm:text-[10px]">Confidence</div>
+            <div className="text-[#666666] text-[9px] sm:text-[10px]">{providerLabel}</div>
           </div>
         </div>
       </div>
