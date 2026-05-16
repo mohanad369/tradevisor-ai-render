@@ -236,12 +236,24 @@ async function analyzeChartWithClaude(
         trend: "Trend summary",
         marketStructure: "Market structure summary",
         keyLevel: "Key level summary",
-        confluenceScore: 85
+        confluenceScore: 85,
+        chartScale: {
+          topPrice: 0,
+          bottomPrice: 0,
+          currentPrice: 0,
+          confidence: 0,
+          source: "visible right-side price axis",
+          warnings: ["Only set confidence above 70 when the right price axis is readable."]
+        }
       }),
       "Rules:",
       "- For BUY, stopLoss must be below entry and all take profits above entry.",
       "- For SELL, stopLoss must be above entry and all take profits below entry.",
       "- Risk/reward must be mathematically consistent.",
+      "- Read the visible right-side price axis from the screenshot. Return chartScale.topPrice as the highest visible price label and chartScale.bottomPrice as the lowest visible price label.",
+      "- Return chartScale.currentPrice as the current price label visible on the chart, if readable.",
+      "- Set chartScale.confidence from 0 to 100. Use 0 when the axis is hidden, cropped, blurred, or not readable.",
+      "- Do not invent chartScale. If the price axis is unclear, return topPrice 0, bottomPrice 0, confidence 0.",
       "- If the chart is unclear, lower confidence and keep risk conservative.",
     ].join("\n");
 
@@ -393,11 +405,23 @@ function buildSharedAnalysisPrompt(assetName: string, strategyName: string, time
       marketStructure: "Market structure summary",
       keyLevel: "Key level summary",
       confluenceScore: 85,
+      chartScale: {
+        topPrice: 0,
+        bottomPrice: 0,
+        currentPrice: 0,
+        confidence: 0,
+        source: "visible right-side price axis",
+        warnings: ["Only set confidence above 70 when the right price axis is readable."],
+      },
     }),
     "Rules:",
     "- For BUY, stopLoss must be below entry and all take profits above entry.",
     "- For SELL, stopLoss must be above entry and all take profits below entry.",
     "- Risk/reward must be mathematically consistent.",
+    "- Read the visible right-side price axis from the screenshot. Return chartScale.topPrice as the highest visible price label and chartScale.bottomPrice as the lowest visible price label.",
+    "- Return chartScale.currentPrice as the current price label visible on the chart, if readable.",
+    "- Set chartScale.confidence from 0 to 100. Use 0 when the axis is hidden, cropped, blurred, or not readable.",
+    "- Do not invent chartScale. If the price axis is unclear, return topPrice 0, bottomPrice 0, confidence 0.",
     "- If the chart is unclear, lower confidence and keep risk conservative.",
   ].join("\n");
 }
@@ -506,6 +530,24 @@ function normalizeClaudeResult(raw: Record<string, any>, assetName: string, stra
     marketStructure: raw.marketStructure || "AI market structure read from chart image",
     keyLevel: raw.keyLevel || `Key ${signal === "BUY" ? "support" : "resistance"} around ${entry}`,
     confluenceScore: clamp(numberOr(raw.confluenceScore, raw.confidence || 78), 45, 98),
+    chartScale: normalizeChartScale(raw.chartScale),
+  };
+}
+
+function normalizeChartScale(scale: unknown) {
+  if (!scale || typeof scale !== "object") return undefined;
+  const raw = scale as Record<string, unknown>;
+  const topPrice = numberOr(raw.topPrice, 0);
+  const bottomPrice = numberOr(raw.bottomPrice, 0);
+  const confidence = clamp(numberOr(raw.confidence, 0), 0, 100);
+  if (!topPrice || !bottomPrice || topPrice <= bottomPrice) return undefined;
+  return {
+    topPrice: round(topPrice, 2),
+    bottomPrice: round(bottomPrice, 2),
+    currentPrice: numberOr(raw.currentPrice, 0) || undefined,
+    confidence,
+    source: typeof raw.source === "string" ? raw.source : "visible right-side price axis",
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.slice(0, 4).map(String) : [],
   };
 }
 

@@ -389,30 +389,23 @@ function SupportChat({ onClose }: { onClose: () => void }) {
 export function AnalysisOverlay({ result, assetDecimals }: { result: AnalysisResult; assetDecimals: number }) {
   const isBuy = result.signal === "BUY";
   const formatPrice = (price: number) => price.toFixed(assetDecimals);
-
-  // Calculate vertical positions from AI-detected prices
-  // Use a wider "chart context" price range for better visual spacing
-  const tradePrices = [result.entry, result.stopLoss, result.takeProfit1, result.takeProfit2, result.takeProfit3];
-  const tradeMin = Math.min(...tradePrices);
-  const tradeMax = Math.max(...tradePrices);
-  // Add padding: extend range by 25% above max and below min
-  const pricePadding = (tradeMax - tradeMin) * 0.25;
-  const minPrice = tradeMin - pricePadding;
-  const maxPrice = tradeMax + pricePadding;
-  const range = maxPrice - minPrice || 1;
-
+  const chartScale = result.chartScale;
+  const hasCalibratedAxis = !!chartScale && chartScale.confidence >= 70 && chartScale.topPrice > chartScale.bottomPrice;
+  const range = hasCalibratedAxis ? chartScale.topPrice - chartScale.bottomPrice : 1;
   const getPos = (price: number) => {
-    const normalized = (price - minPrice) / range;
-    // Map to 6%-90% of container height (leaves room for labels)
-    const pct = normalized * 84 + 6;
-    return 96 - pct; // invert: higher price = higher on chart
+    if (!hasCalibratedAxis) return null;
+    const normalized = (chartScale.topPrice - price) / range;
+    if (normalized < -0.02 || normalized > 1.02) return null;
+    return Math.max(4, Math.min(96, normalized * 100));
   };
 
-  const entryPos = getPos(result.entry);
-  const slPos = getPos(result.stopLoss);
-  const tp1Pos = getPos(result.takeProfit1);
-  const tp2Pos = getPos(result.takeProfit2);
-  const tp3Pos = getPos(result.takeProfit3);
+  const levels = [
+    { pos: getPos(result.entry), label: "ENTRY", price: formatPrice(result.entry), color: "#d4a843", dashed: true, strong: true },
+    { pos: getPos(result.stopLoss), label: "SL", price: formatPrice(result.stopLoss), color: "#e11d48", strong: true },
+    { pos: getPos(result.takeProfit1), label: "TP1", price: `${formatPrice(result.takeProfit1)} ${result.riskReward1}`, color: "#22c55e", opacity: 0.6 },
+    { pos: getPos(result.takeProfit2), label: "TP2", price: `${formatPrice(result.takeProfit2)} ${result.riskReward2}`, color: "#22c55e", opacity: 0.8 },
+    { pos: getPos(result.takeProfit3), label: "TP3", price: `${formatPrice(result.takeProfit3)} ${result.riskReward3}`, color: "#22c55e", opacity: 1 },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="absolute inset-0 pointer-events-none z-10">
@@ -422,45 +415,26 @@ export function AnalysisOverlay({ result, assetDecimals }: { result: AnalysisRes
         AI {result.signal} — {result.confidence}%
       </div>
 
-      {/* Entry Line */}
-      <div className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${entryPos}%` }}>
-        <div className="relative">
-          <div className="border-t-2 border-dashed border-[#d4a843] w-full shadow-[0_0_10px_rgba(212,168,67,0.3)]" />
-          <div className="absolute -top-6 right-3 bg-[#d4a843] text-[#050505] text-[10px] font-bold px-2 py-0.5 rounded-full shadow">ENTRY {formatPrice(result.entry)}</div>
+      {!hasCalibratedAxis && (
+        <div className="absolute top-14 left-3 right-3 pointer-events-auto rounded-xl border border-[#d4a843]/30 bg-[#0d0d0d]/92 px-3 py-2 shadow-lg backdrop-blur-sm">
+          <div className="text-[#d4a843] text-xs font-bold">Chart scale not calibrated</div>
+          <div className="text-[#a0a0a0] text-[10px] leading-relaxed mt-1">
+            Levels are listed in the analysis panel. Lines were hidden because the visible price axis was not readable enough.
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* SL Line */}
-      <div className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${slPos}%` }}>
-        <div className="relative">
-          <div className="border-t-2 border-[#e11d48] w-full shadow-[0_0_10px_rgba(225,29,72,0.3)]" />
-          <div className="absolute -top-6 right-3 bg-[#e11d48] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">SL {formatPrice(result.stopLoss)}</div>
+      {hasCalibratedAxis && levels.filter((level) => level.pos !== null).map((level, i) => (
+        <div key={level.label} className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${level.pos}%` }}>
+          <div className="relative">
+            <div className="w-full" style={{ borderTop: `${level.strong ? 2 : 1}px ${level.dashed ? "dashed" : "solid"} ${level.color}`, opacity: level.opacity || 1 }} />
+            <div className={`absolute -top-6 ${i < 2 ? "right-3" : "left-3"} text-[10px] font-bold px-2 py-0.5 rounded-full shadow`}
+              style={{ backgroundColor: level.strong ? level.color : `${level.color}30`, color: level.strong ? (level.color === "#d4a843" ? "#050505" : "#fff") : level.color, border: level.strong ? "none" : `1px solid ${level.color}40` }}>
+              {level.label} {level.price}
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* TP1 Line */}
-      <div className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${tp1Pos}%` }}>
-        <div className="relative">
-          <div className="border-t border-[#22c55e]/60 w-full" />
-          <div className="absolute -top-6 left-3 bg-[#22c55e]/20 border border-[#22c55e]/40 text-[#22c55e] text-[10px] font-bold px-2 py-0.5 rounded-full">TP1 {formatPrice(result.takeProfit1)} {result.riskReward1}</div>
-        </div>
-      </div>
-
-      {/* TP2 Line */}
-      <div className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${tp2Pos}%` }}>
-        <div className="relative">
-          <div className="border-t border-[#22c55e]/80 w-full" />
-          <div className="absolute -top-6 left-3 bg-[#22c55e]/30 border border-[#22c55e]/50 text-[#22c55e] text-[10px] font-bold px-2 py-0.5 rounded-full">TP2 {formatPrice(result.takeProfit2)} {result.riskReward2}</div>
-        </div>
-      </div>
-
-      {/* TP3 Line */}
-      <div className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${tp3Pos}%` }}>
-        <div className="relative">
-          <div className="border-t-2 border-[#22c55e] w-full shadow-[0_0_10px_rgba(34,197,94,0.3)]" />
-          <div className="absolute -top-6 left-3 bg-[#22c55e] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">TP3 {formatPrice(result.takeProfit3)} {result.riskReward3}</div>
-        </div>
-      </div>
+      ))}
 
       {/* Bottom Info Bar */}
       <div className="absolute bottom-2 left-2 right-2 pointer-events-auto">

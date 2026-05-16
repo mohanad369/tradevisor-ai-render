@@ -344,6 +344,9 @@ const vipAr: Record<string, string> = {
   "Upload Your Chart": "ارفع الشارت",
   "Click 'Analyze Chart with AI' to detect Entry, SL, and TP.": "اضغط تحليل الشارت ليحدد الدخول والستوب والأهداف.",
   "Upload a chart for AI technical analysis.": "ارفع شارت للحصول على تحليل فني بالذكاء.",
+  "Chart scale not calibrated": "محور الشارت غير معاير",
+  "Levels are listed on the right. Lines were hidden because the visible price axis was not readable enough.": "المستويات موجودة في اللوحة الجانبية. تم إخفاء الخطوط لأن محور السعر الظاهر غير مقروء بما يكفي.",
+  "Axis calibrated": "المحور معاير",
 }
 
 function vipText(language: Language, text: string) {
@@ -815,12 +818,24 @@ function ChartUploadArea({ onImageUpload, uploadedImage, onClear }: { onImageUpl
 function AnalysisOverlayVIP({ result, assetDecimals }: { result: AnalysisResult; assetDecimals: number }) {
   const isBuy = result.signal === "BUY"
   const formatPrice = (p: number) => p.toFixed(assetDecimals)
-  const tradePrices = [result.entry, result.stopLoss, result.takeProfit1, result.takeProfit2, result.takeProfit3]
-  const tradeMin = Math.min(...tradePrices), tradeMax = Math.max(...tradePrices)
-  const pricePadding = (tradeMax - tradeMin) * 0.25
-  const minPrice = tradeMin - pricePadding, maxPrice = tradeMax + pricePadding
-  const range = maxPrice - minPrice || 1
-  const getPos = (price: number) => 96 - ((price - minPrice) / range * 84 + 6)
+  const { language } = useLanguage()
+  const vt = (text: string) => vipText(language, text)
+  const chartScale = result.chartScale
+  const hasCalibratedAxis = !!chartScale && chartScale.confidence >= 70 && chartScale.topPrice > chartScale.bottomPrice
+  const range = hasCalibratedAxis ? chartScale.topPrice - chartScale.bottomPrice : 1
+  const getPos = (price: number) => {
+    if (!hasCalibratedAxis) return null
+    const normalized = (chartScale.topPrice - price) / range
+    if (normalized < -0.02 || normalized > 1.02) return null
+    return Math.max(4, Math.min(96, normalized * 100))
+  }
+  const lines = [
+    { pos: getPos(result.entry), label: "ENTRY", price: formatPrice(result.entry), color: "#d4a843", dashed: true },
+    { pos: getPos(result.stopLoss), label: "SL", price: formatPrice(result.stopLoss), color: "#e11d48", dashed: false },
+    { pos: getPos(result.takeProfit1), label: "TP1", price: `${formatPrice(result.takeProfit1)} ${result.riskReward1}`, color: "#22c55e", opacity: 0.6 },
+    { pos: getPos(result.takeProfit2), label: "TP2", price: `${formatPrice(result.takeProfit2)} ${result.riskReward2}`, color: "#22c55e", opacity: 0.8 },
+    { pos: getPos(result.takeProfit3), label: "TP3", price: `${formatPrice(result.takeProfit3)} ${result.riskReward3}`, color: "#22c55e", opacity: 1 },
+  ]
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="absolute inset-0 pointer-events-none z-10">
@@ -828,16 +843,23 @@ function AnalysisOverlayVIP({ result, assetDecimals }: { result: AnalysisResult;
         <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" /><span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-white" /></span>
         AI {result.signal} &mdash; {result.confidence}%
       </div>
-      {[
-        { pos: getPos(result.entry), label: "ENTRY", price: formatPrice(result.entry), color: "#d4a843", dashed: true },
-        { pos: getPos(result.stopLoss), label: "SL", price: formatPrice(result.stopLoss), color: "#e11d48", dashed: false },
-        { pos: getPos(result.takeProfit1), label: "TP1", price: `${formatPrice(result.takeProfit1)} ${result.riskReward1}`, color: "#22c55e", opacity: 0.6 },
-        { pos: getPos(result.takeProfit2), label: "TP2", price: `${formatPrice(result.takeProfit2)} ${result.riskReward2}`, color: "#22c55e", opacity: 0.8 },
-        { pos: getPos(result.takeProfit3), label: "TP3", price: `${formatPrice(result.takeProfit3)} ${result.riskReward3}`, color: "#22c55e", opacity: 1 },
-      ].map((line, i) => (
-        <div key={i} className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${line.pos}%` }}>
+      {!hasCalibratedAxis && (
+        <div className="absolute top-12 sm:top-14 left-2 sm:left-3 right-2 sm:right-3 pointer-events-auto rounded-xl border border-[#d4a843]/30 bg-[#0d0d0d]/92 px-3 py-2 shadow-lg backdrop-blur-sm">
+          <div className="text-[#d4a843] text-[10px] sm:text-xs font-bold">{vt("Chart scale not calibrated")}</div>
+          <div className="text-[#a0a0a0] text-[9px] sm:text-[10px] leading-relaxed mt-1">
+            {vt("Levels are listed on the right. Lines were hidden because the visible price axis was not readable enough.")}
+          </div>
+        </div>
+      )}
+      {hasCalibratedAxis && (
+        <div className="absolute top-2 sm:top-3 right-2 sm:right-3 pointer-events-auto rounded-full border border-[#22c55e]/20 bg-[#0d0d0d]/90 px-2 py-1 text-[8px] sm:text-[10px] font-bold text-[#22c55e]">
+          {vt("Axis calibrated")} {chartScale.confidence}%
+        </div>
+      )}
+      {hasCalibratedAxis && lines.filter((line) => line.pos !== null).map((line, i) => (
+        <div key={line.label} className="absolute left-0 right-0 pointer-events-auto" style={{ top: `${line.pos}%` }}>
           <div className="relative">
-            <div className={`w-full shadow-[0_0_10px_${line.color}30]`} style={{ borderTop: `${i < 2 ? 2 : 1}px ${line.dashed ? "dashed" : "solid"} ${line.color}`, opacity: (line as any).opacity || 1 }} />
+            <div className={`w-full shadow-[0_0_10px_${line.color}30]`} style={{ borderTop: `${i < 2 ? 2 : 1}px ${line.dashed ? "dashed" : "solid"} ${line.color}`, opacity: line.opacity || 1 }} />
             <div className={`absolute -top-5 sm:-top-6 ${i < 2 ? "right-2 sm:right-3" : "left-2 sm:left-3"} text-[8px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full shadow`}
               style={{ backgroundColor: i < 2 ? line.color : `${line.color}30`, color: i < 2 ? (line.color === "#d4a843" ? "#050505" : "#fff") : line.color, border: i >= 2 ? `1px solid ${line.color}40` : "none" }}>
               {line.label} {line.price}

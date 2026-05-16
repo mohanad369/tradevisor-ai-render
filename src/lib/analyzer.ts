@@ -95,6 +95,14 @@ export interface AnalysisResult {
   keyLevel: string;
   confluenceScore: number;
   analysisSource?: string;
+  chartScale?: {
+    topPrice: number;
+    bottomPrice: number;
+    currentPrice?: number;
+    confidence: number;
+    source: string;
+    warnings: string[];
+  };
   aiConsensus?: {
     status: "aligned" | "mixed" | "single_model" | "fallback";
     models: string[];
@@ -143,7 +151,24 @@ function withDefaultAnalysisFields(result: Partial<AnalysisResult>, strategyName
     keyLevel: result.keyLevel || `Key level around ${entry}`,
     confluenceScore: Number(result.confluenceScore || result.confidence || 70),
     analysisSource: result.analysisSource,
+    chartScale: normalizeChartScale(result.chartScale),
     aiConsensus: result.aiConsensus,
+  };
+}
+
+function normalizeChartScale(scale: AnalysisResult["chartScale"] | undefined): AnalysisResult["chartScale"] | undefined {
+  if (!scale) return undefined;
+  const topPrice = Number(scale.topPrice);
+  const bottomPrice = Number(scale.bottomPrice);
+  const confidence = Number(scale.confidence);
+  if (!Number.isFinite(topPrice) || !Number.isFinite(bottomPrice) || topPrice <= bottomPrice) return undefined;
+  return {
+    topPrice,
+    bottomPrice,
+    currentPrice: Number.isFinite(Number(scale.currentPrice)) ? Number(scale.currentPrice) : undefined,
+    confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(100, confidence)) : 0,
+    source: scale.source || "chart-price-axis",
+    warnings: Array.isArray(scale.warnings) ? scale.warnings.slice(0, 4) : [],
   };
 }
 
