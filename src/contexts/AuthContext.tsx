@@ -7,8 +7,7 @@ const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "");
 function getAdminApiOrigin() {
   if (configuredApiOrigin) return configuredApiOrigin;
   if (typeof window === "undefined") return "";
-  const host = window.location.hostname;
-  if (host.endsWith(".onrender.com") || host === "localhost" || host === "127.0.0.1") {
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
     return window.location.origin;
   }
   return "";
