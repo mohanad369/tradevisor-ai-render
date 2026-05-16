@@ -1,7 +1,7 @@
 /*
  * api/lib/anthropic.ts — AI Chart Analysis Engine
  *
- * Uses Claude Vision when ANTHROPIC_API_KEY is configured, then falls back to
+ * Uses Claude Vision when ANTHROPIC_API_KEY / CLAUDE_API_KEY is configured, then falls back to
  * image fingerprinting + asset-aware price generation if the provider fails.
  */
 
@@ -9,6 +9,14 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+
+function getClaudeApiKey(): string | undefined {
+  return process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLOUD_API_KEY;
+}
+
+function getClaudeModel(): string {
+  return process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || DEFAULT_MODEL;
+}
 
 function hashString(str: string): number {
   let hash = 0;
@@ -193,7 +201,7 @@ async function analyzeChartWithClaude(
   timeframe: string,
   currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = getClaudeApiKey();
   if (!apiKey) return null;
 
   try {
@@ -265,7 +273,7 @@ async function analyzeChartWithClaude(
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+        model: getClaudeModel(),
         max_tokens: 1800,
         temperature: 0.2,
         messages: [
