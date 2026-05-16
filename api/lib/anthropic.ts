@@ -355,6 +355,8 @@ async function analyzeChartWithClaude(
       "- For BUY, stopLoss must be below entry and all take profits above entry.",
       "- For SELL, stopLoss must be above entry and all take profits below entry.",
       "- Risk/reward must be mathematically consistent.",
+      "- Entry must be close to the supplied current market price or the visible chart current price. If the setup is far away, return the closest valid trigger near current price and lower confidence.",
+      "- Never output entry, stop loss, or targets far outside the visible chart scale. If the chart scale is unclear, be conservative and prefer a wait/no-chase setup.",
       "- Read the visible right-side price axis from the screenshot. Return chartScale.topPrice as the highest visible price label and chartScale.bottomPrice as the lowest visible price label.",
       "- Return chartScale.currentPrice as the current price label visible on the chart, if readable.",
       "- Set chartScale.confidence from 0 to 100. Use 0 when the axis is hidden, cropped, blurred, or not readable.",
@@ -424,7 +426,7 @@ async function analyzeChartWithClaude(
       if (!text) return null;
 
       const parsed = parseJsonObject(text);
-      return normalizeClaudeResult(parsed, assetName, strategyName, timeframe);
+      return normalizeClaudeResult(parsed, assetName, strategyName, timeframe, currentPrice);
     }
 
     return null;
@@ -492,7 +494,7 @@ async function analyzeChartWithOpenAI(
     const text = data.choices?.[0]?.message?.content;
     if (!text) return null;
 
-    return normalizeClaudeResult(parseJsonObject(text), assetName, strategyName, timeframe);
+    return normalizeClaudeResult(parseJsonObject(text), assetName, strategyName, timeframe, currentPrice);
   } catch (error) {
     providerAttempts.openai = {
       at: new Date().toISOString(),
@@ -564,6 +566,8 @@ function buildSharedAnalysisPrompt(assetName: string, strategyName: string, time
     "- For BUY, stopLoss must be below entry and all take profits above entry.",
     "- For SELL, stopLoss must be above entry and all take profits below entry.",
     "- Risk/reward must be mathematically consistent.",
+    "- Entry must be close to the supplied current market price or the visible chart current price. If the setup is far away, return the closest valid trigger near current price and lower confidence.",
+    "- Never output entry, stop loss, or targets far outside the visible chart scale. If the chart scale is unclear, be conservative and prefer a wait/no-chase setup.",
     "- Read the visible right-side price axis from the screenshot. Return chartScale.topPrice as the highest visible price label and chartScale.bottomPrice as the lowest visible price label.",
     "- Return chartScale.currentPrice as the current price label visible on the chart, if readable.",
     "- Set chartScale.confidence from 0 to 100. Use 0 when the axis is hidden, cropped, blurred, or not readable.",
@@ -635,11 +639,19 @@ function parseJsonObject(text: string) {
   }
 }
 
-function normalizeClaudeResult(raw: Record<string, any>, assetName: string, strategyName: string, timeframe: string) {
+function normalizeClaudeResult(raw: Record<string, any>, assetName: string, strategyName: string, timeframe: string, currentPrice?: number) {
   const asset = getAssetProfile(assetName);
+  const strategy = getStrategyProfile(strategyName);
   const signal = raw.signal === "SELL" ? "SELL" : "BUY";
-  const entry = numberOr(raw.entry, asset.base);
-  const stopLoss = numberOr(raw.stopLoss, signal === "BUY" ? entry - asset.range * 0.08 : entry + asset.range * 0.08);
+  const rawEntry = numberOr(raw.entry, asset.base);
+  const anchorPrice = getPriceAnchor(raw, currentPrice);
+  const maxEntryDistance = getMaxEntryDistance(asset.range, strategyName, timeframe);
+  const entryWasTooFar = Boolean(anchorPrice && Math.abs(rawEntry - anchorPrice) > maxEntryDistance);
+  const entry = entryWasTooFar && anchorPrice ? roundToTick(anchorPrice, asset.tickSize) : rawEntry;
+  const defaultRisk = Math.max(asset.tickSize * 20, entry * strategy.slPct * (entryWasTooFar ? 0.45 : 1));
+  const stopLoss = entryWasTooFar
+    ? (signal === "BUY" ? entry - defaultRisk : entry + defaultRisk)
+    : numberOr(raw.stopLoss, signal === "BUY" ? entry - asset.range * 0.08 : entry + asset.range * 0.08);
   const risk = Math.abs(entry - stopLoss) || asset.tickSize;
   const tp1 = numberOr(raw.takeProfit1, signal === "BUY" ? entry + risk * 1.5 : entry - risk * 1.5);
   const tp2 = numberOr(raw.takeProfit2, signal === "BUY" ? entry + risk * 2.5 : entry - risk * 2.5);
@@ -650,7 +662,7 @@ function normalizeClaudeResult(raw: Record<string, any>, assetName: string, stra
 
   return {
     signal,
-    confidence: clamp(numberOr(raw.confidence, 78), 45, 98),
+    confidence: clamp(entryWasTooFar ? Math.min(numberOr(raw.confidence, 78), 76) : numberOr(raw.confidence, 78), 45, 98),
     entry: round(entry, asset.decimals),
     stopLoss: round(stopLoss, asset.decimals),
     takeProfit1: round(tp1, asset.decimals),
@@ -667,17 +679,51 @@ function normalizeClaudeResult(raw: Record<string, any>, assetName: string, stra
     lotSize5000: String(raw.lotSize5000 || "0.05"),
     lotSize10000: String(raw.lotSize10000 || "0.10"),
     maxRiskPercent: numberOr(raw.maxRiskPercent, 1.5),
-    reasons: Array.isArray(raw.reasons) && raw.reasons.length ? raw.reasons.slice(0, 8) : ["Claude chart analysis completed."],
+    reasons: [
+      ...(entryWasTooFar ? ["Entry was recalibrated near the current market/chart price because the raw AI level was too far away."] : []),
+      ...(Array.isArray(raw.reasons) && raw.reasons.length ? raw.reasons.slice(0, 8) : ["Claude chart analysis completed."]),
+    ].slice(0, 8),
     srLevels: Array.isArray(raw.srLevels) ? raw.srLevels.slice(0, 5) : [{ level: entry, type: "pivot", strength: "Key" }],
     fibonacci: Array.isArray(raw.fibonacci) ? raw.fibonacci.slice(0, 6) : [],
     candlePatterns: Array.isArray(raw.candlePatterns) && raw.candlePatterns.length ? raw.candlePatterns.slice(0, 4) : [{ name: "AI Detected Pattern", signal: signal === "BUY" ? "bullish" : "bearish", reliability: "Medium" }],
     volume: raw.volume || { trend: "normal", signal: "Volume read from chart image." },
     trend: raw.trend || "AI trend read from chart image",
     marketStructure: raw.marketStructure || "AI market structure read from chart image",
-    keyLevel: raw.keyLevel || `Key ${signal === "BUY" ? "support" : "resistance"} around ${entry}`,
-    confluenceScore: clamp(numberOr(raw.confluenceScore, raw.confidence || 78), 45, 98),
+    keyLevel: entryWasTooFar ? `Current market anchor around ${round(entry, asset.decimals)}` : raw.keyLevel || `Key ${signal === "BUY" ? "support" : "resistance"} around ${entry}`,
+    confluenceScore: clamp(entryWasTooFar ? Math.min(numberOr(raw.confluenceScore, raw.confidence || 78), 74) : numberOr(raw.confluenceScore, raw.confidence || 78), 45, 98),
     chartScale: normalizeChartScale(raw.chartScale),
   };
+}
+
+function getPriceAnchor(raw: Record<string, any>, currentPrice?: number) {
+  const scale = normalizeChartScale(raw.chartScale);
+  if (scale?.currentPrice && scale.confidence >= 70) return scale.currentPrice;
+  return currentPrice && currentPrice > 0 ? currentPrice : undefined;
+}
+
+function getMaxEntryDistance(assetRange: number, strategyName: string, timeframe: string) {
+  const strategyFactor = ({
+    "AI Scalping": 0.022,
+    "Day Trading": 0.032,
+    "Breakout": 0.04,
+    "Smart Money": 0.04,
+    "Swing Trading": 0.065,
+    "Trend Following": 0.075,
+  } as Record<string, number>)[strategyName] || 0.035;
+  const timeframeFactor = ({
+    "1m": 0.6,
+    "5m": 0.8,
+    "15m": 1,
+    "30m": 1.15,
+    "1H": 1.35,
+    "4H": 1.8,
+    "Daily": 2.4,
+  } as Record<string, number>)[timeframe] || 1;
+  return Math.max(assetRange * strategyFactor * timeframeFactor, 0.0001);
+}
+
+function roundToTick(value: number, tick: number) {
+  return Math.round(value / tick) * tick;
 }
 
 function normalizeChartScale(scale: unknown) {

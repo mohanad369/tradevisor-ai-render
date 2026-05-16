@@ -172,6 +172,131 @@ function normalizeChartScale(scale: AnalysisResult["chartScale"] | undefined): A
   };
 }
 
+function getAssetProfile(assetName: string): AssetProfile {
+  return ASSET_PROFILES[assetName] || ASSET_PROFILES["EUR/USD"];
+}
+
+function getTimeframeFactor(timeframe: string): number {
+  return ({
+    "1m": 0.55,
+    "5m": 0.75,
+    "15m": 1,
+    "30m": 1.15,
+    "1H": 1.35,
+    "4H": 1.8,
+    "Daily": 2.5,
+  } as Record<string, number>)[timeframe] || 1;
+}
+
+function getStrategyEntryFactor(strategyName: string): number {
+  return ({
+    "AI Scalping": 0.18,
+    "Day Trading": 0.28,
+    "Breakout": 0.34,
+    "Smart Money": 0.34,
+    "Swing Trading": 0.55,
+    "Trend Following": 0.6,
+  } as Record<string, number>)[strategyName] || 0.3;
+}
+
+function getEntryDistanceLimit(asset: AssetProfile, strategyName: string, timeframe: string): number {
+  const maxByAtr = asset.atr * getStrategyEntryFactor(strategyName) * getTimeframeFactor(timeframe);
+  return Math.max(asset.tickSize * 10, maxByAtr);
+}
+
+function getAnalysisAnchorPrice(result: AnalysisResult, marketPrice?: number): number | undefined {
+  if (
+    result.chartScale?.currentPrice &&
+    result.chartScale.confidence >= 70 &&
+    Number.isFinite(result.chartScale.currentPrice)
+  ) {
+    return result.chartScale.currentPrice;
+  }
+  return marketPrice && marketPrice > 0 && Number.isFinite(marketPrice) ? marketPrice : undefined;
+}
+
+function alignAnalysisToMarketPrice(
+  result: AnalysisResult,
+  assetName: string,
+  strategyName: string,
+  timeframe: string,
+  marketPrice?: number,
+): AnalysisResult {
+  const anchorPrice = getAnalysisAnchorPrice(result, marketPrice);
+  if (!anchorPrice) return result;
+
+  const asset = getAssetProfile(assetName);
+  const maxDistance = getEntryDistanceLimit(asset, strategyName, timeframe);
+  const currentDistance = Math.abs(result.entry - anchorPrice);
+  const chartScale = result.chartScale
+    ? { ...result.chartScale, currentPrice: result.chartScale.currentPrice || marketPrice }
+    : result.chartScale;
+
+  if (currentDistance <= maxDistance) {
+    return { ...result, chartScale };
+  }
+
+  const strategy = STRATEGY_PROFILES[strategyName] || STRATEGY_PROFILES["Day Trading"];
+  const risk = roundToTick(
+    Math.max(asset.tickSize * 20, asset.atr * strategy.slAtrMult * Math.min(getTimeframeFactor(timeframe), 1.5) * 0.45),
+    asset.tickSize,
+  );
+  const entry = roundToTick(anchorPrice, asset.tickSize);
+  const isBuy = result.signal === "BUY";
+  const stopLoss = roundToTick(isBuy ? entry - risk : entry + risk, asset.tickSize);
+  const takeProfit1 = roundToTick(isBuy ? entry + risk * strategy.tp1Mult : entry - risk * strategy.tp1Mult, asset.tickSize);
+  const takeProfit2 = roundToTick(isBuy ? entry + risk * strategy.tp2Mult : entry - risk * strategy.tp2Mult, asset.tickSize);
+  const takeProfit3 = roundToTick(isBuy ? entry + risk * strategy.tp3Mult : entry - risk * strategy.tp3Mult, asset.tickSize);
+  const riskPips = Number(Math.abs(entry - stopLoss).toFixed(asset.decimals));
+  const rr1 = riskPips > 0 ? (Math.abs(takeProfit1 - entry) / riskPips).toFixed(1) : "1.5";
+  const rr2 = riskPips > 0 ? (Math.abs(takeProfit2 - entry) / riskPips).toFixed(1) : "2.5";
+  const rr3 = riskPips > 0 ? (Math.abs(takeProfit3 - entry) / riskPips).toFixed(1) : "4.0";
+  const support = isBuy ? stopLoss : takeProfit2;
+  const resistance = isBuy ? takeProfit2 : stopLoss;
+  const calibrationNote = "Entry was recalibrated to the current chart/market price because the raw AI level was too far away.";
+
+  return {
+    ...result,
+    entry: Number(entry.toFixed(asset.decimals)),
+    stopLoss: Number(stopLoss.toFixed(asset.decimals)),
+    takeProfit1: Number(takeProfit1.toFixed(asset.decimals)),
+    takeProfit2: Number(takeProfit2.toFixed(asset.decimals)),
+    takeProfit3: Number(takeProfit3.toFixed(asset.decimals)),
+    riskReward1: `1:${rr1}`,
+    riskReward2: `1:${rr2}`,
+    riskReward3: `1:${rr3}`,
+    riskPips,
+    riskAmount: Number((riskPips * asset.pipVal).toFixed(2)),
+    confidence: Math.min(result.confidence, 76),
+    confluenceScore: Math.min(result.confluenceScore, 74),
+    reasons: [calibrationNote, ...result.reasons.filter((reason) => reason !== calibrationNote)].slice(0, 8),
+    srLevels: [
+      { level: Number(support.toFixed(asset.decimals)), type: isBuy ? "support" : "pivot", strength: "Strong" },
+      { level: Number(entry.toFixed(asset.decimals)), type: "pivot", strength: "Current market anchor" },
+      { level: Number(resistance.toFixed(asset.decimals)), type: isBuy ? "resistance" : "support", strength: "Medium" },
+    ],
+    fibonacci: [
+      { level: 0.382, price: Number((isBuy ? entry - risk * 0.382 : entry + risk * 0.382).toFixed(asset.decimals)) },
+      { level: 0.5, price: Number((isBuy ? entry - risk * 0.5 : entry + risk * 0.5).toFixed(asset.decimals)) },
+      { level: 0.618, price: Number((isBuy ? entry - risk * 0.618 : entry + risk * 0.618).toFixed(asset.decimals)) },
+    ],
+    keyLevel: `Current market anchor at ${Number(entry.toFixed(asset.decimals))}`,
+    chartScale,
+  };
+}
+
+function getFallbackEntryDrift(strategyName: string, timeframe: string): number {
+  const strategyFactor = ({
+    "AI Scalping": 0.22,
+    "Day Trading": 0.32,
+    "Breakout": 0.38,
+    "Smart Money": 0.38,
+    "Swing Trading": 0.55,
+    "Trend Following": 0.65,
+  } as Record<string, number>)[strategyName] || 0.35;
+  return Math.min(0.9, strategyFactor * getTimeframeFactor(timeframe));
+}
+
 async function getLiveNewsContext(assetName: string): Promise<MarketNewsContext | null> {
   if (!isBackendConfigured()) return null;
   try {
@@ -219,7 +344,13 @@ export async function analyzeChartClientSide(
         timeframe,
         currentPrice: realPrice,
       });
-      const result = withDefaultAnalysisFields(backendResult, strategyName) as AnalysisResult;
+      const result = alignAnalysisToMarketPrice(
+        withDefaultAnalysisFields(backendResult, strategyName) as AnalysisResult,
+        assetName,
+        strategyName,
+        timeframe,
+        realPrice,
+      );
       return attachTradingAgents(result, assetName, strategyName, timeframe, realPrice);
     } catch (err: any) {
       console.warn("Backend Claude analysis failed, falling back:", err.message);
@@ -264,7 +395,13 @@ export async function analyzeChartClientSide(
         keyLevel: `${aiResult.signal === "BUY" ? "Support" : "Resistance"} at ${aiResult.entry}`,
         confluenceScore: aiResult.confluenceScore,
       };
-      return attachTradingAgents(result, assetName, strategyName, timeframe, realPrice);
+      return attachTradingAgents(
+        alignAnalysisToMarketPrice(result, assetName, strategyName, timeframe, realPrice),
+        assetName,
+        strategyName,
+        timeframe,
+        realPrice,
+      );
     } catch (err: any) {
       console.warn("OpenAI analysis failed, falling back to client-side:", err.message);
       // Continue to fallback below
@@ -278,7 +415,7 @@ export async function analyzeChartClientSide(
   const seed = hashString(base64Image.split(",")[1] || base64Image);
   const rng = getDeterministicRandom(seed);
 
-  const asset = ASSET_PROFILES[assetName] || ASSET_PROFILES["EUR/USD"];
+  const asset = getAssetProfile(assetName);
   const strategy = STRATEGY_PROFILES[strategyName] || STRATEGY_PROFILES["Day Trading"];
 
   const isBuy = rng() > 0.42;
@@ -292,8 +429,8 @@ export async function analyzeChartClientSide(
   const atrScale = priceBase > 0 && asset.base > 0 ? priceBase / asset.base : 1;
   const scaledAtr = asset.atr * Math.max(0.5, Math.min(atrScale, 2.0)); // clamp between 0.5x and 2x
 
-  // Generate entry near current market price (within 1 scaled ATR of base)
-  const entry = roundToTick(priceBase + (rng() - 0.5) * scaledAtr * 2, asset.tickSize);
+  // Generate entry close to the current market price. Far raw entries are rejected by the risk agents.
+  const entry = roundToTick(priceBase + (rng() - 0.5) * scaledAtr * getFallbackEntryDrift(strategyName, timeframe), asset.tickSize);
 
   // Calculate SL distance based on scaled ATR
   const slDistance = roundToTick(scaledAtr * strategy.slAtrMult, asset.tickSize);
@@ -447,5 +584,11 @@ export async function analyzeChartClientSide(
     keyLevel: `${isBuy ? "Support" : "Resistance"} at ${Number((isBuy ? sl - finalRisk * 0.3 : sl + finalRisk * 0.3).toFixed(asset.decimals))} — tested ${2 + Math.floor(rng() * 3)}x`,
     confluenceScore,
   };
-  return attachTradingAgents(result, assetName, strategyName, timeframe, realPrice);
+  return attachTradingAgents(
+    alignAnalysisToMarketPrice(result, assetName, strategyName, timeframe, realPrice),
+    assetName,
+    strategyName,
+    timeframe,
+    realPrice,
+  );
 }

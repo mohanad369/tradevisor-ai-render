@@ -425,7 +425,7 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     ...(rewardRiskRatio < 1.2 ? ["Reward-to-risk is too weak after staged exits."] : []),
     ...(mixedAiConsensus ? ["Claude/OpenAI model consensus is mixed, so the setup is not safe enough."] : []),
     ...(bankPolicy?.riskGate === "closed" ? ["Bank-policy agent closed the institutional risk gate."] : []),
-    ...(priceDistanceInRisk >= 0.75 ? ["Current price is too far from the planned entry, so chasing is dangerous."] : []),
+    ...(priceDistanceInRisk >= 0.5 ? ["Current price is too far from the planned entry, so chasing is dangerous."] : []),
   ];
   const qualityWarnings = [
     ...(input.analysis.confidence < 82 ? ["AI confidence is below the strong-entry threshold."] : []),
@@ -433,7 +433,7 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     ...(rewardRiskRatio < 1.5 ? ["Reward-to-risk is acceptable only with reduced size or waiting."] : []),
     ...(input.analysis.volume.trend === "decreasing" ? ["Volume is not confirming the move clearly."] : []),
     ...(bankRestricted ? [`Bank-policy agent requires confirmation: ${bankPolicy.institutionalIntent}`] : []),
-    ...(priceDistanceInRisk > 0.35 && priceDistanceInRisk < 0.75 ? ["Current price is not close enough to the planned entry. Wait for a better fill."] : []),
+    ...(priceDistanceInRisk > 0.2 && priceDistanceInRisk < 0.5 ? ["Current price is not close enough to the planned entry. Wait for a better fill."] : []),
   ];
   const closed = qualityBlockers.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
   const restricted = qualityWarnings.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
