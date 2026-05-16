@@ -5,6 +5,7 @@ import {
   Crosshair, Zap, MessageCircle, X, Send, Bot, User, AlertTriangle,
 } from "lucide-react";
 import type { AnalysisResult } from "@/lib/analyzer";
+import AgentAnalysisFlow from "@/components/AgentAnalysisFlow";
 
 /* ═══════════════════════════════════════════════════════════
    AnalysisResultPanel — displays AI-generated analysis
@@ -150,62 +151,7 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
           </div>
         </div>
 
-        {result.agents?.finalPlan && (
-          <div className="border-t border-[#1f1f1f] pt-4">
-            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Bot size={13} className="text-[#d4a843]" /> AI Agent Decision
-            </h4>
-            <div className="bg-[#141414] border border-[#d4a843]/20 rounded-xl p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[#a0a0a0] text-xs">Final Action</span>
-                <span className={`text-xs font-bold ${result.agents.finalPlan.action === "approve_plan" ? "text-[#22c55e]" : "text-[#d4a843]"}`}>
-                  {result.agents.finalPlan.action.replaceAll("_", " ")}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { label: "1 News", value: getAgentValue(result.agents.news, "nextAgentPayload", "recommendedAction") },
-                  { label: "2 Banks", value: getAgentValue(result.agents.bankPolicy, "nextAgentPayload", "bankBias") },
-                  { label: "3 Validate", value: getAgentValue(result.agents.decision, "nextAgentPayload", "recommendedAction") },
-                  { label: "4 Momentum", value: getAgentValue(result.agents.marketContext, "nextAgentPayload", "recommendedAction") },
-                  { label: "5 Chart", value: getAgentValue(result.agents.chartTrade, "nextAgentPayload", "recommendedAction") },
-                  { label: "6 Supervisor", value: getAgentValue(result.agents.supervisor, "nextAgentPayload", "supervisorStatus") },
-                  { label: "7 Risk", value: getAgentValue(result.agents.finalRisk, "finalDecision", "riskGate") },
-                ].map((agent) => (
-                  <div key={agent.label} className="rounded-lg bg-[#0d0d0d] border border-[#1f1f1f] px-2 py-1.5">
-                    <div className="text-[#666666] text-[9px] uppercase tracking-wider">{agent.label}</div>
-                    <div className="text-[#22c55e] text-[10px] font-bold truncate">
-                      {String(agent.value || "ok").replaceAll("_", " ")}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="text-[#666666] text-[10px] uppercase tracking-wider">Agent Confidence</div>
-                  <div className="text-white text-sm font-bold capitalize">{result.agents.finalPlan.confidence}</div>
-                </div>
-                <div>
-                  <div className="text-[#666666] text-[10px] uppercase tracking-wider">Position Size</div>
-                  <div className="text-white text-sm font-bold">{result.agents.finalPlan.positionSize}</div>
-                </div>
-                <div>
-                  <div className="text-[#666666] text-[10px] uppercase tracking-wider">Max Loss</div>
-                  <div className="text-[#e11d48] text-sm font-bold">${result.agents.finalPlan.maxLossAmount}</div>
-                </div>
-                <div>
-                  <div className="text-[#666666] text-[10px] uppercase tracking-wider">Blended R:R</div>
-                  <div className="text-[#22c55e] text-sm font-bold">1:{result.agents.finalPlan.rewardRiskRatio}</div>
-                </div>
-              </div>
-              <div className="space-y-1">
-                {result.agents.finalPlan.notes.slice(0, 2).map((note) => (
-                  <div key={note} className="text-[#a0a0a0] text-[11px] leading-relaxed">{note}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {result.agents?.finalPlan && <AgentAnalysisFlow result={result} />}
 
         {/* Lot Size */}
         <div className="border-t border-[#1f1f1f] pt-4">
@@ -304,12 +250,6 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
       <AnimatePresence>{chatOpen && <SupportChat onClose={() => setChatOpen(false)} />}</AnimatePresence>
     </motion.div>
   );
-}
-
-function getAgentValue(agent: Record<string, unknown>, section: string, key: string) {
-  const value = agent[section];
-  if (!value || typeof value !== "object") return undefined;
-  return (value as Record<string, unknown>)[key];
 }
 
 /* ═══════════════════════════════════════════════════════════
