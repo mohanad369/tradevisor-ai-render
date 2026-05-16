@@ -65,6 +65,7 @@ function VIPDashboardInner() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const toast = useToast()
   const deviceId = getDeviceId()
+  const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "") || window.location.origin
 
   const savedEmail = localStorage.getItem("tradevisor_current_user_email")
   const savedCode = localStorage.getItem("tradevisor_current_user_code")
@@ -168,18 +169,45 @@ function VIPDashboardInner() {
     const code = enteredOTP.toUpperCase().trim()
     setVerifying(true)
 
-    // Kill local session and try again
     localStorage.removeItem("tradevisor_session_token")
     localStorage.removeItem("tradevisor_current_user_email")
     localStorage.removeItem("tradevisor_current_user_code")
 
-    // Try tRPC logout first
-    trpc.vip.logout.useMutation().mutate({ sessionToken: "force" })
+    redeemVipCode(code, true)
+  }
 
-    // Then try login again
-    setTimeout(() => {
+  const redeemVipCode = async (code: string, force = false) => {
+    try {
+      const response = await fetch(`${apiOrigin}/api/vip/redeem-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, deviceId, force }),
+      })
+      const data = await response.json().catch(() => null)
+      if (response.ok && data?.success && data.sessionToken && data.subscriber) {
+        localStorage.setItem("tradevisor_session_token", data.sessionToken)
+        localStorage.setItem("tradevisor_current_user_email", data.subscriber.email)
+        localStorage.setItem("tradevisor_current_user_code", data.subscriber.code)
+        setVerifying(false)
+        toast.addToast("Access granted! Welcome to VIP.", "success")
+        setTimeout(() => window.location.reload(), 500)
+        return
+      }
+
+      setVerifying(false)
+      if (data?.blocked) {
+        setSessionBlocked(true)
+        setOtpError(data.error || "Account active on another device.")
+        toast.addToast(data.error || "Account active on another device.", "error")
+        return
+      }
+
+      setOtpError(data?.error || "Invalid or expired access code.")
+      toast.addToast(data?.error || "Invalid or expired access code.", "error")
+    } catch (error) {
+      console.warn("[vip redeem] REST failed, using tRPC fallback:", error)
       loginMutation.mutate({ code, deviceId })
-    }, 300)
+    }
   }
 
   const verifyOTP = () => {
@@ -191,8 +219,7 @@ function VIPDashboardInner() {
       return
     }
     setVerifying(true)
-    // Use login (with session lock) instead of verifyCode
-    loginMutation.mutate({ code: enteredOTP.toUpperCase().trim(), deviceId })
+    redeemVipCode(enteredOTP.toUpperCase().trim())
   }
 
   if (isLoggedIn) {

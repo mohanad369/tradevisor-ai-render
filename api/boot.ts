@@ -16,8 +16,8 @@ import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, validateBase
 import { env } from "./lib/env";
 import { seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
-import { paymentInvoices, vipCodes, vipPayments, vipSubscribers } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { paymentInvoices, vipCodes, vipPayments, vipSessions, vipSubscribers } from "../db/schema";
+import { and, desc, eq } from "drizzle-orm";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -106,6 +106,63 @@ app.post("/api/admin/grant-vip", async (c) => {
     const message = error instanceof Error ? error.message : "Unable to create VIP code";
     return c.json({ error: message }, 500);
   }
+});
+
+app.post("/api/vip/redeem-code", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`vip-redeem:${ip}`, 20);
+  if (!limit.allowed) return c.json({ error: "Too many VIP login attempts", retryAfter: limit.retryAfter }, 429);
+
+  const body = await c.req.json().catch(() => null) as {
+    code?: string;
+    deviceId?: string;
+    force?: boolean;
+  } | null;
+
+  const code = body?.code?.trim().toUpperCase();
+  const deviceId = body?.deviceId?.trim();
+  if (!code || code.length < 6) return c.json({ success: false, error: "Valid access code is required" }, 400);
+  if (!deviceId) return c.json({ success: false, error: "Device ID is required" }, 400);
+
+  const [sub] = await db.select().from(vipSubscribers).where(eq(vipSubscribers.code, code)).limit(1);
+  if (!sub) return c.json({ success: false, error: "Invalid access code" }, 404);
+  if (sub.status === "REVOKED") return c.json({ success: false, error: "Access revoked" }, 403);
+  if (sub.endDate && new Date(sub.endDate) < new Date()) {
+    return c.json({ success: false, error: "Subscription expired" }, 403);
+  }
+
+  const [existingSession] = await db.select().from(vipSessions)
+    .where(and(eq(vipSessions.subscriberId, sub.subscriberId), eq(vipSessions.active, true)))
+    .orderBy(desc(vipSessions.lastSeenAt))
+    .limit(1);
+
+  if (existingSession?.active && existingSession.deviceId !== deviceId && !body?.force) {
+    return c.json({
+      success: false,
+      blocked: true,
+      error: "Account active on another device. Logout first.",
+    }, 409);
+  }
+
+  await db.update(vipSessions).set({ active: false }).where(eq(vipSessions.subscriberId, sub.subscriberId));
+
+  const sessionToken = `sess_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+
+  await db.insert(vipSessions).values({
+    sessionToken,
+    subscriberId: sub.subscriberId,
+    email: sub.email,
+    code: sub.code,
+    deviceId,
+    ip,
+    userAgent: c.req.header("user-agent") || "",
+    active: true,
+    expiresAt,
+  });
+
+  return c.json({ success: true, sessionToken, subscriber: sub, expires: expiresAt });
 });
 
 app.get("/api/market/quotes", async (c) => {
