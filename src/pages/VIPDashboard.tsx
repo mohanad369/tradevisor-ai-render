@@ -806,6 +806,7 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         </div>
       </div>
       <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+        <VIPTradeSafetyNotice result={result} />
         {/* AI Indicators */}
         <div>
           <h4 className="text-white text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 flex items-center gap-1"><Gauge size={10} className="text-[#d4a843] sm:hidden" /><Gauge size={11} className="text-[#d4a843] hidden sm:block" /> AI Indicators</h4>
@@ -899,6 +900,33 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         </div>
       </div>
     </motion.div>
+  )
+}
+
+function VIPTradeSafetyNotice({ result }: { result: AnalysisResult }) {
+  const action = result.agents?.finalPlan?.action
+  if (!action || action === "approve_plan") return null
+
+  const isRejected = action === "reject"
+  return (
+    <div className={`rounded-xl border p-3 ${isRejected ? "bg-[#e11d48]/10 border-[#e11d48]/30" : "bg-[#d4a843]/10 border-[#d4a843]/30"}`}>
+      <div className="flex items-start gap-2.5">
+        <div className={`h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 ${isRejected ? "bg-[#e11d48]/15" : "bg-[#d4a843]/15"}`}>
+          <AlertTriangle size={15} className={isRejected ? "text-[#e11d48]" : "text-[#d4a843]"} />
+        </div>
+        <div className="min-w-0">
+          <div className={`text-xs sm:text-sm font-bold ${isRejected ? "text-[#e11d48]" : "text-[#d4a843]"}`}>
+            {isRejected ? "No Trade Now" : "Wait or Reduce Size"}
+          </div>
+          <p className="text-[#a0a0a0] text-[10px] sm:text-[11px] leading-relaxed mt-1">
+            This entry is currently risky. The warning is based on the full AI review, market momentum, chart structure, six-agent checks, and final risk management.
+          </p>
+          {result.agents?.finalPlan.notes.slice(0, 2).map((note) => (
+            <div key={note} className="text-[#666666] text-[9px] sm:text-[10px] leading-relaxed mt-1">{note}</div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 

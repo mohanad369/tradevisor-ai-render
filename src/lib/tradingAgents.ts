@@ -183,14 +183,20 @@ function chartTradeAgent(marketContextOutput: Record<string, any>, input: Pipeli
   const risk = Math.abs(input.analysis.entry - input.analysis.stopLoss);
   const reward = Math.abs(input.analysis.takeProfit3 - input.analysis.entry);
   const ratio = risk > 0 ? Number((reward / risk).toFixed(2)) : 0;
-  const riskGate: RiskGate = ratio >= 1.5 ? marketContextOutput.nextAgentPayload?.riskGate : "restricted";
+  const weakChart = input.analysis.confidence < 72 || input.analysis.confluenceScore < 65 || ratio < 1.2;
+  const needsReview = input.analysis.confidence < 82 || input.analysis.confluenceScore < 78 || ratio < 1.5;
+  const riskGate: RiskGate = weakChart
+    ? "closed"
+    : needsReview
+      ? "restricted"
+      : marketContextOutput.nextAgentPayload?.riskGate;
 
   return {
     agent: "chart-trade-analysis-agent",
     generatedAt: new Date().toISOString(),
     sourceAgent: marketContextOutput.agent,
     symbol: input.assetName,
-    validation: { status: "passed", symbolMatches: true, validSide: true, validPrices: true },
+    validation: { status: weakChart ? "rejected" : "passed", symbolMatches: true, validSide: true, validPrices: true },
     rewardRisk: { risk, reward, ratio, status: ratio >= 1.5 ? "acceptable" : "weak" },
     directionalFit: {
       status: "aligned",
@@ -199,17 +205,24 @@ function chartTradeAgent(marketContextOutput: Record<string, any>, input: Pipeli
     },
     technicalQuality: {
       score: input.analysis.confluenceScore,
-      status: input.analysis.confluenceScore >= 80 ? "strong" : "moderate",
+      status: weakChart ? "unclear" : input.analysis.confluenceScore >= 80 ? "strong" : "moderate",
       reasons: input.analysis.reasons.slice(0, 4),
     },
     nextAgentPayload: {
       recommendedAction: "pass_to_agent_5",
       symbol: input.assetName,
       tradeSide: side,
-      tradeStatus: ratio >= 1.5 ? "analysis_ready" : "needs_review",
+      tradeStatus: weakChart ? "unsafe_entry" : ratio >= 1.5 ? "analysis_ready" : "needs_review",
       confidence: input.analysis.confidence >= 82 ? "high" : "medium",
       riskGate,
-      reasons: ["Chart trade was matched with the full agent context."],
+      reasons: [
+        weakChart
+          ? "Chart quality is not clear enough for a safe entry."
+          : "Chart trade was matched with the full agent context.",
+        ...(input.analysis.confidence < 82 ? ["AI confidence is below the premium approval threshold."] : []),
+        ...(input.analysis.confluenceScore < 78 ? ["Confluence is not strong enough for a clean setup."] : []),
+        ...(ratio < 1.5 ? ["Reward-to-risk is below the preferred quality threshold."] : []),
+      ],
       trade: {
         symbol: input.assetName,
         side,
@@ -277,11 +290,30 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
   }, 0);
   const rewardRiskRatio = risk > 0 ? Number((blendedReward / risk).toFixed(2)) : 0;
   const mixedAiConsensus = input.analysis.aiConsensus?.status === "mixed";
-  const closed = supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
-  const restricted = mixedAiConsensus || supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
+  const qualityBlockers = [
+    ...(input.analysis.confidence < 72 ? ["AI confidence is too low for a live entry."] : []),
+    ...(input.analysis.confluenceScore < 65 ? ["Market confluence is weak, so the setup is not clean."] : []),
+    ...(rewardRiskRatio < 1.2 ? ["Reward-to-risk is too weak after staged exits."] : []),
+    ...(mixedAiConsensus ? ["Claude/OpenAI model consensus is mixed, so the setup is not safe enough."] : []),
+  ];
+  const qualityWarnings = [
+    ...(input.analysis.confidence < 82 ? ["AI confidence is below the strong-entry threshold."] : []),
+    ...(input.analysis.confluenceScore < 78 ? ["Confluence is moderate, not strong."] : []),
+    ...(rewardRiskRatio < 1.5 ? ["Reward-to-risk is acceptable only with reduced size or waiting."] : []),
+    ...(input.analysis.volume.trend === "decreasing" ? ["Volume is not confirming the move clearly."] : []),
+  ];
+  const closed = qualityBlockers.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
+  const restricted = qualityWarnings.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
   const action = closed ? "reject" : restricted ? "wait_or_reduce_size" : "approve_plan";
   const confidence = action === "approve_plan" && input.analysis.confidence >= 82 ? "high" : "medium";
   const notes = [
+    ...(closed
+      ? ["No trade now: entry is dangerous until the chart becomes clearer."]
+      : restricted
+        ? ["Entry is not clean enough for full risk. Wait for confirmation or reduce size."]
+        : ["Setup passed the full AI and agent review."]),
+    ...qualityBlockers,
+    ...qualityWarnings,
     ...(input.analysis.aiConsensus?.notes || []),
     "Risk is defined with a clear stop loss.",
     "Targets are based on chart analysis, momentum, and supervision checks.",

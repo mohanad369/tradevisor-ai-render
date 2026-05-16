@@ -74,7 +74,7 @@ describe("runTradingAgentPipeline", () => {
     expect(result.finalPlan.rewardRiskRatio).toBeGreaterThanOrEqual(1.5);
   });
 
-  it("restricts the final plan when reward-to-risk is weak", () => {
+  it("rejects the final plan when reward-to-risk is unsafe", () => {
     const result = runTradingAgentPipeline({
       analysis: makeAnalysis({
         takeProfit1: 101,
@@ -90,13 +90,14 @@ describe("runTradingAgentPipeline", () => {
     });
 
     expect(result.chartTrade.nextAgentPayload).toMatchObject({
-      tradeStatus: "needs_review",
-      riskGate: "restricted",
+      tradeStatus: "unsafe_entry",
+      riskGate: "closed",
     });
     expect(result.supervisor.nextAgentPayload).toMatchObject({
-      supervisorStatus: "degraded",
-      riskGate: "restricted",
+      supervisorStatus: "unhealthy",
+      riskGate: "closed",
     });
-    expect(result.finalPlan.action).toBe("wait_or_reduce_size");
+    expect(result.finalPlan.action).toBe("reject");
+    expect(result.finalPlan.notes[0]).toContain("No trade now");
   });
 });

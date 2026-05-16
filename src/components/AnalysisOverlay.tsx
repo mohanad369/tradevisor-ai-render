@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp, Target, Shield, Layers, Activity, BarChart3,
-  Crosshair, Zap, MessageCircle, X, Send, Bot, User,
+  Crosshair, Zap, MessageCircle, X, Send, Bot, User, AlertTriangle,
 } from "lucide-react";
 import type { AnalysisResult } from "@/lib/analyzer";
 
@@ -43,6 +43,33 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
       </div>
 
       <div className="p-5 space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar">
+        {result.agents?.finalPlan?.action && result.agents.finalPlan.action !== "approve_plan" && (
+          <div className={`rounded-xl border p-4 ${
+            result.agents.finalPlan.action === "reject"
+              ? "bg-[#e11d48]/10 border-[#e11d48]/30"
+              : "bg-[#d4a843]/10 border-[#d4a843]/30"
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 h-9 w-9 rounded-xl flex items-center justify-center ${
+                result.agents.finalPlan.action === "reject" ? "bg-[#e11d48]/15" : "bg-[#d4a843]/15"
+              }`}>
+                <AlertTriangle size={18} className={result.agents.finalPlan.action === "reject" ? "text-[#e11d48]" : "text-[#d4a843]"} />
+              </div>
+              <div>
+                <div className={`text-sm font-bold ${result.agents.finalPlan.action === "reject" ? "text-[#e11d48]" : "text-[#d4a843]"}`}>
+                  {result.agents.finalPlan.action === "reject" ? "No Trade Now" : "Wait or Reduce Size"}
+                </div>
+                <p className="text-[#a0a0a0] text-xs leading-relaxed mt-1">
+                  This entry is currently risky. The warning is based on chart structure, AI consensus, momentum, agent checks, and risk management.
+                </p>
+                {result.agents.finalPlan.notes.slice(0, 2).map((note) => (
+                  <div key={note} className="text-[#666666] text-[11px] leading-relaxed mt-1">{note}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {result.aiConsensus && (
           <div className={`rounded-xl border p-3 ${
             result.aiConsensus.status === "aligned"
