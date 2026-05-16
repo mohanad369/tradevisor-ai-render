@@ -41,7 +41,7 @@ function makeAnalysis(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
 }
 
 describe("runTradingAgentPipeline", () => {
-  it("connects all six agents and approves a strong BUY setup", () => {
+  it("connects all agents including bank policy and approves a strong BUY setup", () => {
     const result = runTradingAgentPipeline({
       analysis: makeAnalysis(),
       assetName: "XAU/USD (Gold)",
@@ -51,6 +51,7 @@ describe("runTradingAgentPipeline", () => {
     });
 
     expect(result.news.agent).toBe("news-intelligence-agent");
+    expect(result.bankPolicy.agent).toBe("bank-policy-agent");
     expect(result.decision.agent).toBe("decision-validation-agent");
     expect(result.marketContext.agent).toBe("market-context-agent");
     expect(result.chartTrade.agent).toBe("chart-trade-analysis-agent");
@@ -58,6 +59,7 @@ describe("runTradingAgentPipeline", () => {
     expect(result.finalRisk.agent).toBe("final-risk-agent");
 
     expect(result.news.nextAgentPayload).toMatchObject({ recommendedAction: "pass_to_agent_2" });
+    expect(result.bankPolicy.nextAgentPayload).toMatchObject({ recommendedAction: "pass_to_agent_2" });
     expect(result.decision.nextAgentPayload).toMatchObject({ recommendedAction: "pass_to_agent_3" });
     expect(result.marketContext.nextAgentPayload).toMatchObject({ recommendedAction: "pass_to_agent_4" });
     expect(result.chartTrade.nextAgentPayload).toMatchObject({ recommendedAction: "pass_to_agent_5" });
@@ -77,6 +79,9 @@ describe("runTradingAgentPipeline", () => {
     expect(result.finalPlan.setupQuality.confirmationChecklist.length).toBeGreaterThan(0);
     expect(result.finalPlan.takeProfits).toHaveLength(3);
     expect(result.finalPlan.rewardRiskRatio).toBeGreaterThanOrEqual(1.5);
+    expect((result.decision.nextAgentPayload as Record<string, any>).bankPolicy).toMatchObject({
+      institutionalIntent: expect.any(String),
+    });
   });
 
   it("rejects the final plan when reward-to-risk is unsafe", () => {

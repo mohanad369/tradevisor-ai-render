@@ -4,6 +4,7 @@ type RiskGate = "open" | "restricted" | "closed";
 
 export interface TradingAgentPipelineResult {
   news: Record<string, unknown>;
+  bankPolicy: Record<string, unknown>;
   decision: Record<string, unknown>;
   marketContext: Record<string, unknown>;
   chartTrade: Record<string, unknown>;
@@ -40,14 +41,16 @@ interface PipelineInput {
 
 export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipelineResult {
   const news = newsAgent(input);
-  const decision = decisionAgent(news);
+  const bankPolicy = bankPolicyAgent(news, input);
+  const decision = decisionAgent(news, bankPolicy);
   const marketContext = marketContextAgent(decision, input);
   const chartTrade = chartTradeAgent(marketContext, input);
-  const supervisor = supervisorAgent({ news, decision, marketContext, chartTrade });
+  const supervisor = supervisorAgent({ news, bankPolicy, decision, marketContext, chartTrade });
   const finalRisk = finalRiskAgent(chartTrade, supervisor, input);
 
   return {
     news,
+    bankPolicy,
     decision,
     marketContext,
     chartTrade,
@@ -93,15 +96,91 @@ function newsAgent(input: PipelineInput) {
   };
 }
 
-function decisionAgent(newsOutput: Record<string, any>) {
-  const inputs = newsOutput.nextAgentPayload?.inputs ?? [];
+function bankPolicyAgent(newsOutput: Record<string, any>, input: PipelineInput) {
+  const isGold = input.assetName.includes("XAU");
+  const isUsdCross = input.assetName.includes("USD");
+  const signal = input.analysis.signal;
+  const hawkishPressure = input.analysis.trend.toLowerCase().includes("down") || signal === "SELL";
+  const dovishPressure = input.analysis.trend.toLowerCase().includes("up") || signal === "BUY";
+  const bankBias = isGold
+    ? hawkishPressure ? "hawkish_usd_pressure" : dovishPressure ? "dovish_gold_support" : "neutral"
+    : isUsdCross
+      ? hawkishPressure ? "usd_strength_watch" : "usd_weakness_watch"
+      : "cross_asset_watch";
+  const institutionalIntent = signal === "BUY"
+    ? isGold ? "watch central-bank and fund accumulation near support before buying gold" : "watch bank liquidity bids before buying"
+    : isGold ? "watch USD-yield pressure and bank selling into resistance before selling gold" : "watch bank liquidity offers before selling";
+  const conflict = isGold && signal === "BUY" && input.analysis.volume.trend === "decreasing";
+  const riskGate: RiskGate = conflict ? "restricted" : "open";
+
+  const bankInputs = [
+    {
+      title: "Central-bank policy tone check",
+      source: "official-central-bank-watchlist",
+      url: "https://www.federalreserve.gov/newsevents.htm",
+      publishedAt: new Date().toISOString(),
+      sentiment: bankBias.includes("support") || bankBias.includes("weakness") ? "positive" : bankBias.includes("pressure") || bankBias.includes("strength") ? "negative" : "neutral",
+      riskLevel: conflict ? "medium" : "low",
+      matchedKeywords: ["Federal Reserve", "interest rates", "yields", input.assetName],
+    },
+    {
+      title: "Institutional liquidity intent model",
+      source: "tradevisor-bank-agent",
+      url: "internal://bank-liquidity-intent",
+      publishedAt: new Date().toISOString(),
+      sentiment: signal === "BUY" ? "positive" : "negative",
+      riskLevel: input.analysis.confidence >= 82 ? "low" : "medium",
+      matchedKeywords: ["bank liquidity", "order flow", "policy tone", input.timeframe],
+    },
+  ];
+
+  return {
+    agent: "bank-policy-agent",
+    generatedAt: new Date().toISOString(),
+    sourceAgent: newsOutput.agent,
+    bankBias,
+    institutionalIntent,
+    policyReadiness: {
+      status: riskGate === "open" ? "ready" : "needs_confirmation",
+      confidence: input.analysis.confidence >= 82 ? "high" : "medium",
+      riskGate,
+      reasons: [
+        "Bank-policy context was added before decision validation.",
+        institutionalIntent,
+        ...(conflict ? ["Bank intent is not clean because volume does not confirm the chart direction."] : []),
+      ],
+    },
+    nextAgentPayload: {
+      recommendedAction: "pass_to_agent_2",
+      confidence: input.analysis.confidence >= 82 ? "high" : "medium",
+      riskGate,
+      bankBias,
+      institutionalIntent,
+      bankInputs,
+      officialSources: [
+        "Federal Reserve",
+        "European Central Bank",
+        "Bank of England",
+        "Bank of Japan",
+        "US Treasury and bond-yield context",
+      ],
+    },
+  };
+}
+
+function decisionAgent(newsOutput: Record<string, any>, bankPolicyOutput: Record<string, any>) {
+  const inputs = [
+    ...(newsOutput.nextAgentPayload?.inputs ?? []),
+    ...(bankPolicyOutput.nextAgentPayload?.bankInputs ?? []),
+  ];
   const highRiskCount = inputs.filter((item: any) => item.riskLevel === "high").length;
-  const riskGate: RiskGate = inputs.length < 2 ? "closed" : highRiskCount ? "restricted" : "open";
+  const bankRiskGate = bankPolicyOutput.nextAgentPayload?.riskGate as RiskGate | undefined;
+  const riskGate: RiskGate = inputs.length < 3 ? "closed" : highRiskCount || bankRiskGate === "restricted" ? "restricted" : "open";
 
   return {
     agent: "decision-validation-agent",
     generatedAt: new Date().toISOString(),
-    sourceAgent: newsOutput.agent,
+    sourceAgent: `${newsOutput.agent}+${bankPolicyOutput.agent}`,
     validation: {
       status: inputs.length >= 2 ? "passed" : "insufficient_data",
       acceptedCount: inputs.length,
@@ -112,21 +191,24 @@ function decisionAgent(newsOutput: Record<string, any>) {
     signalProfile: {
       dominantSentiment: newsOutput.marketMood,
       conflictLevel: "low",
-      riskBias: highRiskCount ? "high" : "low",
+      riskBias: highRiskCount || bankRiskGate === "restricted" ? "medium" : "low",
+      bankBias: bankPolicyOutput.nextAgentPayload?.bankBias,
+      institutionalIntent: bankPolicyOutput.nextAgentPayload?.institutionalIntent,
     },
     decision: {
       type: inputs.length >= 2 ? "validated_market_context" : "hold_for_more_data",
       confidence: riskGate === "open" ? "high" : "medium",
       riskGate,
-      reasons: ["News inputs were validated for the next agent."],
+      reasons: ["News and bank-policy inputs were validated for the next agent."],
     },
     nextAgentPayload: {
       recommendedAction: "pass_to_agent_3",
       decisionType: inputs.length >= 2 ? "validated_market_context" : "hold_for_more_data",
       confidence: riskGate === "open" ? "high" : "medium",
       riskGate,
-      reasons: ["News inputs were validated for the next agent."],
+      reasons: ["News and bank-policy inputs were validated for the next agent."],
       verifiedInputs: inputs,
+      bankPolicy: bankPolicyOutput.nextAgentPayload,
     },
   };
 }
@@ -181,6 +263,7 @@ function marketContextAgent(decisionOutput: Record<string, any>, input: Pipeline
         volatilityPercent: 1.1,
         timestamp: new Date().toISOString(),
         aiConsensus: input.analysis.aiConsensus,
+        bankPolicy: decisionOutput.nextAgentPayload?.bankPolicy,
       },
     },
   };
@@ -255,6 +338,7 @@ function chartTradeAgent(marketContextOutput: Record<string, any>, input: Pipeli
 function supervisorAgent(outputs: Record<string, any>) {
   const checks = [
     checkOutput("news", outputs.news, "news-intelligence-agent", "pass_to_agent_2"),
+    checkOutput("bankPolicy", outputs.bankPolicy, "bank-policy-agent", "pass_to_agent_2"),
     checkOutput("decision", outputs.decision, "decision-validation-agent", "pass_to_agent_3"),
     checkOutput("marketContext", outputs.marketContext, "market-context-agent", "pass_to_agent_4"),
     checkOutput("chartTrade", outputs.chartTrade, "chart-trade-analysis-agent", "pass_to_agent_5"),
@@ -298,6 +382,8 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
   }, 0);
   const rewardRiskRatio = risk > 0 ? Number((blendedReward / risk).toFixed(2)) : 0;
   const mixedAiConsensus = input.analysis.aiConsensus?.status === "mixed";
+  const bankPolicy = chartTradeOutput.nextAgentPayload.marketContext?.bankPolicy;
+  const bankRestricted = bankPolicy?.riskGate === "restricted";
   const priceDistanceFromEntry = input.marketPrice
     ? Math.abs(input.marketPrice - trade.entryPrice)
     : 0;
@@ -307,6 +393,7 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     ...(input.analysis.confluenceScore < 65 ? ["Market confluence is weak, so the setup is not clean."] : []),
     ...(rewardRiskRatio < 1.2 ? ["Reward-to-risk is too weak after staged exits."] : []),
     ...(mixedAiConsensus ? ["Claude/OpenAI model consensus is mixed, so the setup is not safe enough."] : []),
+    ...(bankPolicy?.riskGate === "closed" ? ["Bank-policy agent closed the institutional risk gate."] : []),
     ...(priceDistanceInRisk >= 0.75 ? ["Current price is too far from the planned entry, so chasing is dangerous."] : []),
   ];
   const qualityWarnings = [
@@ -314,6 +401,7 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     ...(input.analysis.confluenceScore < 78 ? ["Confluence is moderate, not strong."] : []),
     ...(rewardRiskRatio < 1.5 ? ["Reward-to-risk is acceptable only with reduced size or waiting."] : []),
     ...(input.analysis.volume.trend === "decreasing" ? ["Volume is not confirming the move clearly."] : []),
+    ...(bankRestricted ? [`Bank-policy agent requires confirmation: ${bankPolicy.institutionalIntent}`] : []),
     ...(priceDistanceInRisk > 0.35 && priceDistanceInRisk < 0.75 ? ["Current price is not close enough to the planned entry. Wait for a better fill."] : []),
   ];
   const closed = qualityBlockers.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
@@ -327,6 +415,7 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     priceDistanceInRisk,
     volumeTrend: input.analysis.volume.trend,
     mixedAiConsensus,
+    bankRestricted,
     blockerCount: qualityBlockers.length,
     warningCount: qualityWarnings.length,
   });
@@ -401,6 +490,7 @@ function calculateSetupQualityScore(input: {
   priceDistanceInRisk: number;
   volumeTrend: string;
   mixedAiConsensus: boolean;
+  bankRestricted: boolean;
   blockerCount: number;
   warningCount: number;
 }) {
@@ -411,6 +501,7 @@ function calculateSetupQualityScore(input: {
   score += input.volumeTrend === "increasing" ? 10 : input.volumeTrend === "normal" ? 6 : 0;
   score += input.priceDistanceInRisk <= 0.2 ? 10 : input.priceDistanceInRisk <= 0.5 ? 5 : 0;
   score += input.mixedAiConsensus ? 0 : 5;
+  score += input.bankRestricted ? 0 : 5;
   score -= input.blockerCount * 14;
   score -= input.warningCount * 5;
   return Math.max(0, Math.min(100, Math.round(score)));

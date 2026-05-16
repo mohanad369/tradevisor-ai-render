@@ -1096,6 +1096,14 @@ function VIPAgentAnalysisFlow({ result }: { result: AnalysisResult }) {
     },
     {
       id: "02",
+      name: "Bank Agent",
+      task: "Checks central-bank tone, USD pressure, yields, and institutional liquidity intent.",
+      output: readAgentValue(result.agents?.bankPolicy, "nextAgentPayload", "bankBias") || "bank context checked",
+      icon: Building2,
+      color: "#60a5fa",
+    },
+    {
+      id: "03",
       name: "Validation Agent",
       task: "Checks weak or conflicting data before the next step.",
       output: readAgentValue(result.agents?.decision, "nextAgentPayload", "recommendedAction") || "data validated",
@@ -1103,7 +1111,7 @@ function VIPAgentAnalysisFlow({ result }: { result: AnalysisResult }) {
       color: "#22c55e",
     },
     {
-      id: "03",
+      id: "04",
       name: "Momentum Agent",
       task: "Reads pressure, trend strength, and current market momentum.",
       output: readAgentValue(result.agents?.marketContext, "nextAgentPayload", "recommendedAction") || "momentum aligned",
@@ -1111,7 +1119,7 @@ function VIPAgentAnalysisFlow({ result }: { result: AnalysisResult }) {
       color: "#f59e0b",
     },
     {
-      id: "04",
+      id: "05",
       name: "Chart Agent",
       task: "Maps asset, entry, stop loss, and take-profit levels.",
       output: readAgentValue(result.agents?.chartTrade, "nextAgentPayload", "recommendedAction") || "chart mapped",
@@ -1119,7 +1127,7 @@ function VIPAgentAnalysisFlow({ result }: { result: AnalysisResult }) {
       color: "#a78bfa",
     },
     {
-      id: "05",
+      id: "06",
       name: "Supervisor Agent",
       task: "Checks that every agent output is connected and valid.",
       output: readAgentValue(result.agents?.supervisor, "nextAgentPayload", "supervisorStatus") || "workflow connected",
@@ -1127,7 +1135,7 @@ function VIPAgentAnalysisFlow({ result }: { result: AnalysisResult }) {
       color: "#eab308",
     },
     {
-      id: "06",
+      id: "07",
       name: "Risk Agent",
       task: "Final gate for risk, position size, stop, and targets.",
       output: riskGate,
@@ -1150,7 +1158,7 @@ function VIPAgentAnalysisFlow({ result }: { result: AnalysisResult }) {
       <div className="rounded-xl border border-[#d4a843]/20 bg-[#0f0f0f] p-2 sm:p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="text-[#a0a0a0] text-[9px] sm:text-[10px] leading-relaxed">
-            The trade moved through six agents before the final plan.
+            The trade moved through news, bank-policy, validation, momentum, chart, supervisor, and risk agents before the final plan.
           </div>
           <div className={`text-[9px] sm:text-[10px] font-bold capitalize ${finalAction.includes("approve") ? "text-[#22c55e]" : "text-[#d4a843]"}`}>
             {finalAction}

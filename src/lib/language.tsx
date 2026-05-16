@@ -34,7 +34,7 @@ const dictionary: Dictionary = {
   "agents.eyebrow": { en: "AI Agent Network", ar: "شبكة وكلاء الذكاء" },
   "agents.title": { en: "Artificial Intelligence Agents", ar: "وكلاء الذكاء الاصطناعي" },
   "agents.subtitle": {
-    en: "Every trade moves through six linked agents: news, validation, momentum, chart logic, supervision, and risk management before the final decision appears.",
+    en: "Every trade moves through linked agents: news, bank policy, validation, momentum, chart logic, supervision, and risk management before the final decision appears.",
     ar: "الصفقة تمر داخل الموقع عبر ستة وكلاء مترابطين: خبر، تحقق، زخم، شارت، مراقبة، ثم ادارة مخاطر قبل ظهور القرار النهائي.",
   },
   "agents.flowTitle": { en: "How the trade moves inside the system", ar: "حركة الصفقة داخل النظام" },
