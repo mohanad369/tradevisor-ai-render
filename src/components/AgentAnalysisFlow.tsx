@@ -176,6 +176,11 @@ function formatAgentOutput(value: string, isArabic: boolean) {
     connected: "متصل",
     valid: "صالح",
     "no trade": "لا توجد صفقة الآن",
+    "pass to agent 2": "تم تمرير البيانات للوكيل التالي",
+    "pass to agent 3": "تم تمرير القرار للزخم",
+    "pass to agent 4": "تم تمرير الزخم لوكيل الشارت",
+    "pass to agent 5": "تم تمرير الشارت للمشرف",
+    "pass to agent 6": "تم تمرير الصفقة لإدارة المخاطر",
   }
   return translations[normalized] || normalized
 }

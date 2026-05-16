@@ -86,6 +86,33 @@ export async function analyzeChart(payload: AnalyzeChartPayload): Promise<Analyz
   return apiPost("/chart/analyze", payload);
 }
 
+export interface MarketNewsItem {
+  title: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  sentiment: "positive" | "negative" | "neutral";
+  riskLevel: "low" | "medium" | "high";
+  matchedKeywords: string[];
+}
+
+export interface MarketNewsContext {
+  assetName: string;
+  generatedAt: string;
+  source: string;
+  status: "live" | "fallback";
+  marketMood: "positive" | "negative" | "neutral";
+  riskLevel: "low" | "medium" | "high";
+  headlines: MarketNewsItem[];
+  officialSources: string[];
+}
+
+export async function fetchNewsContext(assetName: string): Promise<MarketNewsContext | null> {
+  const params = new URLSearchParams({ asset: assetName });
+  const result = await apiGet<{ ok: boolean; context?: MarketNewsContext }>(`/news/context?${params.toString()}`);
+  return result.context || null;
+}
+
 export interface SupportAskPayload {
   question: string;
   language: string;

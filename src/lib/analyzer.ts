@@ -5,7 +5,7 @@
  */
 
 import { analyzeWithOpenAI, isOpenAIConfigured } from "./openai";
-import { analyzeChart as analyzeChartOnBackend, isBackendConfigured } from "./api";
+import { analyzeChart as analyzeChartOnBackend, fetchNewsContext, isBackendConfigured, type MarketNewsContext } from "./api";
 import { runTradingAgentPipeline, type TradingAgentPipelineResult } from "./tradingAgents";
 
 function hashString(str: string): number {
@@ -172,6 +172,35 @@ function normalizeChartScale(scale: AnalysisResult["chartScale"] | undefined): A
   };
 }
 
+async function getLiveNewsContext(assetName: string): Promise<MarketNewsContext | null> {
+  if (!isBackendConfigured()) return null;
+  try {
+    return await fetchNewsContext(assetName);
+  } catch (error) {
+    console.warn("Live news context unavailable, using internal agent context:", error instanceof Error ? error.message : String(error));
+    return null;
+  }
+}
+
+async function attachTradingAgents(
+  result: AnalysisResult,
+  assetName: string,
+  strategyName: string,
+  timeframe: string,
+  marketPrice?: number,
+) {
+  const newsContext = await getLiveNewsContext(assetName);
+  result.agents = runTradingAgentPipeline({
+    analysis: result,
+    assetName,
+    strategyName,
+    timeframe,
+    marketPrice,
+    newsContext,
+  });
+  return result;
+}
+
 export async function analyzeChartClientSide(
   base64Image: string,
   assetName: string,
@@ -191,14 +220,7 @@ export async function analyzeChartClientSide(
         currentPrice: realPrice,
       });
       const result = withDefaultAnalysisFields(backendResult, strategyName) as AnalysisResult;
-      result.agents = runTradingAgentPipeline({
-        analysis: result,
-        assetName,
-        strategyName,
-        timeframe,
-        marketPrice: realPrice,
-      });
-      return result;
+      return attachTradingAgents(result, assetName, strategyName, timeframe, realPrice);
     } catch (err: any) {
       console.warn("Backend Claude analysis failed, falling back:", err.message);
     }
@@ -242,14 +264,7 @@ export async function analyzeChartClientSide(
         keyLevel: `${aiResult.signal === "BUY" ? "Support" : "Resistance"} at ${aiResult.entry}`,
         confluenceScore: aiResult.confluenceScore,
       };
-      result.agents = runTradingAgentPipeline({
-        analysis: result,
-        assetName,
-        strategyName,
-        timeframe,
-        marketPrice: realPrice,
-      });
-      return result;
+      return attachTradingAgents(result, assetName, strategyName, timeframe, realPrice);
     } catch (err: any) {
       console.warn("OpenAI analysis failed, falling back to client-side:", err.message);
       // Continue to fallback below
@@ -432,12 +447,5 @@ export async function analyzeChartClientSide(
     keyLevel: `${isBuy ? "Support" : "Resistance"} at ${Number((isBuy ? sl - finalRisk * 0.3 : sl + finalRisk * 0.3).toFixed(asset.decimals))} — tested ${2 + Math.floor(rng() * 3)}x`,
     confluenceScore,
   };
-  result.agents = runTradingAgentPipeline({
-    analysis: result,
-    assetName,
-    strategyName,
-    timeframe,
-    marketPrice: realPrice,
-  });
-  return result;
+  return attachTradingAgents(result, assetName, strategyName, timeframe, realPrice);
 }

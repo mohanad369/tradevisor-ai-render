@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { sendVipCodeEmail } from "./lib/email";
 import { getLatestGoldQuote, onGoldQuote, startLiveGoldFeed } from "./lib/liveGold";
 import { fetchServerMarketQuotes } from "./lib/market";
+import { fetchMarketNewsContext } from "./lib/news";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { checkRateLimit, createAdminSessionToken, SECURITY_HEADERS, verifyAdminSessionToken, verifyDeveloperPassword, verifyPassword } from "./lib/security";
 import { env } from "./lib/env";
@@ -116,6 +117,21 @@ app.get("/api/market/quotes", async (c) => {
   } catch (error) {
     console.error("[Market] quote fetch failed", error);
     return c.json({ ok: false, error: "Market prices are unavailable" }, 503);
+  }
+});
+
+app.get("/api/news/context", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`news:${ip}`, 60);
+  if (!limit.allowed) return c.json({ error: "Too many requests", retryAfter: limit.retryAfter }, 429);
+
+  const asset = c.req.query("asset") || "XAU/USD";
+  try {
+    const context = await fetchMarketNewsContext(asset);
+    return c.json({ ok: true, context });
+  } catch (error) {
+    console.error("[NewsAgent] context fetch failed", error);
+    return c.json({ ok: false, error: "Market news is unavailable" }, 503);
   }
 });
 

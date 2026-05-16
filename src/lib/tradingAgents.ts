@@ -37,6 +37,21 @@ interface PipelineInput {
   strategyName: string;
   timeframe: string;
   marketPrice?: number;
+  newsContext?: {
+    status: "live" | "fallback";
+    marketMood: "positive" | "negative" | "neutral";
+    riskLevel: "low" | "medium" | "high";
+    headlines: Array<{
+      title: string;
+      source: string;
+      url: string;
+      publishedAt: string;
+      sentiment: "positive" | "negative" | "neutral";
+      riskLevel: "low" | "medium" | "high";
+      matchedKeywords: string[];
+    }>;
+    officialSources: string[];
+  } | null;
 }
 
 export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipelineResult {
@@ -62,7 +77,16 @@ export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipel
 
 function newsAgent(input: PipelineInput) {
   const direction = input.analysis.signal === "BUY" ? "bullish" : "bearish";
-  const inputs = [
+  const liveHeadlines = input.newsContext?.headlines?.slice(0, 6).map((headline) => ({
+    title: headline.title,
+    source: headline.source,
+    url: headline.url,
+    publishedAt: headline.publishedAt,
+    sentiment: headline.sentiment,
+    riskLevel: headline.riskLevel,
+    matchedKeywords: headline.matchedKeywords?.length ? headline.matchedKeywords : [input.assetName],
+  })) || [];
+  const internalInputs = [
     {
       title: `${input.assetName} ${direction} chart context detected`,
       source: "tradevisor-chart-agent",
@@ -82,15 +106,22 @@ function newsAgent(input: PipelineInput) {
       matchedKeywords: ["momentum", "volume", input.analysis.trend],
     },
   ];
+  const inputs = liveHeadlines.length ? [...liveHeadlines, ...internalInputs] : internalInputs;
+  const liveRisk = input.newsContext?.riskLevel;
+  const marketMood = input.newsContext?.marketMood || (input.analysis.signal === "BUY" ? "positive" : "negative");
 
   return {
     agent: "news-intelligence-agent",
     generatedAt: new Date().toISOString(),
-    marketMood: input.analysis.signal === "BUY" ? "positive" : "negative",
+    newsStatus: input.newsContext?.status || "internal_only",
+    marketMood,
     keySignals: inputs.map(({ title, sentiment, riskLevel }) => ({ title, sentiment, riskLevel })),
     nextAgentPayload: {
       recommendedAction: "pass_to_agent_2",
-      confidence: input.analysis.confidence >= 80 ? "high" : "medium",
+      confidence: liveHeadlines.length >= 3 && input.analysis.confidence >= 80 ? "high" : "medium",
+      newsStatus: input.newsContext?.status || "internal_only",
+      newsRiskLevel: liveRisk || "medium",
+      officialSources: input.newsContext?.officialSources || [],
       inputs,
     },
   };
