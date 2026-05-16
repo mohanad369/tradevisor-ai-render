@@ -13,6 +13,7 @@ const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 type ProviderAttempt = {
   at: string;
   configured: boolean;
+  model?: string;
   ok?: boolean;
   status?: number;
   error?: string;
@@ -31,6 +32,16 @@ function getClaudeModel(): string {
   const configuredModel = (process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || "").trim();
   if (!configuredModel || configuredModel === "claude-3-5-sonnet-20241022") return DEFAULT_MODEL;
   return configuredModel;
+}
+
+function getClaudeModelCandidates(): string[] {
+  return Array.from(new Set([
+    getClaudeModel(),
+    DEFAULT_MODEL,
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-haiku-20241022",
+    "claude-3-haiku-20240307",
+  ]));
 }
 
 export function getAIProviderRuntimeStatus() {
@@ -234,7 +245,7 @@ async function analyzeChartWithClaude(
   currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
   const apiKey = getClaudeApiKey();
-  providerAttempts.claude = { at: new Date().toISOString(), configured: Boolean(apiKey) };
+  providerAttempts.claude = { at: new Date().toISOString(), configured: Boolean(apiKey), model: getClaudeModel() };
   if (!apiKey) return null;
 
   try {
@@ -298,53 +309,60 @@ async function analyzeChartWithClaude(
       "- If the chart is unclear, lower confidence and keep risk conservative.",
     ].join("\n");
 
-    const response = await fetch(ANTHROPIC_URL, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: getClaudeModel(),
-        max_tokens: 1800,
-        temperature: 0.2,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: mediaType,
-                  data: base64Image,
+    for (const model of getClaudeModelCandidates()) {
+      const response = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1800,
+          temperature: 0.2,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: mediaType,
+                    data: base64Image,
+                  },
                 },
-              },
-              { type: "text", text: prompt },
-            ],
-          },
-        ],
-      }),
-    });
+                { type: "text", text: prompt },
+              ],
+            },
+          ],
+        }),
+      });
 
-    if (!response.ok) {
-      providerAttempts.claude = { at: new Date().toISOString(), configured: true, ok: false, status: response.status };
-      console.error("[Anthropic] request failed", response.status, await response.text());
-      return null;
+      if (!response.ok) {
+        const failureText = await response.text();
+        providerAttempts.claude = { at: new Date().toISOString(), configured: true, model, ok: false, status: response.status };
+        console.error("[Anthropic] request failed", { model, status: response.status, body: failureText });
+        if (response.status === 404) continue;
+        return null;
+      }
+
+      providerAttempts.claude = { at: new Date().toISOString(), configured: true, model, ok: true, status: response.status };
+      const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
+      const text = data.content?.find((item) => item.type === "text")?.text;
+      if (!text) return null;
+
+      const parsed = parseJsonObject(text);
+      return normalizeClaudeResult(parsed, assetName, strategyName, timeframe);
     }
 
-    providerAttempts.claude = { at: new Date().toISOString(), configured: true, ok: true, status: response.status };
-    const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
-    const text = data.content?.find((item) => item.type === "text")?.text;
-    if (!text) return null;
-
-    const parsed = parseJsonObject(text);
-    return normalizeClaudeResult(parsed, assetName, strategyName, timeframe);
+    return null;
   } catch (error) {
     providerAttempts.claude = {
       at: new Date().toISOString(),
       configured: true,
+      model: getClaudeModel(),
       ok: false,
       error: error instanceof Error ? error.message : String(error),
     };
