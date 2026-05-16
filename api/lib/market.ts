@@ -13,6 +13,9 @@ const MARKET_SYMBOLS: Record<string, string> = {
   "EUR/USD": "EUR/USD",
   "GBP/USD": "GBP/USD",
   "USD/JPY": "USD/JPY",
+  "GBP/JPY": "GBP/JPY",
+  "SPY": "SPY",
+  "NDX": "NDX",
 };
 
 const MARKET_CACHE_TTL_MS = clampNumber(process.env.MARKET_CACHE_TTL_MS, 5_000, 1_000, 60_000);
@@ -423,7 +426,91 @@ async function fetchPublicFallbackQuotes(requestedPairs: string[]): Promise<Reco
     });
     if (goldQuote) results["XAU/USD"] = applyGoldOffset(goldQuote);
   }
+  const cryptoPairs = requestedPairs.filter((pair) => pair === "BTC/USD" || pair === "ETH/USD");
+  const cryptoQuotes = await Promise.all(cryptoPairs.map((pair) => fetchBinanceCryptoQuote(pair).catch((error) => {
+    console.warn("[Market] Binance crypto fallback failed", { pair, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  })));
+  cryptoQuotes.forEach((quote) => {
+    if (quote) results[quote.pair] = quote;
+  });
+
+  if (requestedPairs.includes("SPY")) {
+    const spy = await fetchYahooQuote("SPY", "SPY").catch((error) => {
+      console.warn("[Market] Yahoo SPY fallback failed", error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (spy) results.SPY = spy;
+  }
+
+  if (requestedPairs.includes("NDX")) {
+    const ndx = await fetchYahooQuote("^NDX", "NDX").catch((error) => {
+      console.warn("[Market] Yahoo NDX fallback failed", error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (ndx) results.NDX = ndx;
+  }
   return results;
+}
+
+async function fetchBinanceCryptoQuote(pair: "BTC/USD" | "ETH/USD"): Promise<MarketQuote | null> {
+  const symbol = pair === "BTC/USD" ? "BTCUSDT" : "ETHUSDT";
+  const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, {
+    headers: { "user-agent": "Tradevisor Market Data" },
+  });
+  if (!response.ok) throw new Error(`Binance crypto API failed: ${response.status}`);
+
+  const data = await response.json() as any;
+  const price = Number(data.lastPrice);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const open = Number(data.openPrice);
+  const high = Number(data.highPrice);
+  const low = Number(data.lowPrice);
+  const changeAmount = Number(data.priceChange);
+  const change = Number(data.priceChangePercent);
+
+  return {
+    pair,
+    price,
+    change: Number.isFinite(change) ? change : 0,
+    changeAmount: Number.isFinite(changeAmount) ? changeAmount : 0,
+    open: Number.isFinite(open) ? open : price,
+    high: Number.isFinite(high) ? high : price,
+    low: Number.isFinite(low) ? low : price,
+    previousClose: Number.isFinite(open) ? open : price,
+    isMarketOpen: true,
+    timestamp: Number(data.closeTime) || Date.now(),
+  };
+}
+
+async function fetchYahooQuote(symbol: string, pair: "SPY" | "NDX"): Promise<MarketQuote | null> {
+  const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`, {
+    headers: { "user-agent": "Mozilla/5.0 Tradevisor Market Data" },
+  });
+  if (!response.ok) throw new Error(`Yahoo quote API failed: ${response.status}`);
+
+  const data = await response.json() as any;
+  const result = data.chart?.result?.[0];
+  const meta = result?.meta;
+  const price = Number(meta?.regularMarketPrice || meta?.previousClose || meta?.chartPreviousClose);
+  if (!Number.isFinite(price) || price <= 0) return null;
+
+  const previousClose = Number(meta?.previousClose || meta?.chartPreviousClose || price);
+  const changeAmount = price - previousClose;
+  const change = previousClose > 0 ? (changeAmount / previousClose) * 100 : 0;
+
+  return {
+    pair,
+    price,
+    change,
+    changeAmount,
+    open: Number(meta?.regularMarketOpen || previousClose || price),
+    high: Number(meta?.regularMarketDayHigh || price),
+    low: Number(meta?.regularMarketDayLow || price),
+    previousClose,
+    isMarketOpen: Boolean(meta?.regularMarketTime),
+    timestamp: Number(meta?.regularMarketTime || 0) > 0 ? Number(meta.regularMarketTime) * 1000 : Date.now(),
+  };
 }
 
 async function fetchStooqGoldQuote(): Promise<MarketQuote | null> {

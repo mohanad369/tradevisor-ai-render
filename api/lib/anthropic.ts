@@ -137,7 +137,7 @@ function getAssetProfile(assetName: string) {
     "GBP/USD": { base: 1.26, range: 0.06, decimals: 5, tickSize: 0.00001, pipVal: 10 },
     "USD/JPY": { base: 151.5, range: 3.0, decimals: 3, tickSize: 0.001, pipVal: 9.2 },
     "GBP/JPY": { base: 192.0, range: 5.0, decimals: 3, tickSize: 0.001, pipVal: 9.2 },
-    "XAU/USD (Gold)": { base: 2650, range: 100, decimals: 2, tickSize: 0.01, pipVal: 10 },
+    "XAU/USD (Gold)": { base: 4540, range: 120, decimals: 2, tickSize: 0.01, pipVal: 10 },
     "BTC/USD": { base: 68500, range: 8000, decimals: 0, tickSize: 1, pipVal: 1 },
     "ETH/USD": { base: 3550, range: 500, decimals: 2, tickSize: 0.01, pipVal: 1 },
     "SPY": { base: 595, range: 20, decimals: 2, tickSize: 0.01, pipVal: 1 },

@@ -25,6 +25,8 @@ import PartnerTab from "@/components/PartnerTab"
 import Jarvis from "@/components/Jarvis"
 import { getCachedPrice } from "@/lib/goldapi"
 import { getMetalsPrices } from "@/lib/metals"
+import { getAssetMarketPair, formatAssetPrice } from "@/lib/assetMarket"
+import { fetchMarketQuote } from "@/lib/marketPrices"
 import { strategies, assets } from "@/data/strategies"
 import type { Strategy, Asset } from "@/data/strategies"
 import { ToastProvider, useToast } from "@/components/ToastNotifications"
@@ -645,11 +647,22 @@ function AIAnalyzerTab() {
   const assetDecimals = getDefaultDecimals(selectedAsset)
 
   useEffect(() => {
+    let cancelled = false
+    setRealPrice(undefined)
     if (selectedAsset.name === "XAU/USD (Gold)") {
-      getCachedPrice("XAU", 30000).then(p => setRealPrice(p.price)).catch(() => setRealPrice(undefined))
+      getCachedPrice("XAU", 30000)
+        .then(p => { if (!cancelled) setRealPrice(p.price) })
+        .catch(() => {
+          fetchMarketQuote("XAU/USD")
+            .then(quote => { if (!cancelled) setRealPrice(quote?.price) })
+            .catch(() => { if (!cancelled) setRealPrice(undefined) })
+        })
     } else {
-      setRealPrice(undefined)
+      fetchMarketQuote(getAssetMarketPair(selectedAsset))
+        .then(quote => { if (!cancelled) setRealPrice(quote?.price) })
+        .catch(() => { if (!cancelled) setRealPrice(undefined) })
     }
+    return () => { cancelled = true }
   }, [selectedAsset.name])
 
   const handleAnalyze = async () => {
@@ -661,6 +674,16 @@ function AIAnalyzerTab() {
       const manual = parseFloat(manualPrice)
       if (!isNaN(manual) && manual > 0) priceBase = manual
       else if (realPrice && realPrice > 0) priceBase = realPrice
+
+      if (!priceBase) {
+        try {
+          const quote = await fetchMarketQuote(getAssetMarketPair(selectedAsset))
+          if (quote?.price) {
+            priceBase = quote.price
+            setRealPrice(quote.price)
+          }
+        } catch { /* analysis can still use chart structure without a live price */ }
+      }
 
       if (selectedAsset.name === "XAU/USD (Gold)" && !priceBase) {
         try {
@@ -728,7 +751,7 @@ function AIAnalyzerTab() {
                 <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                   className="absolute top-full mt-2 left-0 bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl shadow-xl z-50 w-48 sm:w-56 max-h-64 overflow-y-auto">
                   {assets.map(a => (
-                    <button key={a.id} onClick={() => { setSelectedAsset(a); setShowAssetDropdown(false); setResult(null); }}
+                    <button key={a.id} onClick={() => { setSelectedAsset(a); setManualPrice(""); setShowAssetDropdown(false); setResult(null); }}
                       className={`w-full text-left px-3 sm:px-4 py-2 text-xs sm:text-sm hover:bg-[#141414] transition-colors ${selectedAsset.id === a.id ? "text-[#d4a843]" : "text-[#a0a0a0]"}`}>
                       {a.name}
                     </button>
@@ -759,16 +782,19 @@ function AIAnalyzerTab() {
       </div>
 
       {/* Manual Price Input */}
-      {selectedAsset.name === "XAU/USD (Gold)" && (
-        <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+      <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
           <DollarSign size={14} className="text-[#d4a843] flex-shrink-0 sm:hidden" /><DollarSign size={16} className="text-[#d4a843] flex-shrink-0 hidden sm:block" />
           <label className="text-[#a0a0a0] text-[10px] sm:text-xs whitespace-nowrap">{vt("Price:")}</label>
           <input type="number" value={manualPrice} onChange={e => setManualPrice(e.target.value)}
-            placeholder={realPrice ? realPrice.toFixed(2) : "4724.57"}
+            placeholder={realPrice ? formatAssetPrice(realPrice, selectedAsset) : "Live price"}
             className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-white placeholder-[#666666] focus:outline-none focus:border-[#d4a843] min-w-0" />
           <span className="text-[#666666] text-[10px] sm:text-xs">USD</span>
-        </div>
-      )}
+          {realPrice && !manualPrice && (
+            <span className="hidden sm:inline text-[#666666] text-[10px]">
+              {getAssetMarketPair(selectedAsset)} live: {formatAssetPrice(realPrice, selectedAsset)}
+            </span>
+          )}
+      </div>
 
       {/* Chart Upload + Results */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">

@@ -38,6 +38,9 @@ export const MARKET_SYMBOLS: Record<string, string> = {
   "EUR/USD": "EUR/USD",
   "GBP/USD": "GBP/USD",
   "USD/JPY": "USD/JPY",
+  "GBP/JPY": "GBP/JPY",
+  "SPY": "SPY",
+  "NDX": "NDX",
 };
 
 function toNumber(value: string | undefined, fallback = 0) {

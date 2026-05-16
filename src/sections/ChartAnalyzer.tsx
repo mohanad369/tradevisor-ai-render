@@ -5,6 +5,8 @@ import { useNavigate } from "react-router";
 import { analyzeChartClientSide, type AnalysisResult } from "@/lib/analyzer";
 import { getCachedPrice } from "@/lib/goldapi";
 import { getMetalsPrices } from "@/lib/metals";
+import { getAssetMarketPair, formatAssetPrice } from "@/lib/assetMarket";
+import { fetchMarketQuote } from "@/lib/marketPrices";
 import ChartUpload from "@/components/ChartUpload";
 import AnalysisResultPanel, { AnalysisOverlay } from "@/components/AnalysisOverlay";
 import LivePriceTicker from "@/components/LivePriceTicker";
@@ -59,17 +61,27 @@ export default function ChartAnalyzer() {
 
   const assetDecimals = getDefaultDecimals(selectedAsset);
 
-  // Fetch live gold price when gold is selected.
+  // Fetch live market price for the selected asset when available.
   useEffect(() => {
     setDeveloperMode(isDeveloperMode());
+    let cancelled = false;
+    setRealPrice(undefined);
 
     if (selectedAsset.name === "XAU/USD (Gold)") {
       getCachedPrice("XAU", 30000)
-        .then((p) => setRealPrice(p.price))
-        .catch(() => setRealPrice(undefined));
+        .then((p) => { if (!cancelled) setRealPrice(p.price); })
+        .catch(() => {
+          fetchMarketQuote("XAU/USD")
+            .then((quote) => { if (!cancelled) setRealPrice(quote?.price); })
+            .catch(() => { if (!cancelled) setRealPrice(undefined); });
+        });
     } else {
-      setRealPrice(undefined);
+      fetchMarketQuote(getAssetMarketPair(selectedAsset))
+        .then((quote) => { if (!cancelled) setRealPrice(quote?.price); })
+        .catch(() => { if (!cancelled) setRealPrice(undefined); });
     }
+
+    return () => { cancelled = true; };
   }, [selectedAsset.name]);
 
   const handleAnalyze = async () => {
@@ -99,7 +111,17 @@ export default function ChartAnalyzer() {
         priceBase = realPrice;
       }
 
-      // For gold, try to get fresh real price if no manual price
+      // Try to get a fresh real price for any supported asset before analysis.
+      if (!priceBase) {
+        try {
+          const quote = await fetchMarketQuote(getAssetMarketPair(selectedAsset));
+          if (quote?.price) {
+            priceBase = quote.price;
+            setRealPrice(quote.price);
+          }
+        } catch { /* analysis can still use chart structure without a live price */ }
+      }
+
       if (selectedAsset.name === "XAU/USD (Gold)" && !priceBase) {
         try {
           const metals = await getMetalsPrices();
@@ -154,10 +176,9 @@ export default function ChartAnalyzer() {
           </p>
         </motion.div>
 
-        {/* Live Price Ticker + Manual Price Input — Gold only */}
-        {selectedAsset.name === "XAU/USD (Gold)" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-4 space-y-3">
-            <LivePriceTicker />
+        {/* Live Price + Manual Price Input */}
+        <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-4 space-y-3">
+            {selectedAsset.name === "XAU/USD (Gold)" && <LivePriceTicker />}
 
             {/* Manual Price Input — for chart price alignment */}
             <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl px-4 py-3 flex items-center gap-3">
@@ -169,7 +190,7 @@ export default function ChartAnalyzer() {
                 type="number"
                 value={manualPrice}
                 onChange={(e) => setManualPrice(e.target.value)}
-                placeholder={realPrice ? realPrice.toFixed(2) : "Live price"}
+                placeholder={realPrice ? formatAssetPrice(realPrice, selectedAsset) : "Live price"}
                 className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-lg px-3 py-1.5 text-sm text-white placeholder-[#666666] focus:outline-none focus:border-[#d4a843] min-w-0"
               />
               <span className="text-[#666666] text-xs">USD</span>
@@ -186,11 +207,12 @@ export default function ChartAnalyzer() {
             {/* Info text */}
             {!manualPrice && (
               <p className="text-[#666666] text-[11px] pl-1">
-                {t("analyzer.tipPrice")}
+                {realPrice
+                  ? `${getAssetMarketPair(selectedAsset)} live price: ${formatAssetPrice(realPrice, selectedAsset)}. ${t("analyzer.tipPrice")}`
+                  : t("analyzer.tipPrice")}
               </p>
             )}
           </motion.div>
-        )}
 
         {/* Controls */}
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.15 }} className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-2xl p-4 mb-6">
@@ -206,7 +228,7 @@ export default function ChartAnalyzer() {
                 {showAssetDropdown && (
                   <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="absolute top-full mt-2 left-0 bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl shadow-xl z-50 w-56 max-h-64 overflow-y-auto">
                     {assets.map((a) => (
-                      <button key={a.id} onClick={() => { setSelectedAsset(a); setShowAssetDropdown(false); setResult(null); }} className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[#141414] transition-colors ${selectedAsset.id === a.id ? "text-[#d4a843]" : "text-[#a0a0a0]"}`}>
+                      <button key={a.id} onClick={() => { setSelectedAsset(a); setManualPrice(""); setShowAssetDropdown(false); setResult(null); }} className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[#141414] transition-colors ${selectedAsset.id === a.id ? "text-[#d4a843]" : "text-[#a0a0a0]"}`}>
                         {a.name}
                       </button>
                     ))}
