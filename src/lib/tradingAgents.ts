@@ -12,6 +12,14 @@ export interface TradingAgentPipelineResult {
   finalPlan: {
     action: string;
     confidence: string;
+    setupQuality: {
+      verdict: "clean" | "caution" | "danger";
+      score: number;
+      summary: string;
+      blockers: string[];
+      warnings: string[];
+      confirmationChecklist: string[];
+    };
     entryPrice: number;
     stopLoss: number;
     takeProfits: Array<{ label: string; price: number; closePercent: number }>;
@@ -290,22 +298,50 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
   }, 0);
   const rewardRiskRatio = risk > 0 ? Number((blendedReward / risk).toFixed(2)) : 0;
   const mixedAiConsensus = input.analysis.aiConsensus?.status === "mixed";
+  const priceDistanceFromEntry = input.marketPrice
+    ? Math.abs(input.marketPrice - trade.entryPrice)
+    : 0;
+  const priceDistanceInRisk = risk > 0 ? Number((priceDistanceFromEntry / risk).toFixed(2)) : 0;
   const qualityBlockers = [
     ...(input.analysis.confidence < 72 ? ["AI confidence is too low for a live entry."] : []),
     ...(input.analysis.confluenceScore < 65 ? ["Market confluence is weak, so the setup is not clean."] : []),
     ...(rewardRiskRatio < 1.2 ? ["Reward-to-risk is too weak after staged exits."] : []),
     ...(mixedAiConsensus ? ["Claude/OpenAI model consensus is mixed, so the setup is not safe enough."] : []),
+    ...(priceDistanceInRisk >= 0.75 ? ["Current price is too far from the planned entry, so chasing is dangerous."] : []),
   ];
   const qualityWarnings = [
     ...(input.analysis.confidence < 82 ? ["AI confidence is below the strong-entry threshold."] : []),
     ...(input.analysis.confluenceScore < 78 ? ["Confluence is moderate, not strong."] : []),
     ...(rewardRiskRatio < 1.5 ? ["Reward-to-risk is acceptable only with reduced size or waiting."] : []),
     ...(input.analysis.volume.trend === "decreasing" ? ["Volume is not confirming the move clearly."] : []),
+    ...(priceDistanceInRisk > 0.35 && priceDistanceInRisk < 0.75 ? ["Current price is not close enough to the planned entry. Wait for a better fill."] : []),
   ];
   const closed = qualityBlockers.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
   const restricted = qualityWarnings.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
   const action = closed ? "reject" : restricted ? "wait_or_reduce_size" : "approve_plan";
   const confidence = action === "approve_plan" && input.analysis.confidence >= 82 ? "high" : "medium";
+  const setupScore = calculateSetupQualityScore({
+    confidence: input.analysis.confidence,
+    confluence: input.analysis.confluenceScore,
+    rewardRiskRatio,
+    priceDistanceInRisk,
+    volumeTrend: input.analysis.volume.trend,
+    mixedAiConsensus,
+    blockerCount: qualityBlockers.length,
+    warningCount: qualityWarnings.length,
+  });
+  const setupQuality = {
+    verdict: closed ? "danger" as const : restricted ? "caution" as const : "clean" as const,
+    score: setupScore,
+    summary: closed
+      ? "Entry is dangerous right now. The system needs clearer confirmation before allowing a trade."
+      : restricted
+        ? "Setup has potential, but it is not clean enough for full risk yet."
+        : "Setup is clean enough for the current strategy and risk model.",
+    blockers: qualityBlockers,
+    warnings: qualityWarnings,
+    confirmationChecklist: buildConfirmationChecklist(input, rewardRiskRatio, priceDistanceInRisk),
+  };
   const notes = [
     ...(closed
       ? ["No trade now: entry is dangerous until the chart becomes clearer."]
@@ -346,6 +382,7 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     result: {
       action,
       confidence,
+      setupQuality,
       entryPrice: trade.entryPrice,
       stopLoss: trade.stopLoss,
       takeProfits,
@@ -355,6 +392,39 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
       notes,
     },
   };
+}
+
+function calculateSetupQualityScore(input: {
+  confidence: number;
+  confluence: number;
+  rewardRiskRatio: number;
+  priceDistanceInRisk: number;
+  volumeTrend: string;
+  mixedAiConsensus: boolean;
+  blockerCount: number;
+  warningCount: number;
+}) {
+  let score = 0;
+  score += Math.min(30, input.confidence * 0.3);
+  score += Math.min(25, input.confluence * 0.25);
+  score += Math.min(20, input.rewardRiskRatio * 10);
+  score += input.volumeTrend === "increasing" ? 10 : input.volumeTrend === "normal" ? 6 : 0;
+  score += input.priceDistanceInRisk <= 0.2 ? 10 : input.priceDistanceInRisk <= 0.5 ? 5 : 0;
+  score += input.mixedAiConsensus ? 0 : 5;
+  score -= input.blockerCount * 14;
+  score -= input.warningCount * 5;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function buildConfirmationChecklist(input: PipelineInput, rewardRiskRatio: number, priceDistanceInRisk: number) {
+  const side = input.analysis.signal === "BUY" ? "bullish" : "bearish";
+  return [
+    `Wait for price to be close to entry; current distance score is ${priceDistanceInRisk}R.`,
+    `Confirm ${side} candle close on ${input.timeframe}, not only a wick.`,
+    `Keep reward/risk above 1:1.5 before entry; current blended R:R is 1:${rewardRiskRatio}.`,
+    "Do not enter during fast spread spikes or unclear news volatility.",
+    "If one condition fails, wait for the next setup instead of forcing the trade.",
+  ];
 }
 
 function checkOutput(name: string, output: Record<string, any>, expectedAgent: string, expectedAction: string) {

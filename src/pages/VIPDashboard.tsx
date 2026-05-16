@@ -806,6 +806,7 @@ function AnalysisResultCard({ result, assetDecimals }: { result: AnalysisResult;
         </div>
       </div>
       <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+        <VIPSetupQualityCard result={result} />
         <VIPTradeSafetyNotice result={result} />
         {/* AI Indicators */}
         <div>
@@ -925,6 +926,50 @@ function VIPTradeSafetyNotice({ result }: { result: AnalysisResult }) {
             <div key={note} className="text-[#666666] text-[9px] sm:text-[10px] leading-relaxed mt-1">{note}</div>
           ))}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function VIPSetupQualityCard({ result }: { result: AnalysisResult }) {
+  const setupQuality = result.agents?.finalPlan?.setupQuality
+  if (!setupQuality) return null
+
+  const isDanger = setupQuality.verdict === "danger"
+  const isClean = setupQuality.verdict === "clean"
+  const color = isDanger ? "#e11d48" : isClean ? "#22c55e" : "#d4a843"
+  const label = isDanger ? "Danger Entry" : isClean ? "Clean Setup" : "Needs Confirmation"
+
+  return (
+    <div className="bg-[#111111] border border-[#1f1f1f] rounded-xl p-3">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}22` }}>
+            <Gauge size={14} style={{ color }} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-white text-xs sm:text-sm font-bold">Setup Quality</div>
+            <div className="text-[#666666] text-[8px] sm:text-[9px] uppercase tracking-wider">{label}</div>
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-sm sm:text-base font-black" style={{ color }}>{setupQuality.score}/100</div>
+          <div className="text-[#666666] text-[8px] sm:text-[9px]">safety score</div>
+        </div>
+      </div>
+      <p className="text-[#a0a0a0] text-[10px] sm:text-[11px] leading-relaxed">{setupQuality.summary}</p>
+      {(setupQuality.blockers.length > 0 || setupQuality.warnings.length > 0) && (
+        <div className="mt-2 space-y-1">
+          {[...setupQuality.blockers, ...setupQuality.warnings].slice(0, 2).map((item) => (
+            <div key={item} className="text-[#777777] text-[9px] sm:text-[10px] leading-relaxed">- {item}</div>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg p-2">
+        <div className="text-[#d4a843] text-[8px] sm:text-[9px] font-bold uppercase tracking-wider mb-1">Before Entry</div>
+        {setupQuality.confirmationChecklist.slice(0, 2).map((item) => (
+          <div key={item} className="text-[#a0a0a0] text-[9px] sm:text-[10px] leading-relaxed">- {item}</div>
+        ))}
       </div>
     </div>
   )

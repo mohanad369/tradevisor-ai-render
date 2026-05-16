@@ -70,6 +70,11 @@ describe("runTradingAgentPipeline", () => {
       stopLoss: 95,
       maxLossAmount: 100,
     });
+    expect(result.finalPlan.setupQuality).toMatchObject({
+      verdict: "clean",
+    });
+    expect(result.finalPlan.setupQuality.score).toBeGreaterThanOrEqual(80);
+    expect(result.finalPlan.setupQuality.confirmationChecklist.length).toBeGreaterThan(0);
     expect(result.finalPlan.takeProfits).toHaveLength(3);
     expect(result.finalPlan.rewardRiskRatio).toBeGreaterThanOrEqual(1.5);
   });
@@ -98,6 +103,8 @@ describe("runTradingAgentPipeline", () => {
       riskGate: "closed",
     });
     expect(result.finalPlan.action).toBe("reject");
+    expect(result.finalPlan.setupQuality.verdict).toBe("danger");
+    expect(result.finalPlan.setupQuality.blockers.length).toBeGreaterThan(0);
     expect(result.finalPlan.notes[0]).toContain("No trade now");
   });
 });

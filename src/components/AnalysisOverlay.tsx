@@ -43,6 +43,10 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
       </div>
 
       <div className="p-5 space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar">
+        {result.agents?.finalPlan?.setupQuality && (
+          <SetupQualityCard setupQuality={result.agents.finalPlan.setupQuality} />
+        )}
+
         {result.agents?.finalPlan?.action && result.agents.finalPlan.action !== "approve_plan" && (
           <div className={`rounded-xl border p-4 ${
             result.agents.finalPlan.action === "reject"
@@ -310,6 +314,47 @@ function getAgentValue(agent: Record<string, unknown>, section: string, key: str
 /* ═══════════════════════════════════════════════════════════
    Support Chat (mini panel inside result card)
    ═══════════════════════════════════════════════════════════ */
+
+function SetupQualityCard({ setupQuality }: { setupQuality: NonNullable<AnalysisResult["agents"]>["finalPlan"]["setupQuality"] }) {
+  const isDanger = setupQuality.verdict === "danger";
+  const isClean = setupQuality.verdict === "clean";
+  const color = isDanger ? "#e11d48" : isClean ? "#22c55e" : "#d4a843";
+  const decision = isDanger ? "Danger Entry" : isClean ? "Clean Setup" : "Needs Confirmation";
+
+  return (
+    <div className="rounded-xl border border-[#1f1f1f] bg-[#111111] p-4">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}22` }}>
+            <BarChart3 size={17} style={{ color }} />
+          </div>
+          <div>
+            <div className="text-white text-sm font-bold">Setup Quality</div>
+            <div className="text-[#666666] text-[10px] uppercase tracking-wider">{decision}</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-lg font-black" style={{ color }}>{setupQuality.score}/100</div>
+          <div className="text-[#666666] text-[10px]">AI safety score</div>
+        </div>
+      </div>
+      <p className="text-[#a0a0a0] text-xs leading-relaxed">{setupQuality.summary}</p>
+      {(setupQuality.blockers.length > 0 || setupQuality.warnings.length > 0) && (
+        <div className="mt-3 space-y-1">
+          {[...setupQuality.blockers, ...setupQuality.warnings].slice(0, 3).map((item) => (
+            <div key={item} className="text-[#777777] text-[11px] leading-relaxed">- {item}</div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 rounded-lg bg-[#0a0a0a] border border-[#1f1f1f] p-2">
+        <div className="text-[#d4a843] text-[10px] font-bold uppercase tracking-wider mb-1">Before Entry</div>
+        {setupQuality.confirmationChecklist.slice(0, 2).map((item) => (
+          <div key={item} className="text-[#a0a0a0] text-[11px] leading-relaxed">- {item}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function SupportChat({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([{ role: "bot", text: "Ask me about this AI analysis!" }]);
