@@ -15,6 +15,7 @@ import { useLanguage } from "@/lib/language";
 
 const ANALYSIS_COUNT_KEY = "tradevisor_analysis_count";
 const FREE_LIMIT = 4;
+const DEV_MODE_KEY = "tradevisor_dev_mode";
 
 function getAnalysisCount(): number {
   try {
@@ -25,6 +26,11 @@ function incrementAnalysisCount(): number {
   const count = getAnalysisCount() + 1;
   localStorage.setItem(ANALYSIS_COUNT_KEY, String(count));
   return count;
+}
+function isDeveloperMode(): boolean {
+  try {
+    return localStorage.getItem(DEV_MODE_KEY) === "true";
+  } catch { return false; }
 }
 
 function getDefaultDecimals(asset: Asset): number {
@@ -48,12 +54,15 @@ export default function ChartAnalyzer() {
   const [manualPrice, setManualPrice] = useState<string>("");
   const [usedOpenAI, setUsedOpenAI] = useState(false);
   const [analysisCount, setAnalysisCount] = useState(getAnalysisCount());
+  const [developerMode, setDeveloperMode] = useState(isDeveloperMode());
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const assetDecimals = getDefaultDecimals(selectedAsset);
 
   // Fetch live gold price when gold is selected.
   useEffect(() => {
+    setDeveloperMode(isDeveloperMode());
+
     if (selectedAsset.name === "XAU/USD (Gold)") {
       getCachedPrice("XAU", 30000)
         .then((p) => setRealPrice(p.price))
@@ -66,9 +75,12 @@ export default function ChartAnalyzer() {
   const handleAnalyze = async () => {
     if (!uploadedImage) return;
 
+    const hasDeveloperAccess = isDeveloperMode();
+    setDeveloperMode(hasDeveloperAccess);
+
     // Check if user exceeded free limit
     const currentCount = getAnalysisCount();
-    if (currentCount >= FREE_LIMIT) {
+    if (!hasDeveloperAccess && currentCount >= FREE_LIMIT) {
       setShowPaymentModal(true);
       return;
     }
@@ -113,9 +125,11 @@ export default function ChartAnalyzer() {
       setUsedOpenAI(data.reasons.length > 0 && data.reasons[0].includes("price action"));
       setResult(data);
 
-      // Increment analysis count
-      const newCount = incrementAnalysisCount();
-      setAnalysisCount(newCount);
+      // Increment analysis count only for non-developer users.
+      if (!hasDeveloperAccess) {
+        const newCount = incrementAnalysisCount();
+        setAnalysisCount(newCount);
+      }
     } catch (error: any) {
       alert(`Analysis failed: ${error.message || "Unknown error"}`);
     } finally {
@@ -252,7 +266,13 @@ export default function ChartAnalyzer() {
             </div>
 
             {/* Free Analysis Counter */}
-            {analysisCount < FREE_LIMIT && (
+            {developerMode ? (
+              <div className="mb-3 flex items-center justify-center gap-2">
+                <span className="text-[10px] text-[#d4a843] bg-[#d4a843]/10 border border-[#d4a843]/20 rounded-full px-3 py-1">
+                  Developer unlimited analysis
+                </span>
+              </div>
+            ) : analysisCount < FREE_LIMIT && (
               <div className="mb-3 flex items-center justify-center gap-2">
                 <span className="text-[10px] text-[#666666] bg-[#141414] border border-[#1f1f1f] rounded-full px-3 py-1">
                   {FREE_LIMIT - analysisCount} free analysis{(FREE_LIMIT - analysisCount) !== 1 ? 'es' : ''} remaining
@@ -262,27 +282,27 @@ export default function ChartAnalyzer() {
 
             {/* Action Buttons */}
             <div className="mt-4">
-              {uploadedImage && !result && !isAnalyzing && analysisCount < FREE_LIMIT && (
+              {uploadedImage && !result && !isAnalyzing && (developerMode || analysisCount < FREE_LIMIT) && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full bg-[#d4a843] text-[#050505] font-semibold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#e8c76a] hover:scale-[1.01] transition-all duration-200">
                   <Sparkles size={18} />
                   {t("analyzer.analyze")}
                 </motion.button>
               )}
-              {uploadedImage && !result && !isAnalyzing && analysisCount >= FREE_LIMIT && (
+              {uploadedImage && !result && !isAnalyzing && !developerMode && analysisCount >= FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse">
                   <Lock size={18} />
                   {t("analyzer.unlock")}
                   <Crown size={16} />
                 </motion.button>
               )}
-              {result && analysisCount < FREE_LIMIT && (
+              {result && (developerMode || analysisCount < FREE_LIMIT) && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full border border-[#1f1f1f] text-[#a0a0a0] font-semibold py-4 rounded-xl flex items-center justify-center gap-2 hover:border-[#d4a843] hover:text-white transition-all duration-200">
                   <Brain size={18} />
                   {t("analyzer.reanalyze")}
-                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{FREE_LIMIT - analysisCount} left</span>
+                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{developerMode ? "dev" : `${FREE_LIMIT - analysisCount} left`}</span>
                 </motion.button>
               )}
-              {result && analysisCount >= FREE_LIMIT && (
+              {result && !developerMode && analysisCount >= FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse">
                   <Lock size={18} />
                   {t("analyzer.unlock")}

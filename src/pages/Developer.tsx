@@ -59,6 +59,7 @@ export default function Developer() {
       localStorage.setItem("tradevisor_current_user_email", data.email)
       localStorage.setItem("tradevisor_current_user_code", data.code)
       localStorage.setItem("tradevisor_dev_mode", "true")
+      localStorage.removeItem("tradevisor_analysis_count")
 
       navigate("/vip")
     } catch {
