@@ -266,11 +266,12 @@ function VIPDashboardInner() {
    FULL VIP DASHBOARD — Mobile Responsive
    ═══════════════════════════════════════════ */
 
-type TabId = "analyzer" | "agents" | "signals" | "daily" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
+type TabId = "analyzer" | "agents" | "bankZero" | "signals" | "daily" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
 
 const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "analyzer", label: "Analyzer", icon: Brain },
   { id: "agents", label: "AI Agents", icon: Bot },
+  { id: "bankZero", label: "Bank Zero", icon: Building2 },
   { id: "signals", label: "Signals", icon: Zap },
   { id: "daily", label: "Daily", icon: Calendar },
   { id: "tv", label: "Charts", icon: LineChart },
@@ -366,7 +367,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
   const navigate = useNavigate()
   const toast = useToast()
   const { language } = useLanguage()
-  const vt = (text: string) => vipText(language, text)
+  const vt = (text: string) => text === "bankZero" ? (language === "ar" ? "استراتيجية البنوك صفر انعكاس" : "Bank Zero Reversal") : vipText(language, text)
   const subscriber = getSubscribers().find(s => s.email === email && s.code === code)
   const isDeveloperMode = localStorage.getItem("tradevisor_dev_mode") === "true"
 
@@ -485,6 +486,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             {activeTab === "analyzer" && <AIAnalyzerTab />}
             {activeTab === "agents" && <AIAgentsWorkflow />}
+            {activeTab === "bankZero" && <BankZeroStrategyTab />}
             {activeTab === "signals" && <AISignalsTab />}
             {activeTab === "daily" && <DailyPicksTab />}
             {activeTab === "tv" && <TradingViewLiveTab />}
@@ -539,6 +541,64 @@ function saveTrade(trade: SavedTrade) {
 
 function getSavedTrades(): SavedTrade[] {
   return JSON.parse(localStorage.getItem("tradevisor_vip_trades") || "[]")
+}
+
+function BankZeroStrategyTab() {
+  const { language } = useLanguage()
+  const isArabic = language === "ar"
+  const title = isArabic ? "استراتيجية البنوك صفر انعكاس" : "Bank Zero Reversal Strategy"
+  const subtitle = isArabic
+    ? "نظام VIP خاص لقراءة مناطق دخول البنوك والسيولة قبل الانعكاس، قيد التجهيز للتفعيل الكامل."
+    : "A private VIP system for reading bank liquidity zones before reversal, prepared for full activation."
+  const points = isArabic
+    ? ["قراءة مناطق سيولة البنوك", "فلترة الأخبار والبنوك قبل الدخول", "رفض الصفقات الخطرة تلقائياً", "أهداف وستوب مبنية على إدارة مخاطر"]
+    : ["Bank liquidity zone reading", "News and bank-policy filtering before entry", "Automatic rejection for dangerous setups", "Risk-based stop and targets"]
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-[#d4a843]/25 bg-[#0d0d0d] p-5 sm:p-7">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a843] to-transparent" />
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#d4a843]/25 bg-[#d4a843]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#d4a843] mb-3">
+              <Building2 size={13} /> {isArabic ? "منتج VIP خاص" : "Private VIP Product"}
+            </div>
+            <h2 className="text-white text-2xl sm:text-3xl font-black mb-2">{title}</h2>
+            <p className="text-[#a0a0a0] text-sm sm:text-base leading-relaxed max-w-2xl">{subtitle}</p>
+          </div>
+          <div className="rounded-2xl border border-[#d4a843]/30 bg-[#141414] px-5 py-4 min-w-[210px]">
+            <div className="text-[#666666] text-[10px] uppercase tracking-wider mb-1">{isArabic ? "السعر" : "Price"}</div>
+            <div className="text-[#d4a843] text-3xl font-black">$3,500</div>
+            <div className="text-[#777777] text-xs mt-1">{isArabic ? "تفعيل خاص عند الإطلاق" : "Private activation at launch"}</div>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {points.map((point, index) => (
+          <motion.div key={point} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}
+            className="rounded-xl border border-[#1f1f1f] bg-[#0f0f0f] p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-[#d4a843]/10 border border-[#d4a843]/20 flex items-center justify-center text-[#d4a843]">
+              <Shield size={16} />
+            </div>
+            <div className="text-white text-sm font-bold">{point}</div>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-[#1f1f1f] bg-[#0a0a0a] p-4">
+        <div className="text-[#d4a843] text-xs font-bold uppercase tracking-wider mb-2">
+          {isArabic ? "ملاحظة التطوير" : "Development Note"}
+        </div>
+        <p className="text-[#a0a0a0] text-sm leading-relaxed">
+          {isArabic
+            ? "هذه الواجهة مضافة الآن داخل VIP. الخطوة التالية نربطها بمنطق تحليل مستقل يعتمد على وكيل البنوك، الأخبار، السيولة، ونقاط الانعكاس."
+            : "This page is now available inside VIP. Next we can connect it to a dedicated analysis logic powered by the bank agent, news context, liquidity, and reversal zones."}
+        </p>
+      </div>
+    </div>
+  )
 }
 
 function AIAnalyzerTab() {
