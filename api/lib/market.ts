@@ -435,6 +435,22 @@ async function fetchPublicFallbackQuotes(requestedPairs: string[]): Promise<Reco
     if (quote) results[quote.pair] = quote;
   });
 
+  if (requestedPairs.includes("BTC/USD") && !results["BTC/USD"]) {
+    const btc = await fetchYahooQuote("BTC-USD", "BTC/USD").catch((error) => {
+      console.warn("[Market] Yahoo BTC fallback failed", error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (btc) results["BTC/USD"] = btc;
+  }
+
+  if (requestedPairs.includes("ETH/USD") && !results["ETH/USD"]) {
+    const eth = await fetchYahooQuote("ETH-USD", "ETH/USD").catch((error) => {
+      console.warn("[Market] Yahoo ETH fallback failed", error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (eth) results["ETH/USD"] = eth;
+  }
+
   if (requestedPairs.includes("SPY")) {
     const spy = await fetchYahooQuote("SPY", "SPY").catch((error) => {
       console.warn("[Market] Yahoo SPY fallback failed", error instanceof Error ? error.message : String(error));
@@ -483,7 +499,7 @@ async function fetchBinanceCryptoQuote(pair: "BTC/USD" | "ETH/USD"): Promise<Mar
   };
 }
 
-async function fetchYahooQuote(symbol: string, pair: "SPY" | "NDX"): Promise<MarketQuote | null> {
+async function fetchYahooQuote(symbol: string, pair: "SPY" | "NDX" | "BTC/USD" | "ETH/USD"): Promise<MarketQuote | null> {
   const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`, {
     headers: { "user-agent": "Mozilla/5.0 Tradevisor Market Data" },
   });
