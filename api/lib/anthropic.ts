@@ -3,7 +3,14 @@
  *
  * Uses Claude Vision when ANTHROPIC_API_KEY / CLAUDE_API_KEY is configured, then falls back to
  * image fingerprinting + asset-aware price generation if the provider fails.
+ *
+ * Phase 1 enhancements:
+ *  - Real-time news context injected into every analysis (uses fetchMarketNewsContext)
+ *  - Anthropic prompt caching on static instructions (saves ~50% on input tokens)
+ *  - OpenAI automatic prompt caching via system-message structuring
  */
+
+import { fetchMarketNewsContext, type MarketNewsContext } from "./news";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_MODEL = "claude-sonnet-4-5";
@@ -127,11 +134,6 @@ export function getAIProviderRuntimeStatus() {
   };
 }
 
-/**
- * pingClaude — simple connectivity test without requiring a chart image.
- * Sends a minimal text-only request to verify the API key, billing, and model work.
- * Returns rich diagnostic info so the caller can show the exact failure reason.
- */
 export async function pingClaude(): Promise<{
   ok: boolean;
   configured: boolean;
@@ -152,7 +154,6 @@ export async function pingClaude(): Promise<{
     };
   }
 
-  // Try to discover available models first
   const availableModels = await fetchAvailableClaudeModels(apiKey);
 
   if (claudeModelCache && claudeModelCache.status !== 200 && availableModels.length === 0) {
@@ -162,14 +163,13 @@ export async function pingClaude(): Promise<{
       status: claudeModelCache.status,
       errorMessage: claudeModelCache.error,
       hint: claudeModelCache.status === 401
-        ? "API key was rejected by Anthropic (401). The key is invalid, revoked, or from a different workspace. Generate a new key at console.anthropic.com."
+        ? "API key was rejected by Anthropic (401). The key is invalid, revoked, or from a different workspace."
         : claudeModelCache.status === 403
-        ? "API key was forbidden (403). Likely no credit balance, billing not enabled, or workspace restrictions. Check console.anthropic.com → Plans & Billing."
+        ? "API key was forbidden (403). Likely no credit balance, billing not enabled, or workspace restrictions."
         : `Anthropic API returned HTTP ${claudeModelCache.status} when discovering models.`,
     };
   }
 
-  // Try sending a tiny text message
   const candidates = await getRuntimeClaudeModelCandidates(apiKey);
 
   for (const model of candidates) {
@@ -213,10 +213,8 @@ export async function pingClaude(): Promise<{
         errorMessage = failureText.slice(0, 300);
       }
 
-      // 404 / not_found = bad model name, try the next candidate
       if (response.status === 404 || errorType === "not_found_error") continue;
 
-      // Anything else = stop and report
       return {
         ok: false,
         configured: true,
@@ -228,12 +226,12 @@ export async function pingClaude(): Promise<{
         hint: response.status === 401
           ? "API key rejected. Generate a new one at console.anthropic.com → API Keys."
           : response.status === 403
-          ? "Forbidden. Usually means $0 credit balance or billing not enabled. Check console.anthropic.com → Plans & Billing."
+          ? "Forbidden. Usually means $0 credit balance or billing not enabled."
           : response.status === 429
-          ? "Rate-limited or out of credits. Add credits at console.anthropic.com → Plans & Billing."
+          ? "Rate-limited or out of credits."
           : response.status === 529
           ? "Anthropic servers overloaded. Try again in a few minutes."
-          : `HTTP ${response.status} from Anthropic API. See errorMessage.`,
+          : `HTTP ${response.status} from Anthropic API.`,
       };
     } catch (error) {
       return {
@@ -242,7 +240,7 @@ export async function pingClaude(): Promise<{
         modelTried: model,
         modelsAvailable: availableModels,
         errorMessage: error instanceof Error ? error.message : String(error),
-        hint: "Network error reaching api.anthropic.com. Render may be having connectivity issues.",
+        hint: "Network error reaching api.anthropic.com.",
       };
     }
   }
@@ -252,8 +250,8 @@ export async function pingClaude(): Promise<{
     configured: true,
     modelsAvailable: availableModels,
     hint: availableModels.length > 0
-      ? `Tried all candidate models but all returned 404. Workspace has these models available: ${availableModels.slice(0, 5).join(", ")}. Set ANTHROPIC_MODEL in Render to one of these.`
-      : "No models worked. Workspace may have no model access. Check workspace permissions at console.anthropic.com.",
+      ? `All candidate models returned 404. Workspace has: ${availableModels.slice(0, 5).join(", ")}`
+      : "No models available in workspace.",
   };
 }
 
@@ -301,6 +299,126 @@ function getStrategyProfile(strategyName: string) {
   return profiles[strategyName] || profiles["Day Trading"];
 }
 
+// ============================================================
+// Phase 1: Static system prompts (cacheable) + dynamic context
+// ============================================================
+
+/**
+ * Builds the static portion of the analysis prompt that never changes between requests.
+ * This is what gets cached by Anthropic's prompt caching (saves ~90% on input cost on hits)
+ * and by OpenAI's automatic caching (prompts > 1024 tokens).
+ */
+function buildStaticAnalysisSystem(role: "primary" | "second-opinion"): string {
+  const intro = role === "primary"
+    ? "You are Tradevisor AI's senior chart-analysis agent."
+    : "You are Tradevisor AI's second-opinion chart-analysis agent.";
+
+  return [
+    intro,
+    "Analyze the uploaded trading chart image and return ONLY valid JSON.",
+    "Do not include markdown, commentary, or extra text.",
+    "Use the six-agent workflow internally: news context, validation, market momentum, chart trade analysis, supervisor checks, and final risk management.",
+    "The final numbers must be realistic for the asset and current market price.",
+    "Required JSON schema:",
+    JSON.stringify({
+      signal: "BUY or SELL",
+      confidence: 85,
+      entry: 0,
+      stopLoss: 0,
+      takeProfit1: 0,
+      takeProfit2: 0,
+      takeProfit3: 0,
+      riskReward1: "1:1.5",
+      riskReward2: "1:2.5",
+      riskReward3: "1:4.0",
+      riskPips: 0,
+      riskAmount: 0,
+      strategyUsed: "<provided strategy name>",
+      timeToHold: "<expected hold time string>",
+      lotSize1000: "0.01",
+      lotSize5000: "0.05",
+      lotSize10000: "0.10",
+      maxRiskPercent: 1.5,
+      reasons: ["reason"],
+      srLevels: [{ level: 0, type: "support", strength: "Strong" }],
+      fibonacci: [{ level: 0.618, price: 0 }],
+      candlePatterns: [{ name: "Pattern", signal: "bullish", reliability: "High" }],
+      volume: { trend: "normal", signal: "Volume note" },
+      trend: "Trend summary",
+      marketStructure: "Market structure summary",
+      keyLevel: "Key level summary",
+      confluenceScore: 85,
+      chartScale: {
+        topPrice: 0,
+        bottomPrice: 0,
+        currentPrice: 0,
+        confidence: 0,
+        source: "visible right-side price axis",
+        warnings: ["Only set confidence above 70 when the right price axis is readable."],
+      },
+    }),
+    "Rules:",
+    "- For BUY, stopLoss must be below entry and all take profits above entry.",
+    "- For SELL, stopLoss must be above entry and all take profits below entry.",
+    "- Risk/reward must be mathematically consistent.",
+    "- Entry must be close to the supplied current market price or the visible chart current price. If the setup is far away, return the closest valid trigger near current price and lower confidence.",
+    "- Never output entry, stop loss, or targets far outside the visible chart scale. If the chart scale is unclear, be conservative and prefer a wait/no-chase setup.",
+    "- Read the visible right-side price axis from the screenshot. Return chartScale.topPrice as the highest visible price label and chartScale.bottomPrice as the lowest visible price label.",
+    "- Return chartScale.currentPrice as the current price label visible on the chart, if readable.",
+    "- Set chartScale.confidence from 0 to 100. Use 0 when the axis is hidden, cropped, blurred, or not readable.",
+    "- Do not invent chartScale. If the price axis is unclear, return topPrice 0, bottomPrice 0, confidence 0.",
+    "- If the chart is unclear, lower confidence and keep risk conservative.",
+    "Market news integration rules (when news context is provided in the user message):",
+    "- Strong positive/negative sentiment matching your technical signal → increase confidence by 3-5%.",
+    "- High-risk events (FOMC, NFP, CPI surprise, war, central bank decisions) → reduce confidence by 10-15% and tighten stop loss.",
+    "- News sentiment conflicting with your technical signal → lower confidence, prefer wait/no-chase setups.",
+    "- Reference the single most impactful headline in 1-2 of your reasons[] entries when it materially affects the decision.",
+    "- If no news is provided or news is stale, rely on the chart alone and do not invent fundamental context.",
+  ].join("\n");
+}
+
+const CLAUDE_STATIC_SYSTEM = buildStaticAnalysisSystem("primary");
+const OPENAI_STATIC_SYSTEM = buildStaticAnalysisSystem("second-opinion");
+
+/**
+ * Builds the dynamic per-request context (asset info + current price + recent news).
+ * This is NOT cached — it changes every request.
+ */
+function buildDynamicUserContext(
+  assetName: string,
+  strategyName: string,
+  timeframe: string,
+  currentPrice: number | undefined,
+  newsContext: MarketNewsContext | null,
+): string {
+  const lines: string[] = [
+    `Asset: ${assetName}`,
+    `Strategy: ${strategyName}`,
+    `Timeframe: ${timeframe}`,
+    currentPrice ? `Current market price: ${currentPrice}` : "Current market price: not supplied",
+  ];
+
+  if (newsContext && Array.isArray(newsContext.headlines) && newsContext.headlines.length > 0) {
+    lines.push("");
+    lines.push(`Recent ${assetName} market news (use as fundamental context):`);
+    lines.push(`- Source: ${newsContext.source} (${newsContext.status})`);
+    lines.push(`- Overall market mood: ${newsContext.marketMood}`);
+    lines.push(`- News risk level: ${newsContext.riskLevel}`);
+    lines.push("- Top headlines:");
+    newsContext.headlines.slice(0, 6).forEach((news, i) => {
+      const when = news.publishedAt ? ` @ ${news.publishedAt.slice(0, 16).replace("T", " ")}` : "";
+      lines.push(`  ${i + 1}. [${news.sentiment}/${news.riskLevel}] ${news.title} — ${news.source}${when}`);
+    });
+  } else {
+    lines.push("");
+    lines.push("Recent market news: not available — rely on the chart only.");
+  }
+
+  lines.push("");
+  lines.push("Now analyze the chart and return the JSON.");
+  return lines.join("\n");
+}
+
 export async function analyzeChartWithAI(
   base64Image: string,
   assetName: string,
@@ -308,9 +426,21 @@ export async function analyzeChartWithAI(
   timeframe: string,
   currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
+  // Phase 1: fetch live news context ONCE and pass to both providers
+  // (news.ts already caches results for 2 minutes, so this is cheap)
+  let newsContext: MarketNewsContext | null = null;
+  try {
+    newsContext = await fetchMarketNewsContext(assetName);
+    if (newsContext?.headlines?.length) {
+      console.log(`[AI] Including ${newsContext.headlines.length} news headlines for ${assetName} (mood: ${newsContext.marketMood}, risk: ${newsContext.riskLevel})`);
+    }
+  } catch (error) {
+    console.warn("[AI] News fetch failed, continuing without news context", error);
+  }
+
   const [claudeResult, openAiResult] = await Promise.all([
-    analyzeChartWithClaude(base64Image, assetName, strategyName, timeframe, currentPrice),
-    analyzeChartWithOpenAI(base64Image, assetName, strategyName, timeframe, currentPrice),
+    analyzeChartWithClaude(base64Image, assetName, strategyName, timeframe, currentPrice, newsContext),
+    analyzeChartWithOpenAI(base64Image, assetName, strategyName, timeframe, currentPrice, newsContext),
   ]);
   const liveResult = combineModelResults(claudeResult, openAiResult);
   if (liveResult) return liveResult;
@@ -439,6 +569,7 @@ async function analyzeChartWithClaude(
   strategyName: string,
   timeframe: string,
   currentPrice?: number,
+  newsContext?: MarketNewsContext | null,
 ): Promise<Record<string, unknown> | null> {
   const apiKey = getClaudeApiKey();
   providerAttempts.claude = { at: new Date().toISOString(), configured: Boolean(apiKey), model: getClaudeModel() };
@@ -446,66 +577,13 @@ async function analyzeChartWithClaude(
 
   try {
     const mediaType = detectMediaType(base64Image);
-    const prompt = [
-      "You are Tradevisor AI's senior chart-analysis agent.",
-      "Analyze the uploaded trading chart image and return ONLY valid JSON.",
-      "Do not include markdown, commentary, or extra text.",
-      "Use the six-agent workflow internally: news context, validation, market momentum, chart trade analysis, supervisor checks, and final risk management.",
-      "The final numbers must be realistic for the asset and current market price.",
-      `Asset: ${assetName}`,
-      `Strategy: ${strategyName}`,
-      `Timeframe: ${timeframe}`,
-      currentPrice ? `Current market price: ${currentPrice}` : "Current market price: not supplied",
-      "Required JSON schema:",
-      JSON.stringify({
-        signal: "BUY or SELL",
-        confidence: 85,
-        entry: 0,
-        stopLoss: 0,
-        takeProfit1: 0,
-        takeProfit2: 0,
-        takeProfit3: 0,
-        riskReward1: "1:1.5",
-        riskReward2: "1:2.5",
-        riskReward3: "1:4.0",
-        riskPips: 0,
-        riskAmount: 0,
-        strategyUsed: strategyName,
-        timeToHold: "30 minutes - 4 hours",
-        lotSize1000: "0.01",
-        lotSize5000: "0.05",
-        lotSize10000: "0.10",
-        maxRiskPercent: 1.5,
-        reasons: ["reason"],
-        srLevels: [{ level: 0, type: "support", strength: "Strong" }],
-        fibonacci: [{ level: 0.618, price: 0 }],
-        candlePatterns: [{ name: "Pattern", signal: "bullish", reliability: "High" }],
-        volume: { trend: "normal", signal: "Volume note" },
-        trend: "Trend summary",
-        marketStructure: "Market structure summary",
-        keyLevel: "Key level summary",
-        confluenceScore: 85,
-        chartScale: {
-          topPrice: 0,
-          bottomPrice: 0,
-          currentPrice: 0,
-          confidence: 0,
-          source: "visible right-side price axis",
-          warnings: ["Only set confidence above 70 when the right price axis is readable."]
-        }
-      }),
-      "Rules:",
-      "- For BUY, stopLoss must be below entry and all take profits above entry.",
-      "- For SELL, stopLoss must be above entry and all take profits below entry.",
-      "- Risk/reward must be mathematically consistent.",
-      "- Entry must be close to the supplied current market price or the visible chart current price. If the setup is far away, return the closest valid trigger near current price and lower confidence.",
-      "- Never output entry, stop loss, or targets far outside the visible chart scale. If the chart scale is unclear, be conservative and prefer a wait/no-chase setup.",
-      "- Read the visible right-side price axis from the screenshot. Return chartScale.topPrice as the highest visible price label and chartScale.bottomPrice as the lowest visible price label.",
-      "- Return chartScale.currentPrice as the current price label visible on the chart, if readable.",
-      "- Set chartScale.confidence from 0 to 100. Use 0 when the axis is hidden, cropped, blurred, or not readable.",
-      "- Do not invent chartScale. If the price axis is unclear, return topPrice 0, bottomPrice 0, confidence 0.",
-      "- If the chart is unclear, lower confidence and keep risk conservative.",
-    ].join("\n");
+    const dynamicContext = buildDynamicUserContext(
+      assetName,
+      strategyName,
+      timeframe,
+      currentPrice,
+      newsContext ?? null,
+    );
 
     const modelCandidates = await getRuntimeClaudeModelCandidates(apiKey);
     for (const model of modelCandidates) {
@@ -520,6 +598,16 @@ async function analyzeChartWithClaude(
           model,
           max_tokens: 1800,
           temperature: 0.2,
+          // Static instructions go in `system` with cache_control → cached for 5 min,
+          // 90% cheaper on cache hits. The chart image + dynamic data are NOT cached
+          // because they change every request.
+          system: [
+            {
+              type: "text",
+              text: CLAUDE_STATIC_SYSTEM,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
           messages: [
             {
               role: "user",
@@ -532,7 +620,7 @@ async function analyzeChartWithClaude(
                     data: base64Image,
                   },
                 },
-                { type: "text", text: prompt },
+                { type: "text", text: dynamicContext },
               ],
             },
           ],
@@ -563,8 +651,6 @@ async function analyzeChartWithClaude(
           availableModelSample: claudeModelCache?.ids.slice(0, 5),
         };
         console.error("[Anthropic] request failed", { model, status: response.status, body: failureText.slice(0, 1000) });
-        // 404 = model not found, try next candidate
-        // 400 with model_not_found type = also try next
         if (response.status === 404 || parsedErrorType === "not_found_error") continue;
         return null;
       }
@@ -606,6 +692,7 @@ async function analyzeChartWithOpenAI(
   strategyName: string,
   timeframe: string,
   currentPrice?: number,
+  newsContext?: MarketNewsContext | null,
 ): Promise<Record<string, unknown> | null> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   providerAttempts.openai = { at: new Date().toISOString(), configured: Boolean(apiKey) };
@@ -613,7 +700,13 @@ async function analyzeChartWithOpenAI(
 
   try {
     const mediaType = detectMediaType(base64Image);
-    const prompt = buildSharedAnalysisPrompt(assetName, strategyName, timeframe, currentPrice);
+    const dynamicContext = buildDynamicUserContext(
+      assetName,
+      strategyName,
+      timeframe,
+      currentPrice,
+      newsContext ?? null,
+    );
     const response = await fetch(OPENAI_URL, {
       method: "POST",
       headers: {
@@ -624,15 +717,17 @@ async function analyzeChartWithOpenAI(
         model: process.env.OPENAI_MODEL || process.env.VIP2_OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
         temperature: 0.15,
         max_tokens: 1800,
+        // OpenAI auto-caches prompts > 1024 tokens. Putting all static instructions
+        // in the system message ensures they get cached across requests.
         messages: [
           {
             role: "system",
-            content: "You are Tradevisor AI's second-opinion chart-analysis agent. Return only valid JSON.",
+            content: OPENAI_STATIC_SYSTEM,
           },
           {
             role: "user",
             content: [
-              { type: "text", text: prompt },
+              { type: "text", text: dynamicContext },
               { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64Image}` } },
             ],
           },
