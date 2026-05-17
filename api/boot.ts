@@ -7,7 +7,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { sendVipCodeEmail } from "./lib/email";
-import { analyzeChartWithAI, getAIProviderRuntimeStatus } from "./lib/anthropic";
+import { analyzeChartWithAI, getAIProviderRuntimeStatus, pingClaude } from "./lib/anthropic";
 import { getLatestGoldQuote, onGoldQuote, startLiveGoldFeed } from "./lib/liveGold";
 import { fetchServerMarketQuotes } from "./lib/market";
 import { fetchMarketNewsContext } from "./lib/news";
@@ -43,6 +43,12 @@ app.use(cors({
 app.get("/api/health", (c) => c.json({ ok: true }));
 
 app.get("/api/ai/status", (c) => c.json({ ok: true, providers: getAIProviderRuntimeStatus() }));
+
+// Real connectivity test - sends a tiny request to Anthropic and reports exact failure reason
+app.get("/api/ai/ping", async (c) => {
+  const result = await pingClaude();
+  return c.json(result);
+});
 
 app.post("/api/admin/login", async (c) => {
   const ip = getClientIp(c.req.raw);

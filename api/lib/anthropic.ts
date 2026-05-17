@@ -6,7 +6,7 @@
  */
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = "claude-sonnet-4-5";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 
@@ -34,16 +34,29 @@ function getClaudeApiKey(): string | undefined {
 
 function getClaudeModel(): string {
   const configuredModel = (process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || "").trim();
-  if (!configuredModel || configuredModel === "claude-3-5-sonnet-20241022") return DEFAULT_MODEL;
+  // List of known-outdated/deprecated models that should be auto-upgraded to DEFAULT_MODEL
+  const deprecatedModels = [
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-opus-20240229",
+    "claude-3-sonnet-20240229",
+    "claude-sonnet-4-20250514",
+  ];
+  if (!configuredModel || deprecatedModels.includes(configuredModel)) return DEFAULT_MODEL;
   return configuredModel;
 }
 
 function getClaudeModelCandidates(): string[] {
+  // Ordered from newest/most-capable to oldest fallback
   return Array.from(new Set([
     getClaudeModel(),
     DEFAULT_MODEL,
-    "claude-sonnet-4-5-20250929",
+    "claude-opus-4-5",
+    "claude-sonnet-4-5",
+    "claude-haiku-4-5",
+    "claude-sonnet-4-20250514",
     "claude-3-7-sonnet-20250219",
+    "claude-3-5-sonnet-20241022",
     "claude-3-5-haiku-20241022",
     "claude-3-haiku-20240307",
   ]));
@@ -111,6 +124,136 @@ export function getAIProviderRuntimeStatus() {
       acceptedEnvNames: ["OPENAI_API_KEY"],
       lastAttempt: providerAttempts.openai,
     },
+  };
+}
+
+/**
+ * pingClaude — simple connectivity test without requiring a chart image.
+ * Sends a minimal text-only request to verify the API key, billing, and model work.
+ * Returns rich diagnostic info so the caller can show the exact failure reason.
+ */
+export async function pingClaude(): Promise<{
+  ok: boolean;
+  configured: boolean;
+  modelTried?: string;
+  modelsAvailable?: string[];
+  status?: number;
+  errorType?: string;
+  errorMessage?: string;
+  reply?: string;
+  hint?: string;
+}> {
+  const apiKey = getClaudeApiKey();
+  if (!apiKey) {
+    return {
+      ok: false,
+      configured: false,
+      hint: "No ANTHROPIC_API_KEY (or CLAUDE_API_KEY / CLOUD_API_KEY) found in environment. Add it in Render → Environment.",
+    };
+  }
+
+  // Try to discover available models first
+  const availableModels = await fetchAvailableClaudeModels(apiKey);
+
+  if (claudeModelCache && claudeModelCache.status !== 200 && availableModels.length === 0) {
+    return {
+      ok: false,
+      configured: true,
+      status: claudeModelCache.status,
+      errorMessage: claudeModelCache.error,
+      hint: claudeModelCache.status === 401
+        ? "API key was rejected by Anthropic (401). The key is invalid, revoked, or from a different workspace. Generate a new key at console.anthropic.com."
+        : claudeModelCache.status === 403
+        ? "API key was forbidden (403). Likely no credit balance, billing not enabled, or workspace restrictions. Check console.anthropic.com → Plans & Billing."
+        : `Anthropic API returned HTTP ${claudeModelCache.status} when discovering models.`,
+    };
+  }
+
+  // Try sending a tiny text message
+  const candidates = await getRuntimeClaudeModelCandidates(apiKey);
+
+  for (const model of candidates) {
+    try {
+      const response = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 20,
+          messages: [{ role: "user", content: "Reply with exactly: pong" }],
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json() as { content?: Array<{ type: string; text?: string }> };
+        const reply = data.content?.find((item) => item.type === "text")?.text || "";
+        return {
+          ok: true,
+          configured: true,
+          modelTried: model,
+          modelsAvailable: availableModels,
+          status: response.status,
+          reply: reply.slice(0, 100),
+          hint: "Claude API is working. Chart analysis should now succeed.",
+        };
+      }
+
+      const failureText = await response.text();
+      let errorType: string | undefined;
+      let errorMessage: string | undefined;
+      try {
+        const parsed = JSON.parse(failureText) as { error?: { type?: string; message?: string } };
+        errorType = parsed.error?.type;
+        errorMessage = parsed.error?.message;
+      } catch {
+        errorMessage = failureText.slice(0, 300);
+      }
+
+      // 404 / not_found = bad model name, try the next candidate
+      if (response.status === 404 || errorType === "not_found_error") continue;
+
+      // Anything else = stop and report
+      return {
+        ok: false,
+        configured: true,
+        modelTried: model,
+        modelsAvailable: availableModels,
+        status: response.status,
+        errorType,
+        errorMessage,
+        hint: response.status === 401
+          ? "API key rejected. Generate a new one at console.anthropic.com → API Keys."
+          : response.status === 403
+          ? "Forbidden. Usually means $0 credit balance or billing not enabled. Check console.anthropic.com → Plans & Billing."
+          : response.status === 429
+          ? "Rate-limited or out of credits. Add credits at console.anthropic.com → Plans & Billing."
+          : response.status === 529
+          ? "Anthropic servers overloaded. Try again in a few minutes."
+          : `HTTP ${response.status} from Anthropic API. See errorMessage.`,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        configured: true,
+        modelTried: model,
+        modelsAvailable: availableModels,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        hint: "Network error reaching api.anthropic.com. Render may be having connectivity issues.",
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    configured: true,
+    modelsAvailable: availableModels,
+    hint: availableModels.length > 0
+      ? `Tried all candidate models but all returned 404. Workspace has these models available: ${availableModels.slice(0, 5).join(", ")}. Set ANTHROPIC_MODEL in Render to one of these.`
+      : "No models worked. Workspace may have no model access. Check workspace permissions at console.anthropic.com.",
   };
 }
 
@@ -398,17 +541,31 @@ async function analyzeChartWithClaude(
 
       if (!response.ok) {
         const failureText = await response.text();
+        let parsedErrorType: string | undefined;
+        let parsedErrorMessage: string | undefined;
+        try {
+          const parsed = JSON.parse(failureText) as { error?: { type?: string; message?: string } };
+          parsedErrorType = parsed.error?.type;
+          parsedErrorMessage = parsed.error?.message;
+        } catch {
+          // not JSON, keep raw text
+        }
         providerAttempts.claude = {
           at: new Date().toISOString(),
           configured: true,
           model,
           ok: false,
           status: response.status,
+          error: parsedErrorType && parsedErrorMessage
+            ? `${parsedErrorType}: ${parsedErrorMessage}`
+            : failureText.slice(0, 500),
           availableModelCount: claudeModelCache?.ids.length,
           availableModelSample: claudeModelCache?.ids.slice(0, 5),
         };
-        console.error("[Anthropic] request failed", { model, status: response.status, body: failureText });
-        if (response.status === 404) continue;
+        console.error("[Anthropic] request failed", { model, status: response.status, body: failureText.slice(0, 1000) });
+        // 404 = model not found, try next candidate
+        // 400 with model_not_found type = also try next
+        if (response.status === 404 || parsedErrorType === "not_found_error") continue;
         return null;
       }
 
