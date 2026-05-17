@@ -899,11 +899,34 @@ async function analyzeChartWithGemini(
 
     const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join("\n");
     if (!text) {
-      console.warn("[Gemini] empty response", data.candidates?.[0]?.finishReason);
+      console.warn("[Gemini] empty response", {
+        finishReason: data.candidates?.[0]?.finishReason,
+        hasCandidates: Boolean(data.candidates?.length),
+      });
       return null;
     }
 
-    return normalizeClaudeResult(parseJsonObject(text), assetName, strategyName, timeframe, currentPrice);
+    try {
+      const parsed = parseJsonObject(text);
+      return normalizeClaudeResult(parsed, assetName, strategyName, timeframe, currentPrice);
+    } catch (parseError) {
+      // Log the actual response sample so we can see what Gemini sent back
+      console.error("[Gemini] failed to parse response as JSON", {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        responseSample: text.slice(0, 300),
+        responseLength: text.length,
+        finishReason: data.candidates?.[0]?.finishReason,
+      });
+      providerAttempts.gemini = {
+        at: new Date().toISOString(),
+        configured: true,
+        model,
+        ok: false,
+        status: response.status,
+        error: `JSON parse failed: ${parseError instanceof Error ? parseError.message : "unknown"}. Response started with: ${text.slice(0, 100)}`,
+      };
+      return null;
+    }
   } catch (error) {
     providerAttempts.gemini = {
       at: new Date().toISOString(),
@@ -1037,14 +1060,32 @@ function combineModelResults(claudeResult: Record<string, unknown> | null, openA
 }
 
 function parseJsonObject(text: string) {
-  const trimmed = text.trim();
+  let cleaned = text.trim();
+
+  // Strip markdown code fences that Gemini/Claude sometimes wrap JSON in
+  // (```json ... ``` or just ``` ... ```)
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json|javascript|js)?\s*\n?/i, "");
+    cleaned = cleaned.replace(/\n?\s*```\s*$/, "");
+    cleaned = cleaned.trim();
+  }
+
+  // Try direct parse
   try {
-    return JSON.parse(trimmed);
+    return JSON.parse(cleaned);
   } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start === -1 || end === -1 || end <= start) throw new Error("Claude returned no JSON object");
-    return JSON.parse(trimmed.slice(start, end + 1));
+    // Fallback: extract first {...} block from anywhere in the text
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error("Model returned no JSON object");
+    }
+    const extracted = cleaned.slice(start, end + 1);
+    try {
+      return JSON.parse(extracted);
+    } catch (innerError) {
+      throw new Error(`Model returned malformed JSON: ${innerError instanceof Error ? innerError.message : String(innerError)}`);
+    }
   }
 }
 
