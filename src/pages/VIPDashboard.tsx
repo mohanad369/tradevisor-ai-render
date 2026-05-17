@@ -2,17 +2,17 @@ import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Lock, Key, AlertTriangle, Crown, ArrowRight, LogOut,
-  Brain, BarChart3, TrendingUp, TrendingDown, Target, Shield,
+  Brain, BarChart3, TrendingUp, Target, Shield,
   Layers, Activity, Zap, X,
   Upload, Camera, DollarSign, Sparkles, Loader2, Crosshair, Send,
   Briefcase, Calculator, Building2, Settings,
   ChevronDown, Clock, CheckCircle2, Star, Globe,
   Mail, Copy, Wallet, ExternalLink, Percent,
-  ArrowDownRight, RefreshCw, Info,
-  Flame, Calendar, Hash, GraduationCap, User,
+  ArrowDownRight, Info,
+  Hash, GraduationCap, User,
   CheckCircle, XCircle, Trophy, TrendingDown as TrendDown, Users,
   PieChart, LineChart, Gauge, ChevronUp, ChevronLeft, ChevronRight,
-  Bookmark, Menu, Bot
+  Menu, Bot
 } from "lucide-react"
 import { useNavigate } from "react-router"
 import { trpc } from "@/lib/trpc"
@@ -295,14 +295,12 @@ function VIPDashboardInner() {
    FULL VIP DASHBOARD — Mobile Responsive
    ═══════════════════════════════════════════ */
 
-type TabId = "analyzer" | "agents" | "bankZero" | "signals" | "daily" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
+type TabId = "analyzer" | "agents" | "bankZero" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
 
 const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "analyzer", label: "Analyzer", icon: Brain },
   { id: "agents", label: "AI Agents", icon: Bot },
   { id: "bankZero", label: "Bank Zero", icon: Building2 },
-  { id: "signals", label: "Signals", icon: Zap },
-  { id: "daily", label: "Daily", icon: Calendar },
   { id: "tv", label: "Charts", icon: LineChart },
   { id: "calculator", label: "Lot Calc", icon: Calculator },
   { id: "partner", label: "Partner", icon: Users },
@@ -316,8 +314,6 @@ const tabs: { id: TabId; label: string; icon: any }[] = [
 const vipAr: Record<string, string> = {
   analyzer: "المحلل",
   agents: "الوكلاء",
-  signals: "الإشارات",
-  daily: "اليومي",
   tv: "الشارتات",
   calculator: "حاسبة اللوت",
   partner: "الشراكة",
@@ -516,8 +512,6 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
             {activeTab === "analyzer" && <AIAnalyzerTab />}
             {activeTab === "agents" && <AIAgentsWorkflow />}
             {activeTab === "bankZero" && <BankZeroStrategyTab />}
-            {activeTab === "signals" && <AISignalsTab />}
-            {activeTab === "daily" && <DailyPicksTab />}
             {activeTab === "tv" && <TradingViewLiveTab />}
             {activeTab === "calculator" && <LotCalculatorTab />}
             {activeTab === "partner" && <PartnerTab />}
@@ -1222,287 +1216,6 @@ function EmptyResultCard({ uploadedImage, asset, strategy, tf }: { uploadedImage
       {uploadedImage && <div className="flex items-center gap-1.5 sm:gap-2 text-[#d4a843] text-[9px] sm:text-[10px]"><TrendingUp size={10} /><span>{asset} &bull; {strategy} &bull; {tf}</span></div>}
     </motion.div>
   )
-}
-
-/* ═══════════════════════════════════════════
-   TAB 2: AI Signals — Mobile Responsive
-   ═══════════════════════════════════════════ */
-
-function AISignalsTab() {
-  const toast = useToast()
-  const [signals, setSignals] = useState(generateMockSignals())
-  const [lastUpdated, setLastUpdated] = useState(new Date())
-  const [savedSignals, setSavedSignals] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("tradevisor_saved_signals") || "[]"))
-
-  const refreshSignals = () => {
-    setSignals(generateMockSignals())
-    setLastUpdated(new Date())
-    toast.addToast("Signals refreshed!", "success")
-  }
-
-  const toggleSaveSignal = (id: string) => {
-    const updated = savedSignals.includes(id) ? savedSignals.filter(s => s !== id) : [...savedSignals, id]
-    setSavedSignals(updated)
-    localStorage.setItem("tradevisor_saved_signals", JSON.stringify(updated))
-    toast.addToast(savedSignals.includes(id) ? "Removed from watchlist" : "Saved to watchlist!", "info")
-  }
-
-  return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-2 sm:gap-0">
-        <div>
-          <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 mb-0.5 sm:mb-1"><Zap size={16} className="text-[#d4a843] sm:hidden" /><Zap size={18} className="text-[#d4a843] hidden sm:block" /> AI Trading Signals</h2>
-          <p className="text-[11px] sm:text-xs text-[#666666]">Real-time AI BUY/SELL signals with Entry, SL, TP.</p>
-        </div>
-        <button onClick={refreshSignals}
-          className="flex items-center justify-center gap-1.5 text-[10px] sm:text-xs text-[#d4a843] hover:text-[#e8c76a] bg-[#d4a843]/10 px-3 py-2 rounded-xl transition-all w-full sm:w-auto">
-          <RefreshCw size={12} /> Refresh Signals
-        </button>
-      </div>
-
-      {/* Market Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
-        {[
-          { label: "XAU/USD", price: "$4,724.35", change: "+1.24%", up: true },
-          { label: "EUR/USD", price: "1.0845", change: "-0.18%", up: false },
-          { label: "GBP/USD", price: "1.2630", change: "+0.42%", up: true },
-          { label: "BTC/USD", price: "$68,450", change: "+2.15%", up: true },
-        ].map(m => (
-          <div key={m.label} className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-lg sm:rounded-xl p-2.5 sm:p-3">
-            <div className="flex items-center justify-between mb-0.5 sm:mb-1">
-              <span className="text-[9px] sm:text-[10px] text-[#666666]">{m.label}</span>
-              {m.up ? <TrendingUp size={10} className="text-[#22c55e]" /> : <TrendingDown size={10} className="text-[#e11d48]" />}
-            </div>
-            <div className="text-xs sm:text-sm font-bold text-white">{m.price}</div>
-            <div className={`text-[9px] sm:text-[10px] font-medium ${m.up ? "text-[#22c55e]" : "text-[#e11d48]"}`}>{m.up ? "+" : ""}{m.change}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Signals Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        {signals.map((signal, i) => (
-          <motion.div key={signal.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-            className={`bg-[#0d0d0d] border rounded-lg sm:rounded-xl p-3 sm:p-4 ${signal.signal === "BUY" ? "border-[#22c55e]/20" : "border-[#e11d48]/20"}`}>
-            <div className="flex items-center justify-between mb-2 sm:mb-3">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className={`px-1.5 sm:px-2.5 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold ${signal.signal === "BUY" ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#e11d48]/15 text-[#e11d48]"}`}>
-                  {signal.signal}
-                </span>
-                <span className="text-xs sm:text-sm font-bold text-white">{signal.asset}</span>
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <button onClick={() => toggleSaveSignal(signal.id)}
-                  className={`p-1 sm:p-1.5 rounded-lg transition-all ${savedSignals.includes(signal.id) ? "bg-[#d4a843]/20 text-[#d4a843]" : "bg-[#141414] text-[#666666]"}`}>
-                  <Bookmark size={11} className={savedSignals.includes(signal.id) ? "fill-[#d4a843]" : ""} />
-                </button>
-                <div className="text-right">
-                  <div className="text-white text-xs sm:text-sm font-bold">{signal.confidence}%</div>
-                  <div className="text-[#666666] text-[8px] sm:text-[9px]">AI</div>
-                </div>
-              </div>
-            </div>
-            {/* Indicators */}
-            <div className="grid grid-cols-4 gap-1 sm:gap-2 mb-2 sm:mb-3">
-              {[
-                { label: "Trend", value: signal.trend, color: signal.trend === "Bullish" ? "text-[#22c55e]" : "text-[#e11d48]" },
-                { label: "Vol", value: signal.volume, color: "text-[#3b82f6]" },
-                { label: "RSI", value: signal.rsi, color: Number(signal.rsi) > 60 ? "text-[#e11d48]" : Number(signal.rsi) < 40 ? "text-[#22c55e]" : "text-[#d4a843]" },
-                { label: "MACD", value: signal.macd, color: signal.macd === "Bullish" ? "text-[#22c55e]" : "text-[#e11d48]" },
-              ].map(item => (
-                <div key={item.label} className="bg-[#141414] rounded-md sm:rounded-lg p-1 sm:p-1.5 text-center">
-                  <div className="text-[#666666] text-[7px] sm:text-[8px]">{item.label}</div>
-                  <div className={`text-[9px] sm:text-[10px] font-bold ${item.color}`}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-            {/* Entry/SL/TP */}
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-              {[{ label: "Entry", value: signal.entry, color: signal.signal === "BUY" ? "text-[#22c55e]" : "text-[#e11d48]" },
-                { label: "SL", value: signal.sl, color: "text-[#e11d48]" },
-                { label: "TP", value: signal.tp, color: "text-[#22c55e]" }].map(l => (
-                <div key={l.label} className="bg-[#141414] rounded-md sm:rounded-lg p-1.5 sm:p-2 text-center">
-                  <div className="text-[#666666] text-[8px] sm:text-[9px] mb-0.5">{l.label}</div>
-                  <div className={`font-bold text-[10px] sm:text-xs ${l.color}`}>{l.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-between text-[9px] sm:text-[10px] text-[#666666]">
-              <span>{signal.strategy} &bull; {signal.timeframe}</span>
-              <span>R:R {signal.rr}</span>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-      <p className="text-center text-[9px] sm:text-[10px] text-[#444444] mt-3 sm:mt-4">Updated: {lastUpdated.toLocaleTimeString()}</p>
-    </div>
-  )
-}
-
-function generateMockSignals() {
-  const assetList = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD", "ETH/USD", "GBP/JPY", "NDX"]
-  const strategyList = ["AI Scalping", "Day Trading", "Swing Trading", "Smart Money"]
-  const timeframes = ["15m", "1H", "4H", "Daily"]
-  const trends = ["Bullish", "Bearish", "Neutral"]
-  const macds = ["Bullish", "Bearish"]
-  const volumes = ["High", "Normal", "Low"]
-  const signals = []
-  for (let i = 0; i < 8; i++) {
-    const isBuy = Math.random() > 0.45
-    const asset = assetList[i]
-    const entry = asset === "XAU/USD" ? 4700 + Math.random() * 50 : asset === "BTC/USD" ? 68000 + Math.random() * 2000 : 1.05 + Math.random() * 0.2
-    const slDist = entry * 0.005
-    signals.push({
-      id: `SIG-${Date.now()}-${i}`,
-      signal: isBuy ? "BUY" as const : "SELL" as const,
-      asset, confidence: 65 + Math.floor(Math.random() * 30),
-      entry: entry.toFixed(asset === "XAU/USD" ? 2 : asset === "BTC/USD" ? 0 : 4),
-      sl: isBuy ? (entry - slDist).toFixed(2) : (entry + slDist).toFixed(2),
-      tp: isBuy ? (entry + slDist * 3).toFixed(2) : (entry - slDist * 3).toFixed(2),
-      strategy: strategyList[Math.floor(Math.random() * strategyList.length)],
-      timeframe: timeframes[Math.floor(Math.random() * timeframes.length)],
-      rr: `1:${(2 + Math.random() * 3).toFixed(1)}`,
-      trend: trends[Math.floor(Math.random() * trends.length)],
-      volume: volumes[Math.floor(Math.random() * volumes.length)],
-      rsi: (30 + Math.floor(Math.random() * 40)).toString(),
-      macd: macds[Math.floor(Math.random() * macds.length)],
-    })
-  }
-  return signals
-}
-
-
-/* ═══════════════════════════════════════════
-   TAB 3: Daily Picks — Mobile Responsive
-   ═══════════════════════════════════════════ */
-
-function DailyPicksTab() {
-  const toast = useToast()
-  const [picks, setPicks] = useState<DailyPick[]>(() => generateDailyPicks())
-  const [lastRefresh, setLastRefresh] = useState(new Date())
-
-  const handleRefresh = () => {
-    setPicks(generateDailyPicks())
-    setLastRefresh(new Date())
-    toast.addToast("Daily picks updated!", "success")
-  }
-
-  const toggleTaken = (id: string) => {
-    setPicks(prev => prev.map(p => p.id === id ? { ...p, taken: !p.taken } : p))
-    const pick = picks.find(p => p.id === id)
-    if (pick && !pick.taken) toast.addToast(`${pick.asset} marked as taken!`, "success")
-  }
-
-  return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-2 sm:gap-0">
-        <div>
-          <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 mb-0.5 sm:mb-1"><Calendar size={16} className="text-[#d4a843] sm:hidden" /><Calendar size={18} className="text-[#d4a843] hidden sm:block" /> Daily AI Picks</h2>
-          <p className="text-[11px] sm:text-xs text-[#666666]">Top AI-selected opportunities for today.</p>
-        </div>
-        <button onClick={handleRefresh}
-          className="flex items-center justify-center gap-1.5 text-[10px] sm:text-xs text-[#d4a843] bg-[#d4a843]/10 px-3 py-2 rounded-xl transition-all w-full sm:w-auto">
-          <RefreshCw size={12} /> Refresh
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {picks.map((pick, i) => (
-          <motion.div key={pick.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-            className={`bg-[#0d0d0d] border rounded-lg sm:rounded-xl p-3 sm:p-4 ${pick.signal === "BUY" ? "border-[#22c55e]/20" : "border-[#e11d48]/20"} ${pick.taken ? "opacity-60" : ""}`}>
-            <div className="flex items-center justify-between mb-2 sm:mb-3">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className={`px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold ${pick.signal === "BUY" ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#e11d48]/15 text-[#e11d48]"}`}>
-                  {pick.signal}
-                </span>
-                <span className="text-xs sm:text-sm font-bold text-white">{pick.asset}</span>
-              </div>
-              <span className={`text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full ${pick.strength === "STRONG" ? "bg-[#22c55e]/10 text-[#22c55e]" : pick.strength === "MODERATE" ? "bg-[#d4a843]/10 text-[#d4a843]" : "bg-[#3b82f6]/10 text-[#3b82f6]"}`}>
-                {pick.strength}
-              </span>
-            </div>
-            {/* Deep Analysis */}
-            <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-2 sm:mb-3">
-              {[
-                { label: "Setup", value: pick.setupQuality, color: pick.setupQuality === "A+" || pick.setupQuality === "A" ? "text-[#22c55e]" : "text-[#d4a843]" },
-                { label: "RSI", value: pick.rsi, color: Number(pick.rsi) > 60 ? "text-[#e11d48]" : Number(pick.rsi) < 40 ? "text-[#22c55e]" : "text-[#d4a843]" },
-                { label: "ADX", value: pick.adx, color: Number(pick.adx) > 25 ? "text-[#22c55e]" : "text-[#666666]" },
-                { label: "Trend", value: pick.trendDirection, color: pick.trendDirection === "UP" ? "text-[#22c55e]" : "text-[#e11d48]" },
-              ].map(item => (
-                <div key={item.label} className="bg-[#141414] rounded-md sm:rounded-lg p-1 sm:p-1.5 text-center">
-                  <div className="text-[#666666] text-[7px] sm:text-[8px]">{item.label}</div>
-                  <div className={`text-[9px] sm:text-[10px] font-bold ${item.color}`}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-            {/* Entry/SL/TP */}
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-              {[{ label: "Entry", value: pick.entry, color: pick.signal === "BUY" ? "text-[#22c55e]" : "text-[#e11d48]" },
-                { label: "SL", value: pick.sl, color: "text-[#e11d48]" },
-                { label: "TP", value: pick.tp, color: "text-[#22c55e]" }].map(l => (
-                <div key={l.label} className="bg-[#141414] rounded-md sm:rounded-lg p-1.5 sm:p-2 text-center">
-                  <div className="text-[#666666] text-[8px] sm:text-[9px] mb-0.5">{l.label}</div>
-                  <div className={`font-bold text-[10px] sm:text-xs ${l.color}`}>{l.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mb-2 sm:mb-3">
-              <div className="text-[#666666] text-[8px] sm:text-[9px] mb-0.5 sm:mb-1">AI Reasoning:</div>
-              <p className="text-[#a0a0a0] text-[9px] sm:text-[10px] leading-relaxed">{pick.reason}</p>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] sm:text-[10px] text-[#666666]">{pick.timeframe} &bull; R:R {pick.rr}</span>
-              <button onClick={() => toggleTaken(pick.id)}
-                className={`text-[9px] sm:text-[10px] font-bold px-2.5 sm:px-3 py-1.5 rounded-lg transition-all ${pick.taken ? "bg-[#22c55e]/10 text-[#22c55e]" : "bg-[#141414] text-[#a0a0a0] hover:bg-[#d4a843]/10 hover:text-[#d4a843]"}`}>
-                {pick.taken ? <span className="flex items-center gap-1"><CheckCircle2 size={10} /> Taken</span> : "Take Trade"}
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-      <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center sm:justify-between gap-1 sm:gap-0">
-        <p className="text-center sm:text-left text-[9px] sm:text-[10px] text-[#444444]">Refreshed: {lastRefresh.toLocaleTimeString()}</p>
-        <p className="text-[9px] sm:text-[10px] text-[#666666]"><Flame size={10} className="inline text-[#d4a843]" /> {picks.filter(p => p.strength === "STRONG").length} strong today</p>
-      </div>
-    </div>
-  )
-}
-
-interface DailyPick {
-  id: string; signal: "BUY" | "SELL"; asset: string; strength: "STRONG" | "MODERATE" | "WEAK"
-  entry: string; sl: string; tp: string; rr: string; timeframe: string; reason: string
-  setupQuality: string; rsi: string; adx: string; trendDirection: string; taken: boolean
-}
-
-function generateDailyPicks(): DailyPick[] {
-  const assets = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD", "ETH/USD"]
-  const timeframes = ["15m", "1H", "4H", "Daily"]
-  const strengths = ["STRONG", "STRONG", "MODERATE", "MODERATE", "MODERATE", "WEAK"]
-  const reasons = [
-    "Price broke above key resistance with volume confirmation. EMA crossover bullish. Multiple confluence factors align.",
-    "Retest of broken resistance-turned-support. Hammer candlestick formed on 4H. RSI shows bullish divergence.",
-    "Channel breakout with increased volume. Fibonacci 0.618 level holding as support. Smart money concepts valid.",
-    "Double bottom pattern confirmed. MACD bullish crossover on Daily timeframe. Institutional buying detected.",
-    "Order block respected with strong reaction. Liquidity sweep complete. FVG filled.",
-    "Ascending triangle breakout imminent. Bollinger Bands expanding. Volatility index rising."
-  ]
-  return assets.map((asset, i) => {
-    const isBuy = Math.random() > 0.4
-    const entry = asset === "XAU/USD" ? 4700 + Math.random() * 60 : asset === "BTC/USD" ? 67500 + Math.random() * 3000 : 1.02 + Math.random() * 0.3
-    const slDist = entry * 0.006
-    return {
-      id: `DAILY-${Date.now()}-${i}`, signal: isBuy ? "BUY" : "SELL", asset,
-      strength: strengths[i] as "STRONG" | "MODERATE" | "WEAK",
-      entry: entry.toFixed(asset === "XAU/USD" ? 2 : asset === "BTC/USD" ? 0 : 4),
-      sl: isBuy ? (entry - slDist).toFixed(2) : (entry + slDist).toFixed(2),
-      tp: isBuy ? (entry + slDist * 3.5).toFixed(2) : (entry - slDist * 3.5).toFixed(2),
-      rr: `1:${(3 + Math.random() * 2).toFixed(1)}`, timeframe: timeframes[Math.floor(Math.random() * timeframes.length)],
-      reason: reasons[i], setupQuality: i < 2 ? "A+" : i < 4 ? "A" : "B+",
-      rsi: (35 + Math.floor(Math.random() * 30)).toString(), adx: (20 + Math.floor(Math.random() * 30)).toString(),
-      trendDirection: isBuy ? "UP" : "DOWN", taken: false,
-    }
-  })
 }
 
 /* ═══════════════════════════════════════════
