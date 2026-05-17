@@ -16,6 +16,8 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+const GEMINI_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro";
 
 type ProviderAttempt = {
   at: string;
@@ -28,9 +30,10 @@ type ProviderAttempt = {
   availableModelSample?: string[];
 };
 
-const providerAttempts: { claude: ProviderAttempt | null; openai: ProviderAttempt | null } = {
+const providerAttempts: { claude: ProviderAttempt | null; openai: ProviderAttempt | null; gemini: ProviderAttempt | null } = {
   claude: null,
   openai: null,
+  gemini: null,
 };
 
 let claudeModelCache: { at: number; status: number; ids: string[]; error?: string } | null = null;
@@ -124,6 +127,12 @@ export function getAIProviderRuntimeStatus() {
           }
         : null,
       lastAttempt: providerAttempts.claude,
+    },
+    gemini: {
+      configured: Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY)?.trim()),
+      model: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+      acceptedEnvNames: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_AI_API_KEY"],
+      lastAttempt: providerAttempts.gemini,
     },
     openai: {
       configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
@@ -379,6 +388,7 @@ function buildStaticAnalysisSystem(role: "primary" | "second-opinion"): string {
 
 const CLAUDE_STATIC_SYSTEM = buildStaticAnalysisSystem("primary");
 const OPENAI_STATIC_SYSTEM = buildStaticAnalysisSystem("second-opinion");
+const GEMINI_STATIC_SYSTEM = buildStaticAnalysisSystem("second-opinion");
 
 /**
  * Builds the dynamic per-request context (asset info + current price + recent news).
@@ -426,7 +436,7 @@ export async function analyzeChartWithAI(
   timeframe: string,
   currentPrice?: number,
 ): Promise<Record<string, unknown> | null> {
-  // Phase 1: fetch live news context ONCE and pass to both providers
+  // Phase 1: fetch live news context ONCE and pass to all providers
   // (news.ts already caches results for 2 minutes, so this is cheap)
   let newsContext: MarketNewsContext | null = null;
   try {
@@ -438,11 +448,19 @@ export async function analyzeChartWithAI(
     console.warn("[AI] News fetch failed, continuing without news context", error);
   }
 
-  const [claudeResult, openAiResult] = await Promise.all([
+  // Run all configured providers in parallel.
+  // Provider preference order: Claude (primary) + Gemini (preferred 2nd) + OpenAI (legacy)
+  // Each function returns null if its API key isn't configured.
+  const [claudeResult, geminiResult, openAiResult] = await Promise.all([
     analyzeChartWithClaude(base64Image, assetName, strategyName, timeframe, currentPrice, newsContext),
+    analyzeChartWithGemini(base64Image, assetName, strategyName, timeframe, currentPrice, newsContext),
     analyzeChartWithOpenAI(base64Image, assetName, strategyName, timeframe, currentPrice, newsContext),
   ]);
-  const liveResult = combineModelResults(claudeResult, openAiResult);
+
+  // Prefer Gemini as the "second opinion" if both Gemini and OpenAI returned results
+  // (Gemini 2.5 Pro is significantly stronger at vision than gpt-4o-mini).
+  const secondOpinion = geminiResult || openAiResult;
+  const liveResult = combineModelResults(claudeResult, secondOpinion);
   if (liveResult) return liveResult;
 
   // Simulate network latency (real API feel)
@@ -587,6 +605,45 @@ async function analyzeChartWithClaude(
 
     const modelCandidates = await getRuntimeClaudeModelCandidates(apiKey);
     for (const model of modelCandidates) {
+      // Newer Claude models (Opus 4.7+) deprecated the `temperature` parameter
+      // in favor of extended reasoning. Detect and omit it for those models.
+      const modelDeprecatesTemperature = /^claude-(opus-4-[7-9]|opus-[5-9])/i.test(model);
+
+      const requestBody: Record<string, unknown> = {
+        model,
+        max_tokens: 1800,
+        // Static instructions go in `system` with cache_control → cached for 5 min,
+        // 90% cheaper on cache hits. The chart image + dynamic data are NOT cached
+        // because they change every request.
+        system: [
+          {
+            type: "text",
+            text: CLAUDE_STATIC_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: base64Image,
+                },
+              },
+              { type: "text", text: dynamicContext },
+            ],
+          },
+        ],
+      };
+
+      if (!modelDeprecatesTemperature) {
+        requestBody.temperature = 0.2;
+      }
+
       const response = await fetch(ANTHROPIC_URL, {
         method: "POST",
         headers: {
@@ -594,37 +651,7 @@ async function analyzeChartWithClaude(
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
         },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1800,
-          temperature: 0.2,
-          // Static instructions go in `system` with cache_control → cached for 5 min,
-          // 90% cheaper on cache hits. The chart image + dynamic data are NOT cached
-          // because they change every request.
-          system: [
-            {
-              type: "text",
-              text: CLAUDE_STATIC_SYSTEM,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: mediaType,
-                    data: base64Image,
-                  },
-                },
-                { type: "text", text: dynamicContext },
-              ],
-            },
-          ],
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -755,6 +782,136 @@ async function analyzeChartWithOpenAI(
       error: error instanceof Error ? error.message : String(error),
     };
     console.error("[OpenAI] analysis failed", error);
+    return null;
+  }
+}
+
+/**
+ * Google Gemini 2.5 Pro - second-opinion vision model.
+ * Stronger at chart vision than gpt-4o-mini and significantly cheaper than gpt-4o.
+ * Free tier: 5 RPM, 25 RPD on aistudio.google.com.
+ * Paid tier: $1.25/$10 per million tokens.
+ */
+async function analyzeChartWithGemini(
+  base64Image: string,
+  assetName: string,
+  strategyName: string,
+  timeframe: string,
+  currentPrice?: number,
+  newsContext?: MarketNewsContext | null,
+): Promise<Record<string, unknown> | null> {
+  const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY)?.trim();
+  providerAttempts.gemini = { at: new Date().toISOString(), configured: Boolean(apiKey) };
+  if (!apiKey) return null;
+
+  try {
+    const mediaType = detectMediaType(base64Image);
+    const dynamicContext = buildDynamicUserContext(
+      assetName,
+      strategyName,
+      timeframe,
+      currentPrice,
+      newsContext ?? null,
+    );
+
+    const model = (process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL).trim();
+    const url = `${GEMINI_URL_BASE}/${model}:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        // Gemini "systemInstruction" is the closest equivalent to OpenAI's system
+        // message — it stays constant across requests and Gemini will cache it
+        // automatically for paid tier (implicit caching).
+        systemInstruction: {
+          parts: [{ text: GEMINI_STATIC_SYSTEM }],
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: dynamicContext },
+              {
+                inlineData: {
+                  mimeType: mediaType,
+                  data: base64Image,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.15,
+          maxOutputTokens: 2400,
+          responseMimeType: "application/json",
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const failureText = await response.text();
+      let errorMsg = failureText.slice(0, 400);
+      try {
+        const parsed = JSON.parse(failureText) as { error?: { message?: string; status?: string } };
+        if (parsed.error?.message) errorMsg = `${parsed.error.status || "ERROR"}: ${parsed.error.message}`;
+      } catch {
+        // not JSON
+      }
+      providerAttempts.gemini = {
+        at: new Date().toISOString(),
+        configured: true,
+        model,
+        ok: false,
+        status: response.status,
+        error: errorMsg,
+      };
+      console.error("[Gemini] request failed", { model, status: response.status, error: errorMsg });
+      return null;
+    }
+
+    providerAttempts.gemini = {
+      at: new Date().toISOString(),
+      configured: true,
+      model,
+      ok: true,
+      status: response.status,
+    };
+
+    const data = await response.json() as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        finishReason?: string;
+      }>;
+      promptFeedback?: { blockReason?: string };
+    };
+
+    if (data.promptFeedback?.blockReason) {
+      console.warn("[Gemini] response blocked", data.promptFeedback.blockReason);
+      return null;
+    }
+
+    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join("\n");
+    if (!text) {
+      console.warn("[Gemini] empty response", data.candidates?.[0]?.finishReason);
+      return null;
+    }
+
+    return normalizeClaudeResult(parseJsonObject(text), assetName, strategyName, timeframe, currentPrice);
+  } catch (error) {
+    providerAttempts.gemini = {
+      at: new Date().toISOString(),
+      configured: true,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+    console.error("[Gemini] analysis failed", error);
     return null;
   }
 }
