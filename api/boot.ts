@@ -390,9 +390,7 @@ async function activatePaymentFromRecord(payment: typeof vipPayments.$inferSelec
   await db.update(vipCodes).set({ used: true, assignedTo: payment.email }).where(eq(vipCodes.id, availableCode.id));
 
   const now = new Date();
-  const isYearly = payment.planName.toLowerCase().includes("year");
-  const endDate = new Date(now);
-  endDate.setMonth(endDate.getMonth() + (isYearly ? 12 : 1));
+  const endDate = getVipEndDate(now, payment.planName);
 
   await db.update(vipPayments)
     .set({ status: "APPROVED", approvedAt: now, assignedCode: availableCode.code })
@@ -412,6 +410,25 @@ async function activatePaymentFromRecord(payment: typeof vipPayments.$inferSelec
   });
 
   return { success: true as const, email: payment.email, code: availableCode.code, expiresAt: endDate };
+}
+
+function getVipEndDate(startDate: Date, planName: string) {
+  const normalizedPlan = planName.toLowerCase();
+  const endDate = new Date(startDate);
+  const isThreeDayAccess = normalizedPlan.includes("3") && (
+    normalizedPlan.includes("day") ||
+    normalizedPlan.includes("أيام") ||
+    normalizedPlan.includes("ايام")
+  );
+
+  if (isThreeDayAccess) {
+    endDate.setDate(endDate.getDate() + 3);
+    return endDate;
+  }
+
+  const isYearly = normalizedPlan.includes("year");
+  endDate.setMonth(endDate.getMonth() + (isYearly ? 12 : 1));
+  return endDate;
 }
 
 async function grantDeveloperAccess() {
