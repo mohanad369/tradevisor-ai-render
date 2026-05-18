@@ -1,54 +1,69 @@
-import type { LocalizedText } from "./features";
-
 export interface PricingPlan {
-  name: LocalizedText;
+  name: string;
   originalPrice: string;
   salePrice: string;
   discount: string;
-  period: LocalizedText;
-  features: LocalizedText[];
-  cta: LocalizedText;
+  period: string;
+  features: string[];
+  cta: string;
   premium?: boolean;
+  testOnly?: boolean; // Hidden from public pricing page, only shown on secret test route
 }
 
 export const pricingPlans: PricingPlan[] = [
   {
-    name: { en: "TradeVisor Monthly", ar: "تريدفايزر شهري" },
+    name: "TradeVisor Monthly",
     originalPrice: "$99",
     salePrice: "$69",
     discount: "30% OFF",
-    period: { en: "Monthly subscription - Cancel anytime", ar: "اشتراك شهري - إلغاء في أي وقت" },
+    period: "Monthly subscription • Cancel anytime",
     features: [
-      { en: "AI-powered BUY & SELL signals", ar: "إشارات شراء وبيع بالذكاء الاصطناعي" },
-      { en: "Advanced AI-powered market analysis", ar: "تحليل سوق متقدم بالذكاء الاصطناعي" },
-      { en: "TradingView premium indicator integration", ar: "تكامل مؤشرات TradingView المميزة" },
-      { en: "Multi-timeframe market analysis", ar: "تحليل السوق على عدة أطر زمنية" },
-      { en: "24/7 automated market monitoring", ar: "مراقبة آلية للسوق 24/7" },
-      { en: "Risk management & stop-loss alerts", ar: "إدارة مخاطر وتنبيهات وقف الخسارة" },
-      { en: "Custom indicator settings & optimization", ar: "إعدادات مؤشرات مخصصة وتحسينها" },
-      { en: "Mobile & desktop notifications", ar: "تنبيهات للموبايل والكمبيوتر" },
+      "AI-powered BUY & SELL signals",
+      "Advanced AI-powered market analysis",
+      "TradingView premium indicator integration",
+      "Multi-timeframe market analysis",
+      "24/7 automated market monitoring",
+      "Risk management & stop-loss alerts",
+      "Custom indicator settings & optimization",
+      "Mobile & desktop notifications",
     ],
-    cta: { en: "Get Monthly Access", ar: "احصل على الوصول الشهري" },
+    cta: "Get Monthly Access",
   },
   {
-    name: { en: "TradeVisor Yearly", ar: "تريدفايزر سنوي" },
+    name: "TradeVisor Yearly",
     originalPrice: "$1,200",
     salePrice: "$669",
     discount: "44% OFF",
-    period: { en: "Yearly subscription - Save $531", ar: "اشتراك سنوي - وفر $531" },
+    period: "Yearly subscription • Save $531",
     features: [
-      { en: "AI-powered BUY & SELL signals", ar: "إشارات شراء وبيع بالذكاء الاصطناعي" },
-      { en: "Advanced AI-powered market analysis", ar: "تحليل سوق متقدم بالذكاء الاصطناعي" },
-      { en: "TradingView premium indicator integration", ar: "تكامل مؤشرات TradingView المميزة" },
-      { en: "Multi-timeframe market analysis", ar: "تحليل السوق على عدة أطر زمنية" },
-      { en: "24/7 automated market monitoring", ar: "مراقبة آلية للسوق 24/7" },
-      { en: "Risk management & stop-loss alerts", ar: "إدارة مخاطر وتنبيهات وقف الخسارة" },
-      { en: "Custom indicator settings & optimization", ar: "إعدادات مؤشرات مخصصة وتحسينها" },
-      { en: "Mobile & desktop notifications", ar: "تنبيهات للموبايل والكمبيوتر" },
-      { en: "Priority VIP support", ar: "دعم VIP أولوية" },
-      { en: "Exclusive market insights", ar: "رؤى سوق حصرية" },
+      "AI-powered BUY & SELL signals",
+      "Advanced AI-powered market analysis",
+      "TradingView premium indicator integration",
+      "Multi-timeframe market analysis",
+      "24/7 automated market monitoring",
+      "Risk management & stop-loss alerts",
+      "Custom indicator settings & optimization",
+      "Mobile & desktop notifications",
+      "Priority VIP support",
+      "Exclusive market insights",
     ],
-    cta: { en: "Get Yearly Access", ar: "احصل على الوصول السنوي" },
+    cta: "Get Yearly Access",
     premium: true,
+  },
+  // ─── Developer Test Plan (hidden from public, only shown at /#/test-pay-2026) ───
+  {
+    name: "Developer Test",
+    originalPrice: "$10",
+    salePrice: "$10",
+    discount: "TEST",
+    period: "Payment system test • 1 day access",
+    features: [
+      "For payment system testing only",
+      "1 day VIP access",
+      "Full feature access during test period",
+      "Used to verify NOWPayments + IPN + Email flow",
+    ],
+    cta: "Test Payment ($10)",
+    testOnly: true,
   },
 ];
