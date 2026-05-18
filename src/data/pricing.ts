@@ -14,8 +14,8 @@ export interface PricingPlan {
 export const pricingPlans: PricingPlan[] = [
   {
     name: { en: "TradeVisor VIP 3 Days", ar: "تريدفايزر VIP 3 أيام" },
-    originalPrice: "$25",
-    salePrice: "$10",
+    originalPrice: "$49",
+    salePrice: "$25",
     discount: "TEST ACCESS",
     period: { en: "3-day VIP access for payment testing", ar: "دخول VIP لمدة 3 أيام لتجربة الدفع" },
     features: [
