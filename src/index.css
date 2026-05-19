@@ -264,6 +264,33 @@ a[href="/#/developer"] {
     box-shadow: 0 0 28px rgba(212, 168, 67, 0.12);
   }
 
+  .vip-shell .vip-tabbar {
+    z-index: 90 !important;
+    pointer-events: auto;
+    isolation: isolate;
+  }
+
+  .vip-shell .vip-tabbar * {
+    pointer-events: auto;
+  }
+
+  .vip-shell .vip-tab-button {
+    position: relative;
+    z-index: 91;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  .vip-shell .vip-tab-button.is-active {
+    background: rgba(212, 168, 67, 0.1) !important;
+    border-color: rgba(212, 168, 67, 0.9) !important;
+    color: #f6d46d !important;
+    box-shadow:
+      inset 0 -1px 0 rgba(212, 168, 67, 0.7),
+      0 0 24px rgba(212, 168, 67, 0.14);
+  }
+
   .vip-shell button,
   .vip-shell a,
   .vip-shell input,

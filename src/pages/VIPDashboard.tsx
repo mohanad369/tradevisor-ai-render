@@ -408,7 +408,7 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
       <header className="bg-[#0d0d0d] border-b border-[#1f1f1f] sticky top-0 z-50">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden text-[#a0a0a0] hover:text-white p-1">
+            <button type="button" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden text-[#a0a0a0] hover:text-white p-1">
               <Menu size={20} />
             </button>
             <h1 className="text-sm sm:text-base font-bold flex items-center gap-1.5 sm:gap-2">
@@ -442,14 +442,14 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
 
       {/* Mobile Tab Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-[#0a0a0a] border-b border-[#1f1f1f] px-3 py-2">
+        <div className="vip-tabbar lg:hidden bg-[#0a0a0a] border-b border-[#1f1f1f] px-3 py-2">
           <div className="grid grid-cols-3 gap-1.5">
             {tabs.map(tab => {
               const Icon = tab.icon
               return (
-                <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMobileMenuOpen(false) }}
-                  className={`flex items-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
-                    activeTab === tab.id ? "bg-[#d4a843]/15 text-[#d4a843] border border-[#d4a843]/30" : "text-[#a0a0a0] hover:bg-[#141414]"
+                <button key={tab.id} type="button" aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => { setActiveTab(tab.id); setMobileMenuOpen(false) }}
+                  className={`vip-tab-button flex items-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
+                    activeTab === tab.id ? "is-active bg-[#d4a843]/15 text-[#d4a843] border border-[#d4a843]/30" : "text-[#a0a0a0] hover:bg-[#141414]"
                   }`}>
                   <Icon size={13} /> {vt(tab.id)}
                 </button>
@@ -460,15 +460,15 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
       )}
 
       {/* Desktop Tab Navigation */}
-      <div className="hidden lg:block bg-[#0a0a0a] border-b border-[#1f1f1f] sticky top-[57px] z-40">
+      <div className="vip-tabbar hidden lg:block bg-[#0a0a0a] border-b border-[#1f1f1f] sticky top-[57px] z-40">
         <div className="max-w-[1400px] mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto scrollbar-hide">
             {tabs.map(tab => {
               const Icon = tab.icon
               return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all ${
-                    activeTab === tab.id ? "border-[#d4a843] text-[#d4a843]" : "border-transparent text-[#666666] hover:text-[#a0a0a0]"
+                <button key={tab.id} type="button" aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}
+                  className={`vip-tab-button flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all ${
+                    activeTab === tab.id ? "is-active border-[#d4a843] text-[#d4a843]" : "border-transparent text-[#666666] hover:text-[#a0a0a0]"
                   }`}>
                   <Icon size={13} /> {vt(tab.id)}
                 </button>
@@ -479,14 +479,14 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
       </div>
 
       {/* Mobile Horizontal Tabs (compact) */}
-      <div className="lg:hidden bg-[#0a0a0a] border-b border-[#1f1f1f] sticky top-[49px] z-40">
+      <div className="vip-tabbar lg:hidden bg-[#0a0a0a] border-b border-[#1f1f1f] sticky top-[49px] z-40">
         <div className="flex overflow-x-auto scrollbar-hide snap-x snap-mandatory">
           {tabs.map(tab => {
             const Icon = tab.icon
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1 px-3 py-2.5 text-[11px] font-medium whitespace-nowrap border-b-2 transition-all snap-start ${
-                  activeTab === tab.id ? "border-[#d4a843] text-[#d4a843]" : "border-transparent text-[#666666]"
+              <button key={tab.id} type="button" aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}
+                className={`vip-tab-button flex items-center gap-1 px-3 py-2.5 text-[11px] font-medium whitespace-nowrap border-b-2 transition-all snap-start ${
+                  activeTab === tab.id ? "is-active border-[#d4a843] text-[#d4a843]" : "border-transparent text-[#666666]"
                 }`}>
                 <Icon size={12} /> {vt(tab.id)}
               </button>
