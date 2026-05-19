@@ -33,18 +33,18 @@ export default function Pricing() {
   };
 
   return (
-    <section id="pricing" className="bg-[#050505] py-24">
-      <div className="max-w-[800px] mx-auto px-6">
+    <section id="pricing" className="tv-neon-section py-24">
+      <div className="relative z-10 max-w-[800px] mx-auto px-6">
         <ScrollReveal className="text-center mb-4">
           <p className="text-[#e11d48] text-sm mb-2">{t("pricing.sale")}</p>
         </ScrollReveal>
         <ScrollReveal delay={0.1} className="text-center">
-          <h2 className="text-white text-4xl font-bold mb-2">{t("pricing.title")}</h2>
+          <h2 className="tv-glow-title text-white text-4xl font-bold mb-2">{t("pricing.title")}</h2>
           <p className="text-[#a0a0a0] text-base">{t("pricing.cancel")}</p>
         </ScrollReveal>
         <div className="mt-12">
           <div className="text-center mb-8">
-            <span className="text-[#666666] text-xs font-mono uppercase tracking-wider">{t("pricing.choose")}</span>
+            <span className="tv-neon-pill inline-flex text-[#d4a843] text-xs font-mono uppercase tracking-wider px-3 py-1 rounded-full">{t("pricing.choose")}</span>
             <p className="text-[#a0a0a0] text-sm mt-2">{t("pricing.subtitle")}</p>
           </div>
           <div className="grid md:grid-cols-2 gap-8">

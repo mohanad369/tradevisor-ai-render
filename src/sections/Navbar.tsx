@@ -31,14 +31,14 @@ export default function Navbar() {
   };
 
   return (
-    <motion.nav initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className={`fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 border-b transition-all duration-300 ${scrolled ? "bg-[#0d0d0d]/90 backdrop-blur-xl border-[#1f1f1f]" : "bg-transparent border-transparent"}`}>
+    <motion.nav initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className={`fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 border-b transition-all duration-300 ${scrolled ? "bg-[#020509]/88 backdrop-blur-xl border-[#18c8ff]/15 shadow-[0_12px_40px_rgba(0,0,0,0.35)]" : "bg-transparent border-transparent"}`}>
       {/* Mobile Menu Overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 top-14 bg-[#050505]/95 z-40 md:hidden"
             onClick={() => setMobileMenuOpen(false)}>
             <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}
-              className="bg-[#0d0d0d] border-b border-[#1f1f1f] p-4" onClick={e => e.stopPropagation()}>
+              className="tv-neon-card border-b border-[#18c8ff]/15 p-4" onClick={e => e.stopPropagation()}>
               {links.map((l) => (
                 <button key={l.sectionId} onClick={() => scrollToSection(l.sectionId)}
                   className="block w-full text-left text-[#a0a0a0] text-sm font-medium py-3 px-2 hover:text-[#d4a843] transition-colors border-b border-[#1f1f1f] last:border-0 bg-transparent border-x-0 border-t-0 cursor-pointer">
@@ -63,7 +63,7 @@ export default function Navbar() {
       <div className="max-w-[1200px] mx-auto h-full flex items-center justify-between px-3 sm:px-6">
         {/* Logo */}
         <div className="flex flex-col cursor-pointer" onClick={() => { setMobileMenuOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-          <span className="text-white font-bold text-xs sm:text-sm tracking-[0.1em] uppercase">TRADEVISOR</span>
+          <span className="tv-glow-title text-white font-bold text-xs sm:text-sm tracking-[0.1em] uppercase">TRADEVISOR</span>
           <span className="text-[#a0a0a0] text-[9px] sm:text-[10px]">{t("nav.subtitle")}</span>
         </div>
 
@@ -71,7 +71,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-8">
           {links.map((l) => (
             <button key={l.sectionId} onClick={() => scrollToSection(l.sectionId)}
-              className="text-[#a0a0a0] text-sm font-medium hover:text-[#d4a843] transition-colors bg-transparent border-none cursor-pointer">
+              className="text-[#a0a0a0] text-sm font-medium hover:text-[#18c8ff] transition-colors bg-transparent border-none cursor-pointer">
               {l.label}
             </button>
           ))}
@@ -81,13 +81,13 @@ export default function Navbar() {
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Candle AI - desktop */}
           <button onClick={() => navigate("/candles")}
-            className="hidden md:flex items-center gap-1.5 text-[#d4a843] hover:text-[#e8c76a] text-xs border border-[#d4a843]/20 px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/40 bg-transparent transition-colors">
+            className="hidden md:flex items-center gap-1.5 text-[#d4a843] hover:text-[#e8c76a] text-xs border border-[#d4a843]/20 px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/40 bg-[#d4a843]/5 transition-colors tv-button-glow">
             <Flame size={12} /> {t("nav.candle")}
           </button>
 
           {/* VIP button - VISIBLE on ALL screens */}
           <button onClick={() => navigate("/vip")}
-            className="flex items-center gap-1 text-[#d4a843] hover:text-[#e8c76a] text-[10px] sm:text-xs border border-[#d4a843]/30 px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/60 hover:bg-[#d4a843]/5 bg-transparent transition-colors">
+            className="flex items-center gap-1 text-[#d4a843] hover:text-[#e8c76a] text-[10px] sm:text-xs border border-[#d4a843]/30 px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/60 hover:bg-[#d4a843]/10 bg-[#d4a843]/5 transition-colors tv-button-glow">
             <Crown size={11} className="sm:hidden" /><Crown size={12} className="hidden sm:block" />
             <span className="font-semibold">{t("nav.vip")}</span>
           </button>

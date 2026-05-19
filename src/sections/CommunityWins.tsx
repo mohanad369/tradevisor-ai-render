@@ -7,8 +7,8 @@ import { useLanguage } from "@/lib/language";
 export default function CommunityWins() {
   const { t } = useLanguage();
   return (
-    <section id="wins" className="bg-[#050505] py-24">
-      <div className="max-w-[1200px] mx-auto px-6">
+    <section id="wins" className="tv-neon-section py-24">
+      <div className="relative z-10 max-w-[1200px] mx-auto px-6">
         <ScrollReveal>
           <div className="flex items-center gap-4 mb-2">
             <span className="text-[#666666] text-xs font-mono uppercase tracking-wider">
@@ -21,7 +21,7 @@ export default function CommunityWins() {
         </ScrollReveal>
 
         <ScrollReveal delay={0.1}>
-          <h2 className="text-white text-4xl font-bold mb-2">
+          <h2 className="tv-glow-title text-white text-4xl font-bold mb-2">
             {t("wins.titleA")} <span className="text-[#d4a843]">{t("wins.titleB")}</span> {t("wins.titleC")}
           </h2>
         </ScrollReveal>
@@ -47,7 +47,7 @@ export default function CommunityWins() {
         </div>
 
         <ScrollReveal className="flex flex-col items-center mt-12 gap-4">
-          <button className="border border-[#1f1f1f] text-[#a0a0a0] px-6 py-3 rounded-full hover:border-[#d4a843] hover:text-white transition-all duration-200 text-sm">
+          <button className="tv-neon-pill text-[#a0a0a0] px-6 py-3 rounded-full hover:border-[#d4a843] hover:text-white transition-all duration-200 text-sm">
             {t("wins.viewMore")}
           </button>
           <p className="text-[#a0a0a0] text-sm text-center">

@@ -9,8 +9,8 @@ import { useLanguage } from "@/lib/language";
 export default function Testimonials() {
   const { t } = useLanguage();
   return (
-    <section id="testimonials" className="bg-[#050505] py-24">
-      <div className="max-w-[1200px] mx-auto px-6">
+    <section id="testimonials" className="tv-neon-section py-24">
+      <div className="relative z-10 max-w-[1200px] mx-auto px-6">
         <ScrollReveal>
           <span className="text-[#666666] text-xs font-mono uppercase tracking-wider block mb-2">
             {t("testimonials.kicker")}
@@ -18,14 +18,14 @@ export default function Testimonials() {
         </ScrollReveal>
 
         <ScrollReveal delay={0.1}>
-          <h2 className="text-white text-4xl font-bold mb-4">
+          <h2 className="tv-glow-title text-white text-4xl font-bold mb-4">
             {t("testimonials.title")}
           </h2>
         </ScrollReveal>
 
         <ScrollReveal delay={0.2}>
           <div className="flex items-center gap-4 mb-12">
-            <div className="flex items-center gap-1 bg-[#0d0d0d] border border-[#1f1f1f] rounded-full px-3 py-1.5">
+            <div className="tv-neon-pill flex items-center gap-1 rounded-full px-3 py-1.5">
               <Star size={14} className="text-[#d4a843] fill-[#d4a843]" />
               <span className="text-white text-sm font-medium">{t("testimonials.rating")}</span>
             </div>

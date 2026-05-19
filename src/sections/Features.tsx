@@ -15,10 +15,10 @@ export default function Features() {
   }));
 
   return (
-    <section id="features" className="bg-[#050505] py-24">
-      <div className="max-w-[1200px] mx-auto px-6">
+    <section id="features" className="tv-neon-section py-24">
+      <div className="relative z-10 max-w-[1200px] mx-auto px-6">
         <ScrollReveal>
-          <h2 className="text-white text-4xl font-bold mb-4">
+          <h2 className="tv-glow-title text-white text-4xl font-bold mb-4">
             {t("features.title")}
           </h2>
         </ScrollReveal>
@@ -42,8 +42,8 @@ export default function Features() {
               { value: "$100 -> $3,400", label: t("features.return"), context: t("features.gain") },
               { value: "0.7s", label: t("features.speed"), context: t("features.fast") },
             ].map((metric) => (
-              <div key={metric.label} className="text-center">
-                <div className="text-[#d4a843] text-3xl font-bold">
+              <div key={metric.label} className="tv-neon-card tv-live-line rounded-2xl px-7 py-5 text-center min-w-[180px]">
+                <div className="text-[#d4a843] text-3xl font-bold tv-glow-title">
                   {metric.value}
                 </div>
                 <div className="text-white text-sm font-medium mt-1">

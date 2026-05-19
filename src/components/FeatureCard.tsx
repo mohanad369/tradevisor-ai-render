@@ -31,12 +31,12 @@ export default function FeatureCard({ data }: { data: FeatureCardData }) {
 
   return (
     <motion.div
-      whileHover={{ y: -4, borderColor: "#d4a843" }}
+      whileHover={{ y: -6, borderColor: "rgba(24, 200, 255, 0.55)" }}
       transition={{ duration: 0.3 }}
-      className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-2xl p-8 hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-shadow duration-300"
+      className="tv-neon-card rounded-2xl p-8 transition-all duration-300"
     >
-      <div className="w-10 h-10 rounded-full bg-[#141414] flex items-center justify-center mb-4">
-        <Icon size={20} className="text-[#d4a843]" />
+      <div className="w-10 h-10 rounded-full bg-[#18c8ff]/10 border border-[#18c8ff]/25 flex items-center justify-center mb-4 shadow-[0_0_24px_rgba(24,200,255,0.18)]">
+        <Icon size={20} className="text-[#18c8ff]" />
       </div>
 
       <h3 className="text-white text-lg font-semibold mb-3">{data.title}</h3>

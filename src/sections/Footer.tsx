@@ -3,11 +3,11 @@ import { useLanguage } from "@/lib/language";
 export default function Footer() {
   const { t } = useLanguage();
   return (
-    <footer className="bg-[#050505] border-t border-[#1f1f1f] py-12">
-      <div className="max-w-[1200px] mx-auto px-6">
+    <footer className="bg-[#020509] border-t border-[#18c8ff]/15 py-12">
+      <div className="max-w-[1200px] mx-auto px-6 tv-neon-card rounded-2xl p-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
           <div className="flex flex-col items-center md:items-start">
-            <span className="text-white font-bold text-sm tracking-[0.1em] uppercase">
+            <span className="tv-glow-title text-white font-bold text-sm tracking-[0.1em] uppercase">
               TRADEVISOR
             </span>
             <span className="text-[#a0a0a0] text-xs">
