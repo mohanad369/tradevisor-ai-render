@@ -288,6 +288,7 @@ export const vipRouter = createRouter({
       email: z.string().email().optional(),
       code: z.string().min(1),
       deviceId: z.string().min(1),
+      force: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       let sub;
@@ -309,7 +310,7 @@ export const vipRouter = createRouter({
         .where(and(eq(vipSessions.subscriberId, sub.subscriberId), eq(vipSessions.active, true)))
         .orderBy(desc(vipSessions.lastSeenAt));
 
-      if (existingSession && existingSession.deviceId !== input.deviceId) {
+      if (existingSession && existingSession.deviceId !== input.deviceId && !input.force) {
         return { success: false, error: "Account active on another device. Logout first.", blocked: true };
       }
 
