@@ -5,8 +5,9 @@
  */
 
 import { analyzeWithOpenAI, isOpenAIConfigured } from "./openai";
-import { analyzeChart as analyzeChartOnBackend, fetchNewsContext, isBackendConfigured, type MarketNewsContext } from "./api";
-import { runTradingAgentPipeline, type TradingAgentPipelineResult } from "./tradingAgents";
+import { analyzeChart as analyzeChartOnBackend, isBackendConfigured } from "./api";
+import { trpcClient } from "./trpcClient";
+import { runTradingAgentPipeline, type RealNewsPayload, type TradingAgentPipelineResult } from "./tradingAgents";
 
 function hashString(str: string): number {
   let hash = 0;
@@ -297,12 +298,14 @@ function getFallbackEntryDrift(strategyName: string, timeframe: string): number 
   return Math.min(0.9, strategyFactor * getTimeframeFactor(timeframe));
 }
 
-async function getLiveNewsContext(assetName: string): Promise<MarketNewsContext | null> {
-  if (!isBackendConfigured()) return null;
+async function getRealNewsPayload(assetName: string): Promise<RealNewsPayload | null> {
   try {
-    return await fetchNewsContext(assetName);
-  } catch (error) {
-    console.warn("Live news context unavailable, using internal agent context:", error instanceof Error ? error.message : String(error));
+    return await trpcClient.news.forAsset.query({
+      symbol: assetName,
+      lookbackHours: 24,
+    });
+  } catch (err) {
+    console.warn("[analyzer] news fetch failed, using synthetic:", err);
     return null;
   }
 }
@@ -314,14 +317,14 @@ async function attachTradingAgents(
   timeframe: string,
   marketPrice?: number,
 ) {
-  const newsContext = await getLiveNewsContext(assetName);
+  const realNews = await getRealNewsPayload(assetName);
   result.agents = runTradingAgentPipeline({
     analysis: result,
     assetName,
     strategyName,
     timeframe,
     marketPrice,
-    newsContext,
+    realNews,
   });
   return result;
 }

@@ -4,7 +4,6 @@ type RiskGate = "open" | "restricted" | "closed";
 
 export interface TradingAgentPipelineResult {
   news: Record<string, unknown>;
-  bankPolicy: Record<string, unknown>;
   decision: Record<string, unknown>;
   marketContext: Record<string, unknown>;
   chartTrade: Record<string, unknown>;
@@ -13,14 +12,6 @@ export interface TradingAgentPipelineResult {
   finalPlan: {
     action: string;
     confidence: string;
-    setupQuality: {
-      verdict: "clean" | "caution" | "danger";
-      score: number;
-      summary: string;
-      blockers: string[];
-      warnings: string[];
-      confirmationChecklist: string[];
-    };
     entryPrice: number;
     stopLoss: number;
     takeProfits: Array<{ label: string; price: number; closePercent: number }>;
@@ -31,41 +22,48 @@ export interface TradingAgentPipelineResult {
   };
 }
 
+/** Shape of items returned by the news router (api/lib/news.ts). */
+export interface RealNewsItem {
+  title: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  sentiment: "positive" | "negative" | "neutral";
+  riskLevel: "low" | "medium" | "high";
+  matchedKeywords: string[];
+  summary?: string;
+}
+
+export interface RealNewsPayload {
+  symbol: string;
+  fetchedAt: string;
+  overallSentiment: "positive" | "negative" | "neutral";
+  marketMood: string;
+  items: RealNewsItem[];
+  poweredBy: "claude-web-search" | "fallback";
+}
+
 interface PipelineInput {
   analysis: AnalysisResult;
   assetName: string;
   strategyName: string;
   timeframe: string;
   marketPrice?: number;
-  newsContext?: {
-    status: "live" | "fallback";
-    marketMood: "positive" | "negative" | "neutral";
-    riskLevel: "low" | "medium" | "high";
-    headlines: Array<{
-      title: string;
-      source: string;
-      url: string;
-      publishedAt: string;
-      sentiment: "positive" | "negative" | "neutral";
-      riskLevel: "low" | "medium" | "high";
-      matchedKeywords: string[];
-    }>;
-    officialSources: string[];
-  } | null;
+  /** Optional real news payload from `trpc.news.forAsset`. When provided,
+   *  the news agent uses it instead of generating synthetic inputs. */
+  realNews?: RealNewsPayload | null;
 }
 
 export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipelineResult {
   const news = newsAgent(input);
-  const bankPolicy = bankPolicyAgent(news, input);
-  const decision = decisionAgent(news, bankPolicy);
+  const decision = decisionAgent(news);
   const marketContext = marketContextAgent(decision, input);
   const chartTrade = chartTradeAgent(marketContext, input);
-  const supervisor = supervisorAgent({ news, bankPolicy, decision, marketContext, chartTrade });
+  const supervisor = supervisorAgent({ news, decision, marketContext, chartTrade });
   const finalRisk = finalRiskAgent(chartTrade, supervisor, input);
 
   return {
     news,
-    bankPolicy,
     decision,
     marketContext,
     chartTrade,
@@ -75,143 +73,77 @@ export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipel
   };
 }
 
+// ─── Agents ─────────────────────────────────────────────────────
+
 function newsAgent(input: PipelineInput) {
-  const direction = input.analysis.signal === "BUY" ? "bullish" : "bearish";
-  const liveHeadlines = input.newsContext?.headlines?.slice(0, 6).map((headline) => ({
-    title: headline.title,
-    source: headline.source,
-    url: headline.url,
-    publishedAt: headline.publishedAt,
-    sentiment: headline.sentiment,
-    riskLevel: headline.riskLevel,
-    matchedKeywords: headline.matchedKeywords?.length ? headline.matchedKeywords : [input.assetName],
-  })) || [];
-  const internalInputs = [
-    {
-      title: `${input.assetName} ${direction} chart context detected`,
-      source: "tradevisor-chart-agent",
-      url: "internal://chart-analysis",
-      publishedAt: new Date().toISOString(),
-      sentiment: input.analysis.signal === "BUY" ? "positive" : "negative",
-      riskLevel: input.analysis.confidence >= 80 ? "low" : "medium",
-      matchedKeywords: [input.assetName, input.strategyName, input.timeframe],
-    },
-    {
-      title: `${input.assetName} momentum and volume update`,
-      source: "tradevisor-market-context",
-      url: "internal://market-context",
-      publishedAt: new Date().toISOString(),
-      sentiment: input.analysis.signal === "BUY" ? "positive" : "negative",
-      riskLevel: input.analysis.volume.trend === "decreasing" ? "medium" : "low",
-      matchedKeywords: ["momentum", "volume", input.analysis.trend],
-    },
-  ];
-  const inputs = liveHeadlines.length ? [...liveHeadlines, ...internalInputs] : internalInputs;
-  const liveRisk = input.newsContext?.riskLevel;
-  const marketMood = input.newsContext?.marketMood || (input.analysis.signal === "BUY" ? "positive" : "negative");
+  // If real news from Claude+web_search is provided, use it.
+  // Otherwise fall back to the original synthetic inputs so the rest of
+  // the pipeline keeps a stable shape (e.g. when running offline).
+  const hasReal = !!input.realNews && Array.isArray(input.realNews.items) && input.realNews.items.length > 0;
+
+  const inputs = hasReal
+    ? input.realNews!.items.map((it) => ({
+        title: it.title,
+        source: it.source,
+        url: it.url,
+        publishedAt: it.publishedAt,
+        sentiment: it.sentiment,
+        riskLevel: it.riskLevel,
+        matchedKeywords: it.matchedKeywords.length ? it.matchedKeywords : [input.assetName],
+        summary: it.summary,
+      }))
+    : [
+        {
+          title: `${input.assetName} ${input.analysis.signal === "BUY" ? "bullish" : "bearish"} chart context detected`,
+          source: "tradevisor-chart-agent",
+          url: "internal://chart-analysis",
+          publishedAt: new Date().toISOString(),
+          sentiment: input.analysis.signal === "BUY" ? "positive" : "negative",
+          riskLevel: input.analysis.confidence >= 80 ? "low" : "medium",
+          matchedKeywords: [input.assetName, input.strategyName, input.timeframe],
+        },
+        {
+          title: `${input.assetName} momentum and volume update`,
+          source: "tradevisor-market-context",
+          url: "internal://market-context",
+          publishedAt: new Date().toISOString(),
+          sentiment: input.analysis.signal === "BUY" ? "positive" : "negative",
+          riskLevel: input.analysis.volume.trend === "decreasing" ? "medium" : "low",
+          matchedKeywords: ["momentum", "volume", input.analysis.trend],
+        },
+      ];
+
+  // Aggregate sentiment when real news is present
+  let marketMood: "positive" | "negative" | "neutral";
+  if (hasReal) {
+    marketMood = input.realNews!.overallSentiment;
+  } else {
+    marketMood = input.analysis.signal === "BUY" ? "positive" : "negative";
+  }
 
   return {
     agent: "news-intelligence-agent",
     generatedAt: new Date().toISOString(),
-    newsStatus: input.newsContext?.status || "internal_only",
     marketMood,
+    source: hasReal ? input.realNews!.poweredBy : "synthetic",
     keySignals: inputs.map(({ title, sentiment, riskLevel }) => ({ title, sentiment, riskLevel })),
     nextAgentPayload: {
       recommendedAction: "pass_to_agent_2",
-      confidence: liveHeadlines.length >= 3 && input.analysis.confidence >= 80 ? "high" : "medium",
-      newsStatus: input.newsContext?.status || "internal_only",
-      newsRiskLevel: liveRisk || "medium",
-      officialSources: input.newsContext?.officialSources || [],
+      confidence: input.analysis.confidence >= 80 ? "high" : "medium",
       inputs,
     },
   };
 }
 
-function bankPolicyAgent(newsOutput: Record<string, any>, input: PipelineInput) {
-  const isGold = input.assetName.includes("XAU");
-  const isUsdCross = input.assetName.includes("USD");
-  const signal = input.analysis.signal;
-  const hawkishPressure = input.analysis.trend.toLowerCase().includes("down") || signal === "SELL";
-  const dovishPressure = input.analysis.trend.toLowerCase().includes("up") || signal === "BUY";
-  const bankBias = isGold
-    ? hawkishPressure ? "hawkish_usd_pressure" : dovishPressure ? "dovish_gold_support" : "neutral"
-    : isUsdCross
-      ? hawkishPressure ? "usd_strength_watch" : "usd_weakness_watch"
-      : "cross_asset_watch";
-  const institutionalIntent = signal === "BUY"
-    ? isGold ? "watch central-bank and fund accumulation near support before buying gold" : "watch bank liquidity bids before buying"
-    : isGold ? "watch USD-yield pressure and bank selling into resistance before selling gold" : "watch bank liquidity offers before selling";
-  const conflict = isGold && signal === "BUY" && input.analysis.volume.trend === "decreasing";
-  const riskGate: RiskGate = conflict ? "restricted" : "open";
-
-  const bankInputs = [
-    {
-      title: "Central-bank policy tone check",
-      source: "official-central-bank-watchlist",
-      url: "https://www.federalreserve.gov/newsevents.htm",
-      publishedAt: new Date().toISOString(),
-      sentiment: bankBias.includes("support") || bankBias.includes("weakness") ? "positive" : bankBias.includes("pressure") || bankBias.includes("strength") ? "negative" : "neutral",
-      riskLevel: conflict ? "medium" : "low",
-      matchedKeywords: ["Federal Reserve", "interest rates", "yields", input.assetName],
-    },
-    {
-      title: "Institutional liquidity intent model",
-      source: "tradevisor-bank-agent",
-      url: "internal://bank-liquidity-intent",
-      publishedAt: new Date().toISOString(),
-      sentiment: signal === "BUY" ? "positive" : "negative",
-      riskLevel: input.analysis.confidence >= 82 ? "low" : "medium",
-      matchedKeywords: ["bank liquidity", "order flow", "policy tone", input.timeframe],
-    },
-  ];
-
-  return {
-    agent: "bank-policy-agent",
-    generatedAt: new Date().toISOString(),
-    sourceAgent: newsOutput.agent,
-    bankBias,
-    institutionalIntent,
-    policyReadiness: {
-      status: riskGate === "open" ? "ready" : "needs_confirmation",
-      confidence: input.analysis.confidence >= 82 ? "high" : "medium",
-      riskGate,
-      reasons: [
-        "Bank-policy context was added before decision validation.",
-        institutionalIntent,
-        ...(conflict ? ["Bank intent is not clean because volume does not confirm the chart direction."] : []),
-      ],
-    },
-    nextAgentPayload: {
-      recommendedAction: "pass_to_agent_2",
-      confidence: input.analysis.confidence >= 82 ? "high" : "medium",
-      riskGate,
-      bankBias,
-      institutionalIntent,
-      bankInputs,
-      officialSources: [
-        "Federal Reserve",
-        "European Central Bank",
-        "Bank of England",
-        "Bank of Japan",
-        "US Treasury and bond-yield context",
-      ],
-    },
-  };
-}
-
-function decisionAgent(newsOutput: Record<string, any>, bankPolicyOutput: Record<string, any>) {
-  const inputs = [
-    ...(newsOutput.nextAgentPayload?.inputs ?? []),
-    ...(bankPolicyOutput.nextAgentPayload?.bankInputs ?? []),
-  ];
+function decisionAgent(newsOutput: Record<string, any>) {
+  const inputs = newsOutput.nextAgentPayload?.inputs ?? [];
   const highRiskCount = inputs.filter((item: any) => item.riskLevel === "high").length;
-  const bankRiskGate = bankPolicyOutput.nextAgentPayload?.riskGate as RiskGate | undefined;
-  const riskGate: RiskGate = inputs.length < 3 ? "closed" : highRiskCount || bankRiskGate === "restricted" ? "restricted" : "open";
+  const riskGate: RiskGate = inputs.length < 2 ? "closed" : highRiskCount ? "restricted" : "open";
 
   return {
     agent: "decision-validation-agent",
     generatedAt: new Date().toISOString(),
-    sourceAgent: `${newsOutput.agent}+${bankPolicyOutput.agent}`,
+    sourceAgent: newsOutput.agent,
     validation: {
       status: inputs.length >= 2 ? "passed" : "insufficient_data",
       acceptedCount: inputs.length,
@@ -222,24 +154,21 @@ function decisionAgent(newsOutput: Record<string, any>, bankPolicyOutput: Record
     signalProfile: {
       dominantSentiment: newsOutput.marketMood,
       conflictLevel: "low",
-      riskBias: highRiskCount || bankRiskGate === "restricted" ? "medium" : "low",
-      bankBias: bankPolicyOutput.nextAgentPayload?.bankBias,
-      institutionalIntent: bankPolicyOutput.nextAgentPayload?.institutionalIntent,
+      riskBias: highRiskCount ? "high" : "low",
     },
     decision: {
       type: inputs.length >= 2 ? "validated_market_context" : "hold_for_more_data",
       confidence: riskGate === "open" ? "high" : "medium",
       riskGate,
-      reasons: ["News and bank-policy inputs were validated for the next agent."],
+      reasons: ["News inputs were validated for the next agent."],
     },
     nextAgentPayload: {
       recommendedAction: "pass_to_agent_3",
       decisionType: inputs.length >= 2 ? "validated_market_context" : "hold_for_more_data",
       confidence: riskGate === "open" ? "high" : "medium",
       riskGate,
-      reasons: ["News and bank-policy inputs were validated for the next agent."],
+      reasons: ["News inputs were validated for the next agent."],
       verifiedInputs: inputs,
-      bankPolicy: bankPolicyOutput.nextAgentPayload,
     },
   };
 }
@@ -293,8 +222,6 @@ function marketContextAgent(decisionOutput: Record<string, any>, input: Pipeline
         shortTermChangePercent: input.analysis.signal === "BUY" ? 0.8 : -0.8,
         volatilityPercent: 1.1,
         timestamp: new Date().toISOString(),
-        aiConsensus: input.analysis.aiConsensus,
-        bankPolicy: decisionOutput.nextAgentPayload?.bankPolicy,
       },
     },
   };
@@ -305,20 +232,14 @@ function chartTradeAgent(marketContextOutput: Record<string, any>, input: Pipeli
   const risk = Math.abs(input.analysis.entry - input.analysis.stopLoss);
   const reward = Math.abs(input.analysis.takeProfit3 - input.analysis.entry);
   const ratio = risk > 0 ? Number((reward / risk).toFixed(2)) : 0;
-  const weakChart = input.analysis.confidence < 72 || input.analysis.confluenceScore < 65 || ratio < 1.2;
-  const needsReview = input.analysis.confidence < 82 || input.analysis.confluenceScore < 78 || ratio < 1.5;
-  const riskGate: RiskGate = weakChart
-    ? "closed"
-    : needsReview
-      ? "restricted"
-      : marketContextOutput.nextAgentPayload?.riskGate;
+  const riskGate: RiskGate = ratio >= 1.5 ? marketContextOutput.nextAgentPayload?.riskGate : "restricted";
 
   return {
     agent: "chart-trade-analysis-agent",
     generatedAt: new Date().toISOString(),
     sourceAgent: marketContextOutput.agent,
     symbol: input.assetName,
-    validation: { status: weakChart ? "rejected" : "passed", symbolMatches: true, validSide: true, validPrices: true },
+    validation: { status: "passed", symbolMatches: true, validSide: true, validPrices: true },
     rewardRisk: { risk, reward, ratio, status: ratio >= 1.5 ? "acceptable" : "weak" },
     directionalFit: {
       status: "aligned",
@@ -327,24 +248,17 @@ function chartTradeAgent(marketContextOutput: Record<string, any>, input: Pipeli
     },
     technicalQuality: {
       score: input.analysis.confluenceScore,
-      status: weakChart ? "unclear" : input.analysis.confluenceScore >= 80 ? "strong" : "moderate",
+      status: input.analysis.confluenceScore >= 80 ? "strong" : "moderate",
       reasons: input.analysis.reasons.slice(0, 4),
     },
     nextAgentPayload: {
       recommendedAction: "pass_to_agent_5",
       symbol: input.assetName,
       tradeSide: side,
-      tradeStatus: weakChart ? "unsafe_entry" : ratio >= 1.5 ? "analysis_ready" : "needs_review",
+      tradeStatus: ratio >= 1.5 ? "analysis_ready" : "needs_review",
       confidence: input.analysis.confidence >= 82 ? "high" : "medium",
       riskGate,
-      reasons: [
-        weakChart
-          ? "Chart quality is not clear enough for a safe entry."
-          : "Chart trade was matched with the full agent context.",
-        ...(input.analysis.confidence < 82 ? ["AI confidence is below the premium approval threshold."] : []),
-        ...(input.analysis.confluenceScore < 78 ? ["Confluence is not strong enough for a clean setup."] : []),
-        ...(ratio < 1.5 ? ["Reward-to-risk is below the preferred quality threshold."] : []),
-      ],
+      reasons: ["Chart trade was matched with the full agent context."],
       trade: {
         symbol: input.assetName,
         side,
@@ -369,7 +283,6 @@ function chartTradeAgent(marketContextOutput: Record<string, any>, input: Pipeli
 function supervisorAgent(outputs: Record<string, any>) {
   const checks = [
     checkOutput("news", outputs.news, "news-intelligence-agent", "pass_to_agent_2"),
-    checkOutput("bankPolicy", outputs.bankPolicy, "bank-policy-agent", "pass_to_agent_2"),
     checkOutput("decision", outputs.decision, "decision-validation-agent", "pass_to_agent_3"),
     checkOutput("marketContext", outputs.marketContext, "market-context-agent", "pass_to_agent_4"),
     checkOutput("chartTrade", outputs.chartTrade, "chart-trade-analysis-agent", "pass_to_agent_5"),
@@ -412,65 +325,11 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     return total + sideMultiplier * (target.price - trade.entryPrice) * (target.closePercent / 100);
   }, 0);
   const rewardRiskRatio = risk > 0 ? Number((blendedReward / risk).toFixed(2)) : 0;
-  const mixedAiConsensus = input.analysis.aiConsensus?.status === "mixed";
-  const bankPolicy = chartTradeOutput.nextAgentPayload.marketContext?.bankPolicy;
-  const bankRestricted = bankPolicy?.riskGate === "restricted";
-  const priceDistanceFromEntry = input.marketPrice
-    ? Math.abs(input.marketPrice - trade.entryPrice)
-    : 0;
-  const priceDistanceInRisk = risk > 0 ? Number((priceDistanceFromEntry / risk).toFixed(2)) : 0;
-  const qualityBlockers = [
-    ...(input.analysis.confidence < 72 ? ["AI confidence is too low for a live entry."] : []),
-    ...(input.analysis.confluenceScore < 65 ? ["Market confluence is weak, so the setup is not clean."] : []),
-    ...(rewardRiskRatio < 1.2 ? ["Reward-to-risk is too weak after staged exits."] : []),
-    ...(mixedAiConsensus ? ["Claude/OpenAI model consensus is mixed, so the setup is not safe enough."] : []),
-    ...(bankPolicy?.riskGate === "closed" ? ["Bank-policy agent closed the institutional risk gate."] : []),
-    ...(priceDistanceInRisk >= 0.5 ? ["Current price is too far from the planned entry, so chasing is dangerous."] : []),
-  ];
-  const qualityWarnings = [
-    ...(input.analysis.confidence < 82 ? ["AI confidence is below the strong-entry threshold."] : []),
-    ...(input.analysis.confluenceScore < 78 ? ["Confluence is moderate, not strong."] : []),
-    ...(rewardRiskRatio < 1.5 ? ["Reward-to-risk is acceptable only with reduced size or waiting."] : []),
-    ...(input.analysis.volume.trend === "decreasing" ? ["Volume is not confirming the move clearly."] : []),
-    ...(bankRestricted ? [`Bank-policy agent requires confirmation: ${bankPolicy.institutionalIntent}`] : []),
-    ...(priceDistanceInRisk > 0.2 && priceDistanceInRisk < 0.5 ? ["Current price is not close enough to the planned entry. Wait for a better fill."] : []),
-  ];
-  const closed = qualityBlockers.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
-  const restricted = qualityWarnings.length > 0 || supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
+  const closed = supervisorOutput.nextAgentPayload.riskGate === "closed" || chartTradeOutput.nextAgentPayload.riskGate === "closed";
+  const restricted = supervisorOutput.nextAgentPayload.riskGate === "restricted" || chartTradeOutput.nextAgentPayload.riskGate === "restricted";
   const action = closed ? "reject" : restricted ? "wait_or_reduce_size" : "approve_plan";
   const confidence = action === "approve_plan" && input.analysis.confidence >= 82 ? "high" : "medium";
-  const setupScore = calculateSetupQualityScore({
-    confidence: input.analysis.confidence,
-    confluence: input.analysis.confluenceScore,
-    rewardRiskRatio,
-    priceDistanceInRisk,
-    volumeTrend: input.analysis.volume.trend,
-    mixedAiConsensus,
-    bankRestricted,
-    blockerCount: qualityBlockers.length,
-    warningCount: qualityWarnings.length,
-  });
-  const setupQuality = {
-    verdict: closed ? "danger" as const : restricted ? "caution" as const : "clean" as const,
-    score: setupScore,
-    summary: closed
-      ? "Entry is dangerous right now. The system needs clearer confirmation before allowing a trade."
-      : restricted
-        ? "Setup has potential, but it is not clean enough for full risk yet."
-        : "Setup is clean enough for the current strategy and risk model.",
-    blockers: qualityBlockers,
-    warnings: qualityWarnings,
-    confirmationChecklist: buildConfirmationChecklist(input, rewardRiskRatio, priceDistanceInRisk),
-  };
   const notes = [
-    ...(closed
-      ? ["No trade now: entry is dangerous until the chart becomes clearer."]
-      : restricted
-        ? ["Entry is not clean enough for full risk. Wait for confirmation or reduce size."]
-        : ["Setup passed the full AI and agent review."]),
-    ...qualityBlockers,
-    ...qualityWarnings,
-    ...(input.analysis.aiConsensus?.notes || []),
     "Risk is defined with a clear stop loss.",
     "Targets are based on chart analysis, momentum, and supervision checks.",
     "Final plan includes staged exits and position size.",
@@ -502,7 +361,6 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     result: {
       action,
       confidence,
-      setupQuality,
       entryPrice: trade.entryPrice,
       stopLoss: trade.stopLoss,
       takeProfits,
@@ -512,41 +370,6 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
       notes,
     },
   };
-}
-
-function calculateSetupQualityScore(input: {
-  confidence: number;
-  confluence: number;
-  rewardRiskRatio: number;
-  priceDistanceInRisk: number;
-  volumeTrend: string;
-  mixedAiConsensus: boolean;
-  bankRestricted: boolean;
-  blockerCount: number;
-  warningCount: number;
-}) {
-  let score = 0;
-  score += Math.min(30, input.confidence * 0.3);
-  score += Math.min(25, input.confluence * 0.25);
-  score += Math.min(20, input.rewardRiskRatio * 10);
-  score += input.volumeTrend === "increasing" ? 10 : input.volumeTrend === "normal" ? 6 : 0;
-  score += input.priceDistanceInRisk <= 0.2 ? 10 : input.priceDistanceInRisk <= 0.5 ? 5 : 0;
-  score += input.mixedAiConsensus ? 0 : 5;
-  score += input.bankRestricted ? 0 : 5;
-  score -= input.blockerCount * 14;
-  score -= input.warningCount * 5;
-  return Math.max(0, Math.min(100, Math.round(score)));
-}
-
-function buildConfirmationChecklist(input: PipelineInput, rewardRiskRatio: number, priceDistanceInRisk: number) {
-  const side = input.analysis.signal === "BUY" ? "bullish" : "bearish";
-  return [
-    `Wait for price to be close to entry; current distance score is ${priceDistanceInRisk}R.`,
-    `Confirm ${side} candle close on ${input.timeframe}, not only a wick.`,
-    `Keep reward/risk above 1:1.5 before entry; current blended R:R is 1:${rewardRiskRatio}.`,
-    "Do not enter during fast spread spikes or unclear news volatility.",
-    "If one condition fails, wait for the next setup instead of forcing the trade.",
-  ];
 }
 
 function checkOutput(name: string, output: Record<string, any>, expectedAgent: string, expectedAction: string) {

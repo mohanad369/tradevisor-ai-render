@@ -1,244 +1,200 @@
-type NewsSentiment = "positive" | "negative" | "neutral";
-type NewsRiskLevel = "low" | "medium" | "high";
+/*
+ * api/lib/news.ts — Real-world News Agent via Claude + web_search tool
+ *
+ * Uses Anthropic's built-in web_search tool so Claude can fetch live news
+ * for an asset (e.g. "XAU/USD", "BTC/USD", "EUR/USD") and return a
+ * structured list of headlines + sentiment.
+ *
+ * Cache: in-memory, 5 min TTL per (symbol, lookbackHours) — search calls
+ * are not free; this keeps cost reasonable.
+ */
 
-export interface MarketNewsItem {
+import { env } from "./env";
+
+const API_URL = "https://api.anthropic.com/v1/messages";
+const MODEL = process.env.ANTHROPIC_NEWS_MODEL || "claude-sonnet-4-5";
+const TIMEOUT_MS = 30_000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_SEARCH_USES = 3;
+
+export interface NewsItem {
   title: string;
   source: string;
   url: string;
   publishedAt: string;
-  sentiment: NewsSentiment;
-  riskLevel: NewsRiskLevel;
+  sentiment: "positive" | "negative" | "neutral";
+  riskLevel: "low" | "medium" | "high";
   matchedKeywords: string[];
+  summary?: string;
 }
 
-export interface MarketNewsContext {
-  assetName: string;
-  generatedAt: string;
-  source: string;
-  status: "live" | "fallback";
-  marketMood: NewsSentiment;
-  riskLevel: NewsRiskLevel;
-  headlines: MarketNewsItem[];
-  officialSources: string[];
+export interface NewsResult {
+  symbol: string;
+  fetchedAt: string;
+  overallSentiment: "positive" | "negative" | "neutral";
+  marketMood: string;
+  items: NewsItem[];
+  poweredBy: "claude-web-search" | "fallback";
 }
 
-type GdeltArticle = {
-  title?: string;
-  url?: string;
-  domain?: string;
-  seendate?: string;
-  sourcecountry?: string;
-  language?: string;
-};
+const cache = new Map<string, { data: NewsResult; expiresAt: number }>();
 
-const GDELT_DOC_URL = "https://api.gdeltproject.org/api/v2/doc/doc";
-const GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search";
-const NEWS_CACHE_MS = 2 * 60 * 1000;
-const newsCache = new Map<string, { value: MarketNewsContext; fetchedAt: number }>();
-
-export async function fetchMarketNewsContext(assetName: string): Promise<MarketNewsContext> {
-  const normalizedAsset = normalizeAssetName(assetName);
-  const cached = newsCache.get(normalizedAsset);
-  if (cached && Date.now() - cached.fetchedAt < NEWS_CACHE_MS) {
-    return cached.value;
+function extractJson(text: string): any | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) {
+    try { return JSON.parse(fenced[1].trim()); } catch { /* fall */ }
   }
-
-  try {
-    const query = buildNewsQuery(normalizedAsset);
-    const url = new URL(GDELT_DOC_URL);
-    url.searchParams.set("query", query);
-    url.searchParams.set("mode", "ArtList");
-    url.searchParams.set("format", "json");
-    url.searchParams.set("maxrecords", "12");
-    url.searchParams.set("sort", "HybridRel");
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(url, {
-      headers: { "user-agent": "TradevisorAI/1.0 market-news-agent" },
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
-
-    if (!response.ok) throw new Error(`GDELT ${response.status}`);
-    const data = await response.json() as { articles?: GdeltArticle[] };
-    const headlines = (data.articles || [])
-      .filter((article) => article.title && article.url)
-      .slice(0, 8)
-      .map((article) => classifyArticle(article, normalizedAsset));
-
-    const context = buildContext(normalizedAsset, headlines, "live", "gdelt-doc-api");
-    newsCache.set(normalizedAsset, { value: context, fetchedAt: Date.now() });
-    return context;
-  } catch (error) {
-    console.warn("[NewsAgent] live news fetch failed", error instanceof Error ? error.message : String(error));
-    const rssHeadlines = await fetchGoogleNewsRss(normalizedAsset).catch((rssError) => {
-      console.warn("[NewsAgent] Google News RSS failed", rssError instanceof Error ? rssError.message : String(rssError));
-      return [];
-    });
-    const context = rssHeadlines.length
-      ? buildContext(normalizedAsset, rssHeadlines, "live", "google-news-rss")
-      : buildContext(normalizedAsset, buildFallbackHeadlines(normalizedAsset), "fallback", "tradevisor-fallback");
-    newsCache.set(normalizedAsset, { value: context, fetchedAt: Date.now() });
-    return context;
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)); } catch { return null; }
+      }
+    }
   }
+  return null;
 }
 
-function normalizeAssetName(assetName: string) {
-  return assetName || "XAU/USD";
-}
-
-function buildNewsQuery(assetName: string) {
-  if (assetName.toUpperCase().includes("XAU") || assetName.toLowerCase().includes("gold")) {
-    return `("gold" OR XAUUSD OR "XAU/USD") ("Federal Reserve" OR inflation OR yields OR dollar OR "central bank" OR "US Treasury")`;
-  }
-  if (assetName.toUpperCase().includes("BTC")) {
-    return `("bitcoin" OR BTC) ("ETF" OR regulation OR liquidity OR dollar OR "Federal Reserve")`;
-  }
-  if (assetName.toUpperCase().includes("ETH")) {
-    return `("ethereum" OR ETH) ("ETF" OR regulation OR liquidity OR dollar OR "Federal Reserve")`;
-  }
-  return `("${assetName}" OR forex OR currency) ("central bank" OR inflation OR rates OR dollar OR yields)`;
-}
-
-function classifyArticle(article: GdeltArticle, assetName: string): MarketNewsItem {
-  const title = cleanText(article.title || "Market update");
-  const text = title.toLowerCase();
-  const positiveWords = ["dovish", "cut", "support", "rally", "rise", "gains", "safe haven", "weak dollar", "inflation fears"];
-  const negativeWords = ["hawkish", "hike", "strong dollar", "yields rise", "selloff", "falls", "drops", "pressure", "risk-on"];
-  const highRiskWords = ["fed", "federal reserve", "cpi", "inflation", "jobs", "payrolls", "war", "geopolitical", "rate decision"];
-  const matchedKeywords = [
-    assetName,
-    ...positiveWords.filter((word) => text.includes(word)),
-    ...negativeWords.filter((word) => text.includes(word)),
-    ...highRiskWords.filter((word) => text.includes(word)),
-  ].slice(0, 8);
-  const positiveScore = positiveWords.filter((word) => text.includes(word)).length;
-  const negativeScore = negativeWords.filter((word) => text.includes(word)).length;
-  const sentiment: NewsSentiment = positiveScore > negativeScore ? "positive" : negativeScore > positiveScore ? "negative" : "neutral";
-  const riskLevel: NewsRiskLevel = highRiskWords.some((word) => text.includes(word)) ? "high" : matchedKeywords.length > 2 ? "medium" : "low";
-
+function fallback(symbol: string, reason: string): NewsResult {
+  console.warn(`[news] fallback (${reason}) for ${symbol}`);
   return {
-    title,
-    source: article.domain || "gdelt-news",
-    url: article.url || "",
-    publishedAt: normalizeGdeltDate(article.seendate),
-    sentiment,
-    riskLevel,
-    matchedKeywords,
+    symbol,
+    fetchedAt: new Date().toISOString(),
+    overallSentiment: "neutral",
+    marketMood: "neutral",
+    items: [],
+    poweredBy: "fallback",
   };
 }
 
-async function fetchGoogleNewsRss(assetName: string): Promise<MarketNewsItem[]> {
-  const url = new URL(GOOGLE_NEWS_RSS_URL);
-  url.searchParams.set("q", buildGoogleNewsQuery(assetName));
-  url.searchParams.set("hl", "en-US");
-  url.searchParams.set("gl", "US");
-  url.searchParams.set("ceid", "US:en");
+/**
+ * Fetch real news for an asset. Symbol can be "XAU/USD", "BTC", "EUR/USD",
+ * "Gold", etc. — Claude will normalize during the search.
+ */
+export async function fetchAssetNews(
+  symbol: string,
+  lookbackHours = 24,
+): Promise<NewsResult> {
+  const key = `${symbol}::${lookbackHours}`;
+  const hit = cache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.data;
+
+  if (!env.ANTHROPIC_API_KEY) return fallback(symbol, "no API key");
+
+  const system = `You are a financial news aggregator. Use the web_search tool to find the most relevant trading-impact news for the given asset published in the last ${lookbackHours} hours. Then return STRICT JSON only (no prose outside the JSON).
+
+Sentiment rules:
+- "positive" = bullish for the asset
+- "negative" = bearish for the asset
+- "neutral" = mixed or factual without directional bias
+
+Risk rules:
+- "high" = central bank decision, geopolitical shock, major regulatory news
+- "medium" = data release (CPI, NFP), earnings, sector trend
+- "low" = routine market commentary
+
+Return between 3 and 6 items. Skip duplicates and low-quality sources.`;
+
+  const userPrompt = `Find the latest market-moving news for ${symbol} from the last ${lookbackHours} hours.
+
+Return EXACTLY this JSON shape:
+{
+  "symbol": "${symbol}",
+  "overallSentiment": "positive" | "negative" | "neutral",
+  "marketMood": "<one short sentence>",
+  "items": [
+    {
+      "title": "<headline>",
+      "source": "<publisher name>",
+      "url": "<canonical URL>",
+      "publishedAt": "<ISO 8601 datetime>",
+      "sentiment": "positive" | "negative" | "neutral",
+      "riskLevel": "low" | "medium" | "high",
+      "matchedKeywords": ["<kw1>", "<kw2>"],
+      "summary": "<1-2 sentence summary>"
+    }
+  ]
+}`;
+
+  const body = {
+    model: MODEL,
+    max_tokens: 4000,
+    system,
+    tools: [
+      {
+        type: "web_search_20250305",
+        name: "web_search",
+        max_uses: MAX_SEARCH_USES,
+      },
+    ],
+    messages: [{ role: "user", content: userPrompt }],
+  };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-  const response = await fetch(url, {
-    headers: { "user-agent": "TradevisorAI/1.0 market-news-agent" },
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout));
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  if (!response.ok) throw new Error(`Google News RSS ${response.status}`);
-  const xml = await response.text();
-  return parseGoogleNewsItems(xml, assetName).slice(0, 8);
-}
-
-function buildGoogleNewsQuery(assetName: string) {
-  if (assetName.toUpperCase().includes("XAU") || assetName.toLowerCase().includes("gold")) {
-    return `gold XAUUSD Federal Reserve dollar yields inflation`;
-  }
-  if (assetName.toUpperCase().includes("BTC")) return `bitcoin BTC ETF regulation liquidity Federal Reserve`;
-  if (assetName.toUpperCase().includes("ETH")) return `ethereum ETH ETF regulation liquidity Federal Reserve`;
-  return `${assetName} forex central bank rates dollar yields`;
-}
-
-function parseGoogleNewsItems(xml: string, assetName: string): MarketNewsItem[] {
-  const itemMatches = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)];
-  return itemMatches.map((match) => {
-    const block = match[1] || "";
-    const title = decodeXml(readXmlTag(block, "title") || "Market update");
-    const url = decodeXml(readXmlTag(block, "link") || "");
-    const source = decodeXml(readXmlTag(block, "source") || extractDomain(url) || "google-news");
-    const publishedAt = normalizeGdeltDate(decodeXml(readXmlTag(block, "pubDate") || ""));
-    return classifyArticle({ title, url, domain: source, seendate: publishedAt }, assetName);
-  }).filter((item) => item.title && item.url);
-}
-
-function readXmlTag(block: string, tag: string) {
-  const match = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return match?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, "").trim();
-}
-
-function decodeXml(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'");
-}
-
-function extractDomain(value: string) {
   try {
-    return new URL(value).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.error(`[news] API error ${res.status}: ${t.slice(0, 300)}`);
+      return fallback(symbol, `http ${res.status}`);
+    }
+
+    const data = (await res.json()) as any;
+
+    // Claude returns an array of content blocks; the final assistant text
+    // is the last block with type "text".
+    const textBlocks: string[] = (data?.content || [])
+      .filter((b: any) => b?.type === "text" && typeof b?.text === "string")
+      .map((b: any) => b.text);
+    const fullText = textBlocks.join("\n");
+
+    const parsed = extractJson(fullText);
+    if (!parsed || !Array.isArray(parsed.items)) {
+      console.error("[news] couldn't parse JSON. Raw:", fullText.slice(0, 500));
+      return fallback(symbol, "parse error");
+    }
+
+    const result: NewsResult = {
+      symbol,
+      fetchedAt: new Date().toISOString(),
+      overallSentiment: parsed.overallSentiment || "neutral",
+      marketMood: parsed.marketMood || "neutral",
+      items: parsed.items.slice(0, 6).map((it: any) => ({
+        title: String(it.title || "").slice(0, 300),
+        source: String(it.source || "unknown"),
+        url: String(it.url || ""),
+        publishedAt: String(it.publishedAt || new Date().toISOString()),
+        sentiment: ["positive", "negative", "neutral"].includes(it.sentiment) ? it.sentiment : "neutral",
+        riskLevel: ["low", "medium", "high"].includes(it.riskLevel) ? it.riskLevel : "medium",
+        matchedKeywords: Array.isArray(it.matchedKeywords) ? it.matchedKeywords.slice(0, 6).map(String) : [],
+        summary: it.summary ? String(it.summary).slice(0, 600) : undefined,
+      })),
+      poweredBy: "claude-web-search",
+    };
+
+    cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
+    return result;
+  } catch (err: any) {
+    if (err?.name === "AbortError") return fallback(symbol, "timeout");
+    console.error("[news] request failed:", err?.message || err);
+    return fallback(symbol, "exception");
+  } finally {
+    clearTimeout(timeout);
   }
-}
-
-function buildContext(assetName: string, headlines: MarketNewsItem[], status: "live" | "fallback", sourceName: string): MarketNewsContext {
-  const positive = headlines.filter((item) => item.sentiment === "positive").length;
-  const negative = headlines.filter((item) => item.sentiment === "negative").length;
-  const highRisk = headlines.filter((item) => item.riskLevel === "high").length;
-  const mediumRisk = headlines.filter((item) => item.riskLevel === "medium").length;
-  const marketMood: NewsSentiment = positive > negative ? "positive" : negative > positive ? "negative" : "neutral";
-  const riskLevel: NewsRiskLevel = highRisk ? "high" : mediumRisk >= 2 ? "medium" : "low";
-  const officialSources = headlines
-    .map((item) => item.source)
-    .filter((source) => /federalreserve|ecb\.europa|bankofengland|boj\.or|treasury\.gov/i.test(source))
-    .slice(0, 4);
-
-  return {
-    assetName,
-    generatedAt: new Date().toISOString(),
-    source: sourceName,
-    status,
-    marketMood,
-    riskLevel,
-    headlines,
-    officialSources,
-  };
-}
-
-function buildFallbackHeadlines(assetName: string): MarketNewsItem[] {
-  return [
-    {
-      title: `${assetName} news feed temporarily unavailable; using conservative internal risk mode`,
-      source: "tradevisor-news-fallback",
-      url: "internal://news-fallback",
-      publishedAt: new Date().toISOString(),
-      sentiment: "neutral",
-      riskLevel: "medium",
-      matchedKeywords: [assetName, "fallback", "risk"],
-    },
-  ];
-}
-
-function normalizeGdeltDate(value: string | undefined) {
-  if (!value) return new Date().toISOString();
-  const compact = value.replace(/\D/g, "");
-  if (compact.length >= 14) {
-    const iso = `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}T${compact.slice(8, 10)}:${compact.slice(10, 12)}:${compact.slice(12, 14)}Z`;
-    return Number.isNaN(Date.parse(iso)) ? new Date().toISOString() : iso;
-  }
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString();
-}
-
-function cleanText(value: string) {
-  return value.replace(/\s+/g, " ").trim().slice(0, 180);
 }
