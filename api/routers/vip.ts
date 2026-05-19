@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { db } from "../../db/db";
 import { paymentInvoices, vipPayments, vipSubscribers, vipCodes, vipSessions, referrals } from "../../db/schema";
 import { replaceAllCodes as replaceAllCodesHelper, replenishPool } from "../../db/seed";
-import { createRouter, publicQuery } from "../middleware";
+import { adminQuery, createRouter, publicQuery } from "../middleware";
 import { createNowPaymentsInvoice, isNowPaymentsConfigured } from "../lib/nowpayments";
 
 function generateUUID(): string {
-  return 'sub_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+  return `sub_${randomBytes(18).toString("base64url")}`;
 }
 
 /** "Monthly" → "monthly"; "VIP Yearly" → "yearly"; everything else defaults to yearly */
@@ -126,11 +127,11 @@ export const vipRouter = createRouter({
       }
     }),
 
-  getPayments: publicQuery.query(async () => {
+  getPayments: adminQuery.query(async () => {
     return await db.select().from(vipPayments).orderBy(desc(vipPayments.submittedAt));
   }),
 
-  getPendingPayments: publicQuery.query(async () => {
+  getPendingPayments: adminQuery.query(async () => {
     return await db.select().from(vipPayments)
       .where(eq(vipPayments.status, "PENDING"))
       .orderBy(desc(vipPayments.submittedAt));
@@ -138,7 +139,7 @@ export const vipRouter = createRouter({
 
   // FIX: now picks a code matching the plan type (monthly vs yearly)
   //      and auto-replenishes the pool when it runs low.
-  approvePayment: publicQuery
+  approvePayment: adminQuery
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {
       const [payment] = await db.select().from(vipPayments)
@@ -194,7 +195,7 @@ export const vipRouter = createRouter({
       return { success: true, code: availableCode.code, email: payment.email, codeType };
     }),
 
-  rejectPayment: publicQuery
+  rejectPayment: adminQuery
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(vipPayments)
@@ -203,27 +204,30 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  deletePayment: publicQuery
+  deletePayment: adminQuery
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {
       await db.delete(vipPayments).where(eq(vipPayments.orderId, input.orderId));
       return { success: true };
     }),
 
-  getSubscribers: publicQuery.query(async () => {
+  getSubscribers: adminQuery.query(async () => {
     return await db.select().from(vipSubscribers).orderBy(desc(vipSubscribers.startDate));
   }),
 
-  revokeSubscriber: publicQuery
+  revokeSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(vipSubscribers)
         .set({ status: "REVOKED" })
         .where(eq(vipSubscribers.subscriberId, input.subscriberId));
+      await db.update(vipSessions)
+        .set({ active: false })
+        .where(eq(vipSessions.subscriberId, input.subscriberId));
       return { success: true };
     }),
 
-  reactivateSubscriber: publicQuery
+  reactivateSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(vipSubscribers)
@@ -232,7 +236,7 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  renewSubscriber: publicQuery
+  renewSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       const [sub] = await db.select().from(vipSubscribers)
@@ -240,7 +244,8 @@ export const vipRouter = createRouter({
       if (!sub) return { success: false };
 
       const isYearly = sub.plan.toLowerCase().includes("year");
-      const newEnd = sub.endDate ? new Date(sub.endDate) : new Date();
+      const currentEnd = sub.endDate ? new Date(sub.endDate) : new Date();
+      const newEnd = currentEnd > new Date() ? currentEnd : new Date();
       newEnd.setMonth(newEnd.getMonth() + (isYearly ? 12 : 1));
 
       await db.update(vipSubscribers)
@@ -250,7 +255,7 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  deleteSubscriber: publicQuery
+  deleteSubscriber: adminQuery
     .input(z.object({ subscriberId: z.string() }))
     .mutation(async ({ input }) => {
       const [sub] = await db.select().from(vipSubscribers)
@@ -264,6 +269,9 @@ export const vipRouter = createRouter({
 
       await db.delete(vipSubscribers)
         .where(eq(vipSubscribers.subscriberId, input.subscriberId));
+      await db.update(vipSessions)
+        .set({ active: false })
+        .where(eq(vipSessions.subscriberId, input.subscriberId));
 
       return { success: true };
     }),
@@ -271,7 +279,7 @@ export const vipRouter = createRouter({
   // ─── Code Pool Endpoints ───
 
   /** All codes, optionally filtered by type. Ordered for stable UI display. */
-  getCodes: publicQuery
+  getCodes: adminQuery
     .input(z.object({ codeType: z.enum(["monthly", "yearly"]).optional() }).optional())
     .query(async ({ input }) => {
       if (input?.codeType) {
@@ -287,7 +295,7 @@ export const vipRouter = createRouter({
    * only deletes unused codes so active subscribers aren't broken).
    * Pass `force: true` to wipe everything including assigned codes.
    */
-  replaceAllCodes: publicQuery
+  replaceAllCodes: adminQuery
     .input(z.object({
       codeType: z.enum(["monthly", "yearly"]).optional(),
       count: z.number().int().positive().max(1000).optional(),
@@ -313,7 +321,7 @@ export const vipRouter = createRouter({
     }),
 
   /** Dedicated endpoints — clearer for the admin UI buttons. */
-  replaceMonthlyCodes: publicQuery
+  replaceMonthlyCodes: adminQuery
     .input(z.object({ count: z.number().int().positive().max(1000).optional() }).optional())
     .mutation(async ({ input }) => {
       const result = await replaceAllCodesHelper({
@@ -323,7 +331,7 @@ export const vipRouter = createRouter({
       return { success: true, count: result.created, deleted: result.deleted };
     }),
 
-  replaceYearlyCodes: publicQuery
+  replaceYearlyCodes: adminQuery
     .input(z.object({ count: z.number().int().positive().max(1000).optional() }).optional())
     .mutation(async ({ input }) => {
       const result = await replaceAllCodesHelper({
@@ -393,7 +401,7 @@ export const vipRouter = createRouter({
 
       await db.update(vipSessions).set({ active: false }).where(eq(vipSessions.subscriberId, sub.subscriberId));
 
-      const sessionToken = "sess_" + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+      const sessionToken = `sess_${randomBytes(24).toString("base64url")}`;
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
 
@@ -433,65 +441,13 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  getSessions: publicQuery.query(async () => {
+  getSessions: adminQuery.query(async () => {
     return await db.select().from(vipSessions).where(eq(vipSessions.active, true)).orderBy(desc(vipSessions.lastSeenAt));
   }),
 
-  // ─── Developer Access — bypass with hardcoded master code ───
-  devAccess: publicQuery
-    .input(z.object({ devCode: z.string() }))
-    .mutation(async ({ input }) => {
-      if (input.devCode !== "TRADEVISOR2024") {
-        return { success: false, error: "Invalid developer code" };
-      }
-      const DEV_EMAIL = "dev@tradevisor.ai";
-      const [existing] = await db.select().from(vipSubscribers)
-        .where(eq(vipSubscribers.email, DEV_EMAIL));
-
-      if (existing && existing.status === "ACTIVE" && existing.endDate && new Date(existing.endDate) > new Date()) {
-        return { success: true, email: existing.email, code: existing.code, expires: existing.endDate };
-      }
-
-      let code = existing?.code;
-      if (!code) {
-        // Dev gets a yearly code by convention
-        const [availableCode] = await db.select().from(vipCodes)
-          .where(and(eq(vipCodes.used, false), eq(vipCodes.codeType, "yearly")))
-          .limit(1);
-        if (!availableCode) return { success: false, error: "No codes available" };
-        code = availableCode.code;
-        await db.update(vipCodes)
-          .set({ used: true, assignedTo: DEV_EMAIL })
-          .where(eq(vipCodes.id, availableCode.id));
-      }
-
-      if (existing) {
-        await db.delete(vipSubscribers).where(eq(vipSubscribers.subscriberId, existing.subscriberId));
-      }
-
-      const now = new Date();
-      const endDate = new Date();
-      endDate.setMonth(now.getMonth() + 12);
-
-      await db.insert(vipSubscribers).values({
-        subscriberId: generateUUID(),
-        orderId: "DEV-" + Date.now(),
-        email: DEV_EMAIL,
-        code,
-        plan: "Developer (Lifetime)",
-        amount: "$0",
-        txId: "DEV-MODE",
-        status: "ACTIVE",
-        startDate: now,
-        endDate,
-      });
-
-      return { success: true, email: DEV_EMAIL, code, expires: endDate };
-    }),
-
   // ─── Referral / Partner Program ───
 
-  grantVipGift: publicQuery
+  grantVipGift: adminQuery
     .input(z.object({
       email: z.string().email(),
       months: z.number().int().min(1).max(12).default(1),
@@ -579,17 +535,17 @@ export const vipRouter = createRouter({
       }
     }),
 
-  getReferrals: publicQuery.query(async () => {
+  getReferrals: adminQuery.query(async () => {
     return await db.select().from(referrals).orderBy(desc(referrals.submittedAt));
   }),
 
-  getPendingReferrals: publicQuery.query(async () => {
+  getPendingReferrals: adminQuery.query(async () => {
     return await db.select().from(referrals)
       .where(eq(referrals.status, "PENDING"))
       .orderBy(desc(referrals.submittedAt));
   }),
 
-  approveReferral: publicQuery
+  approveReferral: adminQuery
     .input(z.object({ referralId: z.string() }))
     .mutation(async ({ input }) => {
       const [ref] = await db.select().from(referrals)
@@ -623,7 +579,7 @@ export const vipRouter = createRouter({
       return { success: true, referrerEmail: ref.referrerEmail };
     }),
 
-  rejectReferral: publicQuery
+  rejectReferral: adminQuery
     .input(z.object({ referralId: z.string() }))
     .mutation(async ({ input }) => {
       await db.update(referrals)
@@ -632,7 +588,7 @@ export const vipRouter = createRouter({
       return { success: true };
     }),
 
-  deleteReferral: publicQuery
+  deleteReferral: adminQuery
     .input(z.object({ referralId: z.string() }))
     .mutation(async ({ input }) => {
       await db.delete(referrals).where(eq(referrals.referralId, input.referralId));
@@ -656,7 +612,7 @@ export const vipRouter = createRouter({
 
   // FIX: now also returns split monthly/yearly counts so the admin UI
   //      can finally read these from the DB instead of localStorage.
-  getStats: publicQuery.query(async () => {
+  getStats: adminQuery.query(async () => {
     const payments = await db.select().from(vipPayments);
     const subscribers = await db.select().from(vipSubscribers);
     const codes = await db.select().from(vipCodes);

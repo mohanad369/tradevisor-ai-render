@@ -5,8 +5,34 @@ import { AlertTriangle, Code2, KeyRound, Loader2 } from "lucide-react"
 const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "")
 
 type DeveloperLoginResponse =
-  | { success: true; email: string; code: string; expires: string }
+  | {
+      success: true
+      sessionToken: string
+      email: string
+      code: string
+      expires: string
+      subscriber: {
+        subscriberId: string
+        email: string
+        code: string
+        plan: string
+        status: string
+        endDate?: string
+      }
+    }
   | { error: string }
+
+function getOrCreateDeviceId(): string {
+  let id = localStorage.getItem("tradevisor_device_id")
+  if (!id) {
+    const random = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, "")
+      : Math.random().toString(36).slice(2) + Date.now().toString(36)
+    id = `dev_${random}`
+    localStorage.setItem("tradevisor_device_id", id)
+  }
+  return id
+}
 
 export default function Developer() {
   const [password, setPassword] = useState("")
@@ -22,10 +48,11 @@ export default function Developer() {
     setLoading(true)
 
     try {
+      const deviceId = getOrCreateDeviceId()
       const response = await fetch(`${apiOrigin}/api/developer/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, deviceId }),
       })
       const data = await response.json().catch(() => null) as DeveloperLoginResponse | null
 
@@ -34,28 +61,7 @@ export default function Developer() {
         return
       }
 
-      const developerSub = {
-        id: "developer-access",
-        orderId: "DEVELOPER-LOGIN",
-        email: data.email,
-        code: data.code,
-        plan: "Developer Access",
-        amount: "$0",
-        txId: "DEVELOPER-LOGIN",
-        status: "ACTIVE",
-        startDate: new Date().toISOString(),
-        endDate: data.expires,
-      }
-
-      const subscribers = JSON.parse(localStorage.getItem("tv_subscribers_v3") || "[]")
-      const cleanSubscribers = subscribers.filter((sub: any) => sub.email !== data.email)
-      cleanSubscribers.push(developerSub)
-      localStorage.setItem("tv_subscribers_v3", JSON.stringify(cleanSubscribers))
-
-      const logins = JSON.parse(localStorage.getItem("tradevisor_user_logins") || "[]")
-      const cleanLogins = logins.filter((login: any) => login.email !== data.email)
-      cleanLogins.push({ email: data.email, code: data.code })
-      localStorage.setItem("tradevisor_user_logins", JSON.stringify(cleanLogins))
+      localStorage.setItem("tradevisor_session_token", data.sessionToken)
       localStorage.setItem("tradevisor_current_user_email", data.email)
       localStorage.setItem("tradevisor_current_user_code", data.code)
       localStorage.setItem("tradevisor_dev_mode", "true")

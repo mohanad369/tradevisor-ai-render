@@ -20,8 +20,9 @@ import { fetchServerMarketQuotes } from "./lib/market";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { replenishPool, seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
-import { paymentInvoices, vipCodes, vipPayments, vipSubscribers } from "../db/schema";
+import { paymentInvoices, vipCodes, vipPayments, vipSessions, vipSubscribers } from "../db/schema";
 import { and, eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -31,13 +32,28 @@ app.use(cors({
     ? [env.PUBLIC_SITE_ORIGIN, env.PUBLIC_SITE_ORIGIN_WWW].filter(Boolean) as string[]
     : ["http://localhost:3000", "http://localhost:5173"],
   allowMethods: ["GET", "POST", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "x-trpc-source", "x-csrf-token"],
+  allowHeaders: ["Content-Type", "Authorization", "x-trpc-source", "x-csrf-token", "x-nowpayments-sig"],
   credentials: true,
   maxAge: 600,
 }));
 
 // 2. Security headers
-app.use(secureHeaders({ contentSecurityPolicy: {}, crossOriginEmbedderPolicy: false }));
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"],
+    styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+    fontSrc: ["'self'", "data:", "https:"],
+    imgSrc: ["'self'", "data:", "https:", "blob:"],
+    connectSrc: ["'self'", "https:", "wss:", "ws:"],
+    frameSrc: ["'self'", "https:"],
+    mediaSrc: ["'self'", "https:", "blob:"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    frameAncestors: ["'none'"],
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
 app.use(async (c, next) => {
   await next();
@@ -113,20 +129,95 @@ app.post("/api/developer/login", async (c) => {
   const limit = checkRateLimit(`developer-login:${ip}`, 5);
   if (!limit.allowed) return c.json({ error: "Too many login attempts", retryAfter: limit.retryAfter }, 429);
 
-  const body = await c.req.json().catch(() => null) as { password?: string } | null;
+  const body = await c.req.json().catch(() => null) as { password?: string; deviceId?: string } | null;
   if (!body?.password || !verifyDeveloperPassword(body.password)) {
     return c.json({ error: "Invalid developer credentials" }, 401);
   }
 
-  const expires = new Date();
-  expires.setFullYear(expires.getFullYear() + 1);
+  const deviceId = (body.deviceId || "").trim() || `dev_${randomBytes(8).toString("base64url")}`;
+  const developerEmail = "developer@tradevisor.ai";
 
-  return c.json({
-    success: true,
-    email: "developer@tradevisor.ai",
-    code: `DEV-${Date.now().toString(36).toUpperCase()}`,
-    expires: expires.toISOString(),
-  });
+  try {
+    let [subscriber] = await db.select().from(vipSubscribers)
+      .where(eq(vipSubscribers.email, developerEmail));
+
+    if (!subscriber || subscriber.status !== "ACTIVE" || !subscriber.endDate || new Date(subscriber.endDate) < new Date()) {
+      if (subscriber) {
+        await db.update(vipCodes)
+          .set({ used: false, assignedTo: null })
+          .where(eq(vipCodes.code, subscriber.code));
+        await db.delete(vipSubscribers)
+          .where(eq(vipSubscribers.subscriberId, subscriber.subscriberId));
+      }
+
+      const [availableCode] = await db.select().from(vipCodes)
+        .where(and(eq(vipCodes.used, false), eq(vipCodes.codeType, "yearly")))
+        .limit(1);
+
+      if (!availableCode) {
+        return c.json({ error: "No yearly VIP codes available" }, 503);
+      }
+
+      await db.update(vipCodes)
+        .set({ used: true, assignedTo: developerEmail })
+        .where(eq(vipCodes.id, availableCode.id));
+
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+      const subscriberId = makeSubscriberId("dev");
+
+      await db.insert(vipSubscribers).values({
+        subscriberId,
+        orderId: `DEV-${randomBytes(6).toString("hex").toUpperCase()}`,
+        email: developerEmail,
+        code: availableCode.code,
+        plan: "Developer Access",
+        amount: "$0",
+        txId: "DEVELOPER-LOGIN",
+        status: "ACTIVE",
+        startDate: now,
+        endDate,
+      });
+
+      [subscriber] = await db.select().from(vipSubscribers)
+        .where(eq(vipSubscribers.subscriberId, subscriberId));
+    }
+
+    if (!subscriber) return c.json({ error: "Developer access could not be created" }, 500);
+
+    await db.update(vipSessions)
+      .set({ active: false })
+      .where(eq(vipSessions.subscriberId, subscriber.subscriberId));
+
+    const sessionToken = `sess_${randomBytes(24).toString("base64url")}`;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await db.insert(vipSessions).values({
+      sessionToken,
+      subscriberId: subscriber.subscriberId,
+      email: subscriber.email,
+      code: subscriber.code,
+      deviceId,
+      ip,
+      userAgent: c.req.header("user-agent") || "",
+      active: true,
+      expiresAt,
+    });
+
+    return c.json({
+      success: true,
+      sessionToken,
+      subscriber,
+      email: subscriber.email,
+      code: subscriber.code,
+      expires: subscriber.endDate?.toISOString() || expiresAt.toISOString(),
+    });
+  } catch (err: any) {
+    console.error("[developer/login] failed:", err?.message || err);
+    return c.json({ error: "Developer login failed" }, 500);
+  }
 });
 
 app.post("/api/admin/grant-vip", async (c) => {

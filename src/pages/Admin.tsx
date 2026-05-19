@@ -19,8 +19,6 @@ import {
 } from '@/lib/vipSystem'
 import { allowUnsafeLocalFallbacks } from '@/lib/runtime'
 
-const ADMIN_EMAIL = "mohanadmaria777@gmail.com"
-const ADMIN_PASSWORD = "Tradevisor2026!"
 const PENDING_KEY = "tradevisor_pending_users"
 const configuredApiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "")
 
@@ -1272,7 +1270,7 @@ export default function Admin() {
                 </div>
                 <div className="pt-4 border-t border-[#1f1f1f]">
                   <p className="text-xs text-[#a0a0a0] mb-2">Notification Email</p>
-                  <p className="text-sm text-white flex items-center gap-2"><Mail size={14} className="text-[#d4a843]" /> {ADMIN_EMAIL}</p>
+                  <p className="text-sm text-white flex items-center gap-2"><Mail size={14} className="text-[#d4a843]" /> Configured from server email settings</p>
                 </div>
                 <div className="pt-4 border-t border-[#1f1f1f]">
                   <p className="text-xs text-[#e11d48] mb-2">Danger Zone</p>

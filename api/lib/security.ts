@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 // Rate Limiting
 interface RateLimitEntry { count: number; resetAt: number; }
@@ -65,8 +65,8 @@ export function verifyPassword(password: string) {
   if (configuredHash) return safeEqual(hashSecret(password), configuredHash);
   const configuredPassword = process.env.ADMIN_PASSWORD;
   if (configuredPassword) return safeEqual(password, configuredPassword);
-  if (process.env.NODE_ENV === "production") return false;
-  return safeEqual(password, "Tradevisor2026!");
+  console.error("[security] ADMIN_PASSWORD / ADMIN_PASSWORD_HASH is not configured");
+  return false;
 }
 
 export function verifyDeveloperPassword(password: string) {
@@ -81,7 +81,7 @@ export function createAdminSessionToken() {
   const payload = {
     role: "admin",
     exp: Date.now() + ADMIN_SESSION_TTL_MS,
-    nonce: Math.random().toString(36).slice(2),
+    nonce: randomBytes(12).toString("base64url"),
   };
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
   const signature = sign(encodedPayload);
@@ -106,11 +106,12 @@ function sign(value: string) {
 
 function getServerSecret() {
   const secret = process.env.APP_SECRET || process.env.ADMIN_SESSION_SECRET;
-  if (secret && secret.length >= 32) return secret;
+  const knownDevSecret = "dev-only-tradevisor-session-secret-please-change";
+  if (secret && secret.length >= 32 && secret !== knownDevSecret) return secret;
   if (process.env.NODE_ENV === "production") {
-    throw new Error("APP_SECRET must be set to at least 32 characters in production");
+    throw new Error("APP_SECRET must be set to at least 32 unique characters in production");
   }
-  return "dev-only-tradevisor-session-secret-please-change";
+  return knownDevSecret;
 }
 
 function base64UrlEncode(value: string) {
