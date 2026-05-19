@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   Shield, LogOut, Users, BarChart3, Settings, CreditCard, CheckCircle, XCircle,
   Mail, Key, Ban, RefreshCw, Copy, ChevronDown, ChevronUp, Trash2, Menu, X,
-  TrendingUp, Clock, Gift, Crown, ImageIcon, ExternalLink, UserPlus
+  TrendingUp, Clock, Gift, Crown, ImageIcon, ExternalLink, UserPlus, Search
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { trpc } from '@/lib/trpc'
@@ -93,6 +93,8 @@ export default function Admin() {
   const [giftMonths, setGiftMonths] = useState(1)
   const [giftLoading, setGiftLoading] = useState(false)
   const [giftResult, setGiftResult] = useState<Extract<AdminGrantResponse, { success: true }> | null>(null)
+  const [subscriberSearch, setSubscriberSearch] = useState("")
+  const [subscriberFilter, setSubscriberFilter] = useState<'all'|'active'|'expired'|'revoked'>('all')
 
   // TradingView pending requests count
   const tvPendingCount = JSON.parse(localStorage.getItem("tradevisor_tv_notifications") || "[]").filter((r: any) => r.status === "pending").length
@@ -593,6 +595,30 @@ export default function Admin() {
   const pendingPayments = (pendingUsers || []).filter((p: any) => p.status === 'PENDING')
   const approvedPayments = (pendingUsers || []).filter((p: any) => p.status === 'APPROVED')
   const rejectedPayments = (pendingUsers || []).filter((p: any) => p.status === 'REJECTED')
+  const subscriberRows = (subscribers || []).map(sub => {
+    const endTime = sub.endDate ? new Date(sub.endDate).getTime() : 0
+    const isExpired = Boolean(endTime && Date.now() > endTime)
+    const daysLeft = endTime ? Math.ceil((endTime - Date.now()) / 86400000) : 0
+    const computedStatus: 'active'|'expired'|'revoked' =
+      sub.status === 'REVOKED' ? 'revoked' : isExpired ? 'expired' : 'active'
+
+    return { ...sub, isExpired, daysLeft, computedStatus }
+  })
+  const subscriberCounts = {
+    all: subscriberRows.length,
+    active: subscriberRows.filter(sub => sub.computedStatus === 'active').length,
+    expired: subscriberRows.filter(sub => sub.computedStatus === 'expired').length,
+    revoked: subscriberRows.filter(sub => sub.computedStatus === 'revoked').length,
+    withCode: subscriberRows.filter(sub => Boolean(sub.code)).length,
+  }
+  const visibleSubscribers = subscriberRows
+    .filter(sub => subscriberFilter === 'all' || sub.computedStatus === subscriberFilter)
+    .filter(sub => {
+      const q = subscriberSearch.trim().toLowerCase()
+      if (!q) return true
+      return [sub.email, sub.code, sub.plan, sub.orderId].some(value => value?.toLowerCase().includes(q))
+    })
+    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
 
   if (!isAuthenticated) {
     return (
@@ -816,7 +842,44 @@ export default function Admin() {
           {/* ═══════════ SUBSCRIBERS ═══════════ */}
           {activeTab === 'subscribers' && (
             <div>
-              <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Users size={18} className="text-[#d4a843]" /> Subscribers</h2>
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold flex items-center gap-2"><Users size={18} className="text-[#d4a843]" /> Subscribers</h2>
+                  <p className="text-xs text-[#666666] mt-1">See active members, generated codes, expiry state, and access controls.</p>
+                </div>
+                <div className="relative w-full lg:w-80">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666666]" />
+                  <input
+                    value={subscriberSearch}
+                    onChange={event => setSubscriberSearch(event.target.value)}
+                    placeholder="Search email, code, plan, order..."
+                    className="w-full bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl pl-9 pr-3 py-3 text-xs text-white placeholder-[#666666] focus:outline-none focus:border-[#d4a843]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
+                {[
+                  { id: 'all' as const, label: 'All', value: subscriberCounts.all, color: '#d4a843' },
+                  { id: 'active' as const, label: 'Active', value: subscriberCounts.active, color: '#22c55e' },
+                  { id: 'expired' as const, label: 'Expired', value: subscriberCounts.expired, color: '#f59e0b' },
+                  { id: 'revoked' as const, label: 'Revoked', value: subscriberCounts.revoked, color: '#e11d48' },
+                  { id: 'all' as const, label: 'Codes Generated', value: subscriberCounts.withCode, color: '#38bdf8' },
+                ].map(item => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => setSubscriberFilter(item.id)}
+                    className={`bg-[#0d0d0d] border rounded-xl p-3 text-left transition-all ${
+                      subscriberFilter === item.id && item.label !== 'Codes Generated' ? 'border-[#d4a843]' : 'border-[#1f1f1f] hover:border-[#d4a843]/35'
+                    }`}
+                  >
+                    <div className="text-[9px] uppercase tracking-wider text-[#666666]">{item.label}</div>
+                    <div className="text-xl font-bold mt-1" style={{ color: item.color }}>{item.value}</div>
+                  </button>
+                ))}
+              </div>
+
               {(!subscribers || subscribers.length === 0) ? (
                 <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl p-8 text-center">
                   <Users size={24} className="text-[#666666] mx-auto mb-2" />
@@ -824,10 +887,15 @@ export default function Admin() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {(subscribers || []).map(sub => {
-                    const isExpired = sub.endDate ? new Date() > new Date(sub.endDate) : false
-                    const statusColor = sub.status === 'REVOKED' ? '#e11d48' : isExpired ? '#d4a843' : '#22c55e'
-                    const statusText = sub.status === 'ACTIVE' && !isExpired ? 'ACTIVE' : sub.status === 'REVOKED' ? 'REVOKED' : 'EXPIRED'
+                  {visibleSubscribers.length === 0 && (
+                    <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl p-8 text-center">
+                      <Search size={24} className="text-[#666666] mx-auto mb-2" />
+                      <p className="text-[#666666] text-sm">No subscribers match this filter.</p>
+                    </div>
+                  )}
+                  {visibleSubscribers.map(sub => {
+                    const statusColor = sub.computedStatus === 'revoked' ? '#e11d48' : sub.computedStatus === 'expired' ? '#f59e0b' : '#22c55e'
+                    const statusText = sub.computedStatus.toUpperCase()
                     const isExpanded = expandedSub === sub.id
                     return (
                       <motion.div key={sub.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -842,8 +910,9 @@ export default function Admin() {
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-bold text-white">{sub.email}</span>
                                 <span className="text-[8px] px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: statusColor + '15', color: statusColor }}>{statusText}</span>
+                                {sub.code && <span className="text-[8px] px-2 py-0.5 rounded-full font-bold bg-[#38bdf8]/10 text-[#38bdf8]">CODE GENERATED</span>}
                               </div>
-                              <div className="text-[9px] text-[#666666]">{sub.plan} &bull; {sub.amount}</div>
+                              <div className="text-[9px] text-[#666666]">{sub.plan} &bull; {sub.amount} &bull; {sub.computedStatus === 'active' ? `${Math.max(sub.daysLeft, 0)} days left` : sub.computedStatus === 'expired' ? `${Math.abs(sub.daysLeft)} days expired` : 'access blocked'}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -857,24 +926,28 @@ export default function Admin() {
                               {[
                                 { label: 'Code', value: sub.code, color: '#d4a843' },
                                 { label: 'Order', value: sub.orderId, color: '#fff' },
+                                { label: 'Email', value: sub.email, color: '#38bdf8' },
+                                { label: 'Plan', value: sub.plan, color: '#d4a843' },
                                 { label: 'Start', value: new Date(sub.startDate).toLocaleDateString(), color: '#22c55e' },
-                                { label: 'End', value: new Date(sub.endDate).toLocaleDateString(), color: isExpired ? '#e11d48' : '#22c55e' },
+                                { label: 'End', value: new Date(sub.endDate).toLocaleDateString(), color: sub.isExpired ? '#e11d48' : '#22c55e' },
+                                { label: 'TXID', value: sub.txId || 'N/A', color: '#a0a0a0' },
+                                { label: 'Current status', value: statusText, color: statusColor },
                               ].map(item => (
                                 <div key={item.label} className="bg-[#141414] rounded-lg p-2">
                                   <div className="text-[#666666] text-[8px]">{item.label}</div>
-                                  <div className="text-[10px] font-bold" style={{ color: item.color }}>{item.value}</div>
+                                  <div className="text-[10px] font-bold break-all" style={{ color: item.color }}>{item.value}</div>
                                 </div>
                               ))}
                             </div>
                             <div className="flex flex-wrap gap-2 mt-3">
-                              {(sub.status === 'ACTIVE' && !isExpired) && (
+                              {(sub.status === 'ACTIVE' && !sub.isExpired) && (
                                 <button onClick={() => handleRevoke(sub.id)} className="flex-1 min-w-[80px] px-3 py-2 bg-[#e11d48]/10 border border-[#e11d48]/20 text-[#e11d48] text-[10px] font-bold rounded-lg hover:bg-[#e11d48]/20 transition-all flex items-center justify-center gap-1"><Ban size={10} /> Revoke</button>
                               )}
                               {sub.status === 'REVOKED' && (
                                 <button onClick={() => handleReactivate(sub.id)} className="flex-1 min-w-[80px] px-3 py-2 bg-[#d4a843]/10 border border-[#d4a843]/20 text-[#d4a843] text-[10px] font-bold rounded-lg hover:bg-[#d4a843]/20 transition-all flex items-center justify-center gap-1"><CheckCircle size={10} /> Reactivate</button>
                               )}
-                              {isExpired && (
-                                <button onClick={() => handleRenew(sub.id)} className="flex-1 min-w-[80px] px-3 py-2 bg-[#22c55e]/10 border border-[#22c55e]/20 text-[#22c55e] text-[10px] font-bold rounded-lg hover:bg-[#22c55e]/20 transition-all flex items-center justify-center gap-1"><RefreshCw size={10} /> Renew</button>
+                              {sub.isExpired && (
+                                <button onClick={() => handleRenew(sub.id)} className="flex-1 min-w-[80px] px-3 py-2 bg-[#22c55e]/10 border border-[#22c55e]/20 text-[#22c55e] text-[10px] font-bold rounded-lg hover:bg-[#22c55e]/20 transition-all flex items-center justify-center gap-1"><RefreshCw size={10} /> Keep / Renew</button>
                               )}
                               <button onClick={() => handleDeleteSubscriber(sub.id)} className="flex-1 min-w-[80px] px-3 py-2 bg-[#7f1d1d]/20 border border-[#e11d48]/40 text-[#e11d48] text-[10px] font-bold rounded-lg hover:bg-[#e11d48]/30 transition-all flex items-center justify-center gap-1"><Trash2 size={10} /> Delete</button>
                             </div>
