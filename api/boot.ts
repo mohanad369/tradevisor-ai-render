@@ -15,10 +15,12 @@ import {
   verifyPassword,
 } from "./lib/security";
 import { env } from "./lib/env";
+import { sendVipCodeEmail } from "./lib/email";
 import { fetchServerMarketQuotes } from "./lib/market";
+import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { replenishPool, seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
-import { vipCodes, vipSubscribers } from "../db/schema";
+import { paymentInvoices, vipCodes, vipPayments, vipSubscribers } from "../db/schema";
 import { and, eq } from "drizzle-orm";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
@@ -162,6 +164,85 @@ app.post("/api/admin/grant-vip", async (c) => {
 
 app.route("/api/vip2", (await import("./addons/vip2/router")).default);
 
+app.post("/api/payments/nowpayments/ipn", async (c) => {
+  const rawBody = await c.req.text();
+  const signature = c.req.header("x-nowpayments-sig");
+
+  if (!verifyNowPaymentsIpn(rawBody, signature)) {
+    console.warn("[NOWPayments] Invalid IPN signature");
+    return c.json({ error: "Invalid signature" }, 401);
+  }
+
+  let payload: any;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+
+  const orderId = String(payload.order_id || "");
+  const paymentStatus = String(payload.payment_status || payload.invoice_status || "");
+  const normalizedStatus = paymentStatus.toUpperCase();
+
+  if (!orderId) {
+    return c.json({ error: "Missing order_id" }, 400);
+  }
+
+  await db.update(paymentInvoices)
+    .set({
+      status: normalizedStatus || "UNKNOWN",
+      rawPayload: rawBody,
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentInvoices.orderId, orderId));
+
+  if (!isPaidNowPaymentsStatus(paymentStatus)) {
+    return c.json({ ok: true, activated: false, status: normalizedStatus });
+  }
+
+  const [payment] = await db.select().from(vipPayments)
+    .where(eq(vipPayments.orderId, orderId))
+    .limit(1);
+
+  if (!payment) {
+    console.warn("[NOWPayments] Paid IPN received without vip payment record", { orderId });
+    return c.json({ ok: true, activated: false, reason: "Payment record not found" });
+  }
+
+  if (payment.status === "APPROVED") {
+    return c.json({ ok: true, activated: true, alreadyApproved: true });
+  }
+
+  if (payment.status !== "PENDING") {
+    return c.json({ ok: true, activated: false, status: payment.status });
+  }
+
+  const activated = await activateHostedPayment(payment);
+  if (!activated.success) {
+    console.error("[NOWPayments] Paid order could not be activated", {
+      orderId,
+      error: activated.error,
+    });
+    return c.json({ ok: true, activated: false, error: activated.error });
+  }
+
+  const emailResult = await sendVipCodeEmail({
+    to: activated.email,
+    code: activated.code,
+    plan: payment.planName,
+    orderId: payment.orderId,
+    expiresAt: activated.expiresAt,
+  });
+
+  return c.json({
+    ok: true,
+    activated: true,
+    orderId,
+    codeType: activated.codeType,
+    emailSent: emailResult.sent,
+  });
+});
+
 // 7. Seed VIP codes BEFORE accepting requests so the first approval
 //    after a fresh deploy never sees an empty pool. Failures are logged
 //    but won't crash the app (subsequent /approve calls will surface them).
@@ -227,6 +308,62 @@ async function grantVipAccess(email: string, months: number, plan: string) {
   await replenishPool(codeType, 20);
 
   return { success: true, email, code: availableCode.code, expires: endDate, reused: false };
+}
+
+function planToCodeType(planName: string): "monthly" | "yearly" {
+  return planName.toLowerCase().includes("month") ? "monthly" : "yearly";
+}
+
+async function activateHostedPayment(payment: typeof vipPayments.$inferSelect) {
+  const codeType = planToCodeType(payment.planName);
+  const [availableCode] = await db.select().from(vipCodes)
+    .where(and(eq(vipCodes.used, false), eq(vipCodes.codeType, codeType)))
+    .limit(1);
+
+  if (!availableCode) {
+    return { success: false as const, error: `No ${codeType} VIP codes available` };
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now);
+  expiresAt.setMonth(now.getMonth() + (codeType === "yearly" ? 12 : 1));
+
+  await db.update(vipCodes)
+    .set({ used: true, assignedTo: payment.email })
+    .where(eq(vipCodes.id, availableCode.id));
+
+  await db.update(vipPayments)
+    .set({
+      status: "APPROVED",
+      approvedAt: now,
+      assignedCode: availableCode.code,
+    })
+    .where(eq(vipPayments.id, payment.id));
+
+  await db.insert(vipSubscribers).values({
+    subscriberId: makeSubscriberId("np"),
+    orderId: payment.orderId,
+    email: payment.email,
+    code: availableCode.code,
+    plan: payment.planName,
+    amount: payment.amount,
+    txId: payment.txId,
+    status: "ACTIVE",
+    startDate: now,
+    endDate: expiresAt,
+  });
+
+  await replenishPool(codeType, 20).catch((err) => {
+    console.warn("[NOWPayments] Replenish failed after activation:", err);
+  });
+
+  return {
+    success: true as const,
+    email: payment.email,
+    code: availableCode.code,
+    expiresAt,
+    codeType,
+  };
 }
 
 if (env.IS_PRODUCTION) {

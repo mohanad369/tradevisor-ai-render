@@ -96,3 +96,18 @@ export const supportMessages = sqliteTable("support_messages", {
   language: text("language").default("en"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+export const paymentInvoices = sqliteTable("payment_invoices", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  orderId: text("order_id").notNull().unique(),
+  provider: text("provider").notNull(),
+  providerInvoiceId: text("provider_invoice_id").notNull(),
+  invoiceUrl: text("invoice_url").notNull(),
+  email: text("email").notNull(),
+  planName: text("plan_name").notNull(),
+  amount: text("amount").notNull(),
+  status: text("status").notNull().default("WAITING"),
+  rawPayload: text("raw_payload").default(""),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
