@@ -178,6 +178,7 @@ a[href="/#/developer"] {
 
   .vip-shell {
     position: relative;
+    isolation: isolate;
     overflow-x: hidden;
     background:
       radial-gradient(circle at 50% -6%, rgba(24, 200, 255, 0.14), transparent 30%),
@@ -212,7 +213,7 @@ a[href="/#/developer"] {
     box-shadow: 0 0 70px rgba(24, 200, 255, 0.25);
   }
 
-  .vip-shell > * {
+  .vip-shell > :not(.fixed) {
     position: relative;
     z-index: 1;
   }
@@ -261,6 +262,32 @@ a[href="/#/developer"] {
 
   .vip-shell button:hover {
     box-shadow: 0 0 28px rgba(212, 168, 67, 0.12);
+  }
+
+  .vip-shell button,
+  .vip-shell a,
+  .vip-shell input,
+  .vip-shell select {
+    position: relative;
+    z-index: 2;
+  }
+
+  .vip-shell .fixed {
+    z-index: 80;
+    pointer-events: auto;
+  }
+
+  .vip-shell .tv-language-toggle {
+    border-color: rgba(24, 200, 255, 0.28);
+    background:
+      linear-gradient(145deg, rgba(8, 16, 26, 0.96), rgba(5, 7, 10, 0.92)) !important;
+    box-shadow:
+      0 0 28px rgba(24, 200, 255, 0.14),
+      0 14px 40px rgba(0, 0, 0, 0.38);
+  }
+
+  .vip-shell .tv-language-toggle button {
+    box-shadow: none;
   }
 }
 
