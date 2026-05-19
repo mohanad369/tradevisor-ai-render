@@ -413,6 +413,61 @@ export const vipRouter = createRouter({
 
   // ─── Referral / Partner Program ───
 
+  grantVipGift: publicQuery
+    .input(z.object({
+      email: z.string().email(),
+      months: z.number().int().min(1).max(12).default(1),
+      plan: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const email = input.email.trim().toLowerCase();
+      const months = Math.min(Math.max(input.months || 1, 1), 12);
+      const plan = input.plan?.trim() || `Admin Gift ${months} Month${months === 1 ? "" : "s"}`;
+
+      const [existing] = await db.select().from(vipSubscribers).where(eq(vipSubscribers.email, email));
+      if (existing?.status === "ACTIVE" && existing.endDate && new Date(existing.endDate) > new Date()) {
+        return { success: true, email: existing.email, code: existing.code, expires: existing.endDate, reused: true };
+      }
+
+      if (existing) {
+        await db.delete(vipSubscribers).where(eq(vipSubscribers.subscriberId, existing.subscriberId));
+      }
+
+      const codeType: "monthly" | "yearly" = months >= 12 || plan.toLowerCase().includes("year") ? "yearly" : "monthly";
+      const [availableCode] = await db.select().from(vipCodes)
+        .where(and(eq(vipCodes.used, false), eq(vipCodes.codeType, codeType)))
+        .limit(1);
+
+      if (!availableCode) {
+        return { success: false, error: `No ${codeType} codes available` };
+      }
+
+      await db.update(vipCodes)
+        .set({ used: true, assignedTo: email })
+        .where(eq(vipCodes.id, availableCode.id));
+
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setMonth(now.getMonth() + months);
+
+      await db.insert(vipSubscribers).values({
+        subscriberId: generateUUID(),
+        orderId: "ADMIN-GIFT-" + Date.now(),
+        email,
+        code: availableCode.code,
+        plan,
+        amount: "$0",
+        txId: "ADMIN-GIFT",
+        status: "ACTIVE",
+        startDate: now,
+        endDate,
+      });
+
+      await replenishPool(codeType, 20);
+
+      return { success: true, email, code: availableCode.code, expires: endDate, reused: false, codeType };
+    }),
+
   submitReferral: publicQuery
     .input(z.object({
       referralId: z.string().min(1),

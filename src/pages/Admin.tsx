@@ -266,6 +266,27 @@ export default function Admin() {
       else showToast(err.message, 'error')
     }
   })
+  const grantVipGiftMutation = trpc.vip.grantVipGift.useMutation({
+    onSuccess: (data: any) => {
+      if (!data?.success) {
+        showToast(data?.error || 'Could not create VIP code', 'error')
+        return
+      }
+      const expires = data.expires instanceof Date ? data.expires.toISOString() : String(data.expires)
+      setGiftResult({ success: true, email: data.email, code: data.code, expires, reused: data.reused })
+      setGiftEmail("")
+      showToast(`VIP code created for ${data.email}`, "success")
+      invalidateAll()
+    },
+    onError: (err) => {
+      if (checkTrpcError(err)) {
+        showToast('Server unavailable. Local fallback only.', 'error')
+      } else {
+        showToast(err.message, 'error')
+      }
+    },
+    onSettled: () => setGiftLoading(false),
+  })
 
   const [currentActionOrderId, setCurrentActionOrderId] = useState("")
   const [currentSubId, setCurrentSubId] = useState("")
@@ -479,35 +500,40 @@ export default function Admin() {
     event.preventDefault()
     setGiftResult(null)
     setGiftLoading(true)
-    try {
-      const apiOrigin = configuredApiOrigin || window.location.origin
-      const token = localStorage.getItem("tradevisor_admin_session") || ""
-      const response = await fetch(`${apiOrigin}/api/admin/grant-vip`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          email: giftEmail,
-          months: giftMonths,
-          plan: `Admin Gift ${giftMonths} Month${giftMonths === 1 ? "" : "s"}`,
-        }),
-      })
-      const data = await response.json().catch(() => null) as AdminGrantResponse | null
-      if (!response.ok || !data || "error" in data || !data.success) {
-        showToast(data && "error" in data ? data.error : "Could not create VIP code", "error")
+    const email = giftEmail.trim().toLowerCase()
+    const plan = `Admin Gift ${giftMonths} Month${giftMonths === 1 ? "" : "s"}`
+
+    if (!trpcAvailable) {
+      const code = giftMonths >= 12 ? getAvailableYearlyCode() : getAvailableMonthlyCode()
+      if (!code) {
+        setGiftLoading(false)
+        showToast('No local VIP codes available', 'error')
         return
       }
-      setGiftResult(data)
+      if (giftMonths >= 12) assignYearlyCode(code, email)
+      else assignMonthlyCode(code, email)
+      const sub = addSubscriber({
+        orderId: `ADMIN-GIFT-${Date.now()}`,
+        email,
+        code,
+        plan,
+        amount: "$0",
+        txId: "ADMIN-GIFT",
+        status: "ACTIVE",
+      })
+      setGiftResult({ success: true, email, code, expires: sub.endDate })
       setGiftEmail("")
-      showToast(`VIP code created for ${data.email}`, "success")
-      invalidateAll()
-    } catch {
-      showToast("Secure server is unavailable", "error")
-    } finally {
+      refreshLocal()
+      showToast(`VIP code created for ${email}`, "success")
       setGiftLoading(false)
+      return
     }
+
+    grantVipGiftMutation.mutate({
+      email,
+      months: giftMonths,
+      plan,
+    })
   }
 
   // ─── Monthly Subscription Codes Handlers ───
