@@ -123,11 +123,14 @@ export default function Admin() {
     refetchInterval: 5000,
     retry: false
   })
-  const { data: trpcCodes } = trpc.vip.getCodes.useQuery(undefined, {
-    enabled: isAuthenticated && trpcAvailable,
-    refetchInterval: 5000,
-    retry: false
-  })
+  const { data: monthlyCodes = [] } = trpc.vip.getCodes.useQuery(
+    { codeType: "monthly" },
+    { enabled: isAuthenticated && trpcAvailable, refetchInterval: 5000, retry: false }
+  )
+  const { data: yearlyCodes = [] } = trpc.vip.getCodes.useQuery(
+    { codeType: "yearly" },
+    { enabled: isAuthenticated && trpcAvailable, refetchInterval: 5000, retry: false }
+  )
   const { data: trpcReferrals } = trpc.vip.getReferrals.useQuery(undefined, {
     enabled: isAuthenticated && trpcAvailable,
     refetchInterval: 5000,
@@ -246,6 +249,20 @@ export default function Admin() {
     onSuccess: (data) => { showToast(`All ${data.count} codes replaced!`, 'warning'); invalidateAll() },
     onError: (err) => {
       if (checkTrpcError(err)) { replaceAllCodesLocal(); refreshLocal() }
+      else showToast(err.message, 'error')
+    }
+  })
+  const replaceMonthlyMutation = trpc.vip.replaceMonthlyCodes.useMutation({
+    onSuccess: () => { invalidateAll(); showToast('Monthly codes replaced!', 'warning') },
+    onError: (err) => {
+      if (checkTrpcError(err)) { replaceAllMonthlyCodes(100); refreshLocal(); showToast('Monthly codes replaced!', 'warning') }
+      else showToast(err.message, 'error')
+    }
+  })
+  const replaceYearlyMutation = trpc.vip.replaceYearlyCodes.useMutation({
+    onSuccess: () => { invalidateAll(); showToast('Yearly codes replaced!', 'warning') },
+    onError: (err) => {
+      if (checkTrpcError(err)) { replaceAllYearlyCodes(100); refreshLocal(); showToast('Yearly codes replaced!', 'warning') }
       else showToast(err.message, 'error')
     }
   })
@@ -495,18 +512,26 @@ export default function Admin() {
 
   // ─── Monthly Subscription Codes Handlers ───
   const handleReplaceMonthlyCodes = () => {
-    if (!confirm('DELETE all old MONTHLY subscription codes and create 100 NEW ones?\n\nActive subscribers will LOSE their codes!\n\nThis cannot be undone!')) return
-    replaceAllMonthlyCodes(100)
-    refreshLocal()
-    showToast('All monthly subscription codes replaced!', 'warning')
+    if (!confirm('Replace all monthly codes?')) return
+    if (!trpcAvailable) {
+      replaceAllMonthlyCodes(100)
+      refreshLocal()
+      showToast('Monthly codes replaced!', 'warning')
+      return
+    }
+    replaceMonthlyMutation.mutate()
   }
 
   // ─── Yearly VIP Codes Handlers ───
   const handleReplaceYearlyCodes = () => {
-    if (!confirm('DELETE all old YEARLY VIP codes and create 100 NEW ones?\n\nActive subscribers will LOSE their codes!\n\nThis cannot be undone!')) return
-    replaceAllYearlyCodes(100)
-    refreshLocal()
-    showToast('All yearly VIP codes replaced!', 'warning')
+    if (!confirm('Replace all yearly codes?')) return
+    if (!trpcAvailable) {
+      replaceAllYearlyCodes(100)
+      refreshLocal()
+      showToast('Yearly codes replaced!', 'warning')
+      return
+    }
+    replaceYearlyMutation.mutate()
   }
 
   // ─── REFERRAL HANDLERS ───
@@ -952,7 +977,7 @@ export default function Admin() {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                {(initMonthlyCodes() || []).map((c: any) => (
+                {(trpcAvailable ? monthlyCodes : initMonthlyCodes() || []).map((c: any) => (
                   <div key={c.code} className={`border rounded-lg p-2 text-center ${c.used ? 'border-[#22c55e]/20 bg-[#22c55e]/5' : 'border-[#1f1f1f] bg-[#0d0d0d]'}`}>
                     <div className={`font-mono text-[10px] font-bold ${c.used ? 'text-[#22c55e]' : 'text-[#d4a843]'}`}>{c.code}</div>
                     {c.used && c.assignedTo && (
@@ -987,7 +1012,7 @@ export default function Admin() {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                {(initYearlyCodes() || []).map((c: any) => (
+                {(trpcAvailable ? yearlyCodes : initYearlyCodes() || []).map((c: any) => (
                   <div key={c.code} className={`border rounded-lg p-2 text-center ${c.used ? 'border-[#d4a843]/30 bg-[#d4a843]/5' : 'border-[#1f1f1f] bg-[#0d0d0d]'}`}>
                     <div className={`font-mono text-[10px] font-bold ${c.used ? 'text-[#d4a843]' : 'text-[#22c55e]'}`}>{c.code}</div>
                     {c.used && c.assignedTo && (

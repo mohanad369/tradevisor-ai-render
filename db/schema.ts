@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, int } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
 
 // ─── Orders (existing) ───
 export const orders = sqliteTable("orders", {
@@ -42,11 +42,16 @@ export const vipSubscribers = sqliteTable("vip_subscribers", {
 });
 
 // ─── VIP Access Codes ───
+// FIX: added `codeType` column so monthly and yearly pools live in the DB
+// instead of being split between DB (any-pool) and admin browser localStorage.
+// Existing rows get the default "yearly" via the migration in db.ts.
 export const vipCodes = sqliteTable("vip_codes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   code: text("code").notNull().unique(),
   used: integer("used", { mode: "boolean" }).notNull().default(false),
   assignedTo: text("assigned_to"),
+  // "monthly" or "yearly" — picked when approving a payment.
+  codeType: text("code_type").notNull().default("yearly"),
 });
 
 // ─── VIP Sessions (prevents multi-device login) ───
@@ -69,21 +74,16 @@ export const vipSessions = sqliteTable("vip_sessions", {
 export const referrals = sqliteTable("referrals", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   referralId: text("referral_id").notNull().unique(),
-  // The VIP subscriber who is the partner (referrer)
   referrerCode: text("referrer_code").notNull(),
   referrerEmail: text("referrer_email").notNull(),
-  // The invited person
   invitedEmail: text("invited_email").notNull(),
   invitedName: text("invited_name"),
-  // Payment proof from invited
   txId: text("tx_id"),
   amount: text("amount").default("$88"),
   screenshot: text("screenshot"),
-  // Status: PENDING → APPROVED → REWARDED
   status: text("status").notNull().default("PENDING"),
   submittedAt: integer("submitted_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   approvedAt: integer("approved_at", { mode: "timestamp" }),
-  // Reward: free month granted to referrer
   rewardGranted: integer("reward_granted", { mode: "boolean" }).notNull().default(false),
   rewardDate: integer("reward_date", { mode: "timestamp" }),
 });
@@ -95,19 +95,4 @@ export const supportMessages = sqliteTable("support_messages", {
   answer: text("answer").notNull(),
   language: text("language").default("en"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-});
-
-export const paymentInvoices = sqliteTable("payment_invoices", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  orderId: text("order_id").notNull().unique(),
-  provider: text("provider").notNull(),
-  providerInvoiceId: text("provider_invoice_id").notNull(),
-  invoiceUrl: text("invoice_url").notNull(),
-  email: text("email").notNull(),
-  planName: text("plan_name").notNull(),
-  amount: text("amount").notNull(),
-  status: text("status").notNull().default("WAITING"),
-  rawPayload: text("raw_payload").default(""),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
