@@ -11,6 +11,7 @@ import {
   createAdminSessionToken,
   SECURITY_HEADERS,
   verifyAdminSessionToken,
+  verifyDeveloperPassword,
   verifyPassword,
 } from "./lib/security";
 import { env } from "./lib/env";
@@ -103,6 +104,27 @@ app.post("/api/admin/login", async (c) => {
   }
 
   return c.json({ token: createAdminSessionToken() });
+});
+
+app.post("/api/developer/login", async (c) => {
+  const ip = getClientIp(c.req.raw);
+  const limit = checkRateLimit(`developer-login:${ip}`, 5);
+  if (!limit.allowed) return c.json({ error: "Too many login attempts", retryAfter: limit.retryAfter }, 429);
+
+  const body = await c.req.json().catch(() => null) as { password?: string } | null;
+  if (!body?.password || !verifyDeveloperPassword(body.password)) {
+    return c.json({ error: "Invalid developer credentials" }, 401);
+  }
+
+  const expires = new Date();
+  expires.setFullYear(expires.getFullYear() + 1);
+
+  return c.json({
+    success: true,
+    email: "developer@tradevisor.ai",
+    code: `DEV-${Date.now().toString(36).toUpperCase()}`,
+    expires: expires.toISOString(),
+  });
 });
 
 app.post("/api/admin/grant-vip", async (c) => {
