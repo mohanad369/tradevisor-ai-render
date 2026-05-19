@@ -67,11 +67,16 @@ function VIPDashboardInner() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const toast = useToast()
   const deviceId = getDeviceId()
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/$/, "") || window.location.origin
 
   const savedEmail = localStorage.getItem("tradevisor_current_user_email")
   const savedCode = localStorage.getItem("tradevisor_current_user_code")
-  const isLoggedIn = savedEmail && savedCode && checkSubscriberAccess(savedEmail, savedCode)
+  const savedSessionToken = localStorage.getItem("tradevisor_session_token")
+  const { data: serverSession, isLoading: sessionLoading } = trpc.vip.verifySession.useQuery(
+    { sessionToken: savedSessionToken || "", deviceId },
+    { enabled: Boolean(savedSessionToken), retry: false }
+  )
+  const serverSubscriber = serverSession?.valid ? serverSession.subscriber : null
+  const isLoggedIn = Boolean(serverSubscriber) || Boolean(savedEmail && savedCode && checkSubscriberAccess(savedEmail, savedCode))
 
   const loginMutation = trpc.vip.login.useMutation({
     onSuccess: (data) => {
@@ -194,8 +199,23 @@ function VIPDashboardInner() {
     redeemVipCode(enteredOTP.toUpperCase().trim())
   }
 
+  if (serverSubscriber) {
+    return <VIPDashboardFull email={serverSubscriber.email} code={serverSubscriber.code} initialSubscriber={serverSubscriber} />
+  }
+
   if (isLoggedIn) {
     return <VIPDashboardFull email={savedEmail!} code={savedCode!} />
+  }
+
+  if (savedSessionToken && sessionLoading) {
+    return (
+      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-3">
+        <div className="flex items-center gap-3 text-[#d4a843] text-sm">
+          <Loader2 size={18} className="animate-spin" />
+          Verifying VIP session...
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -350,7 +370,7 @@ function vipText(language: Language, text: string) {
   return language === "ar" ? vipAr[text] || text : text
 }
 
-function VIPDashboardFull({ email, code }: { email: string; code: string }) {
+function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; code: string; initialSubscriber?: any }) {
   // ─── Track VIP login & page view ───
   useEffect(() => {
     trackVIPLogin()
@@ -363,7 +383,7 @@ function VIPDashboardFull({ email, code }: { email: string; code: string }) {
   const toast = useToast()
   const { language } = useLanguage()
   const vt = (text: string) => text === "bankZero" ? (language === "ar" ? "استراتيجية البنوك صفر انعكاس" : "Bank Zero Reversal") : vipText(language, text)
-  const subscriber = getSubscribers().find(s => s.email === email && s.code === code)
+  const subscriber = initialSubscriber || getSubscribers().find(s => s.email === email && s.code === code)
   const isDeveloperMode = localStorage.getItem("tradevisor_dev_mode") === "true"
 
   const logoutMutation = trpc.vip.logout.useMutation({
