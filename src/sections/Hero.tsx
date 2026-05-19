@@ -90,16 +90,13 @@ export default function Hero() {
   const marketData = useMarketData()
 
   return (
-    <section className="relative bg-[#030305] text-white overflow-hidden pt-20 pb-4">
+    <section className="relative bg-[#030305] text-white overflow-hidden pt-20 pb-16">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <LivingParticles />
       </div>
       <div className="relative z-10">
         <ProfitHeader />
-        <LiveChart goldPrice={marketData.goldPrice} />
-        <StatsGrid />
-        <SignalsFeed signals={marketData.signals} updatedAt={marketData.updatedAt} />
-        <AssetsGrid assets={marketData.assets} updatedAt={marketData.updatedAt} />
+        <LiveMarketConsole marketData={marketData} />
       </div>
     </section>
   )
@@ -235,6 +232,231 @@ function ProfitHeader() {
 /* ═══════════════════════════════════════════
    LIVE CANDLESTICK CHART (Canvas)
    ═══════════════════════════════════════════ */
+
+function LiveMarketConsole({ marketData }: { marketData: ReturnType<typeof useMarketData> }) {
+  const { language } = useLanguage()
+  const isArabic = language === "ar"
+  const isLive = Boolean(marketData.updatedAt)
+  const assets = marketData.assets
+  const leadAsset = assets[0]
+  const bullishCount = assets.filter((asset) => asset.dir === "up").length
+  const marketStatus = bullishCount >= Math.ceil(assets.length / 2)
+    ? { label: isArabic ? "السوق صاعد" : "Bullish market", tone: "#22c55e", note: isArabic ? "زخم شرائي نشط" : "AI detects clean buying pressure" }
+    : { label: isArabic ? "السوق حذر" : "Cautious market", tone: "#f59e0b", note: isArabic ? "نراقب المخاطر" : "AI is filtering risk before signals" }
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18, duration: 0.55 }}
+        className="relative overflow-hidden rounded-[28px] border border-[#d4a843]/25 bg-[#050806]/90 p-3 shadow-[0_0_80px_rgba(34,197,94,0.10)] sm:p-5"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_16%,rgba(34,197,94,0.16),transparent_30%),radial-gradient(circle_at_12%_85%,rgba(212,168,67,0.14),transparent_32%)]" />
+        <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(34,197,94,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(212,168,67,0.06)_1px,transparent_1px)] [background-size:44px_44px]" />
+
+        <div className="relative z-10 mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <motion.span
+                className="h-2.5 w-2.5 rounded-full bg-[#22c55e]"
+                animate={{ scale: [0.8, 1.35, 0.8], opacity: [0.55, 1, 0.55] }}
+                transition={{ duration: 1.3, repeat: Infinity }}
+              />
+              <span className="text-[10px] font-black uppercase tracking-[0.26em] text-[#d4a843]">
+                {isArabic ? "نافذة أسعار حية" : "Live market command window"}
+              </span>
+            </div>
+            <h1 className="max-w-3xl text-3xl font-black uppercase leading-tight tracking-[0.03em] text-white sm:text-5xl">
+              {isArabic ? "أسعار مباشرة. إشارات أوضح. قرار أسرع." : "AI-powered prices with a living market pulse."}
+            </h1>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:min-w-[440px]">
+            <ConsoleMetric label={isArabic ? "حالة السوق" : "Market status"} value={marketStatus.label} color={marketStatus.tone} />
+            <ConsoleMetric label={isArabic ? "السعر الرئيسي" : "Primary price"} value={isLive ? formatAssetPrice(leadAsset.price) : "Connecting"} color="#d4a843" />
+            <ConsoleMetric label={isArabic ? "اتصال API" : "API feed"} value={isLive ? "Live" : "Connecting"} color="#22c55e" />
+          </div>
+        </div>
+
+        <div className="relative z-10 grid gap-4 xl:grid-cols-[230px_1fr_330px]">
+          <aside className="grid grid-cols-2 gap-2 xl:grid-cols-1">
+            {[
+              { icon: Activity, label: isArabic ? "نظرة عامة" : "Overview", active: true },
+              { icon: Zap, label: isArabic ? "وكلاء AI" : "AI agents" },
+              { icon: BarChart3, label: isArabic ? "الأسواق" : "Markets" },
+              { icon: Radio, label: isArabic ? "الإشارات" : "Signals" },
+              { icon: Target, label: isArabic ? "المخاطر" : "Risk gate" },
+            ].map((item, index) => (
+              <motion.div
+                key={item.label}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 + index * 0.04 }}
+                className={`flex items-center gap-3 rounded-2xl border px-3 py-3 text-xs font-black uppercase tracking-wide ${
+                  item.active ? "border-[#22c55e]/35 bg-[#22c55e]/10 text-[#22c55e]" : "border-[#1f2b22] bg-black/25 text-[#8d978f]"
+                }`}
+              >
+                <item.icon size={16} />
+                <span className="truncate">{item.label}</span>
+              </motion.div>
+            ))}
+          </aside>
+
+          <main className="space-y-4">
+            <div className="rounded-3xl border border-[#22c55e]/20 bg-black/35 p-4">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7b8d80]">
+                    {isArabic ? "قراءة السوق المباشرة" : "Market outlook"}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-3xl font-black uppercase text-[#22c55e]">{marketStatus.label}</span>
+                    <span className="rounded-full border border-[#22c55e]/25 bg-[#22c55e]/10 px-2 py-1 text-[9px] font-black uppercase text-[#22c55e]">
+                      {marketStatus.note}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-[10px] uppercase tracking-wider text-[#66756b]">{leadAsset.pair}</p>
+                  <motion.p
+                    className="font-mono text-3xl font-black text-[#d4a843]"
+                    animate={{ textShadow: ["0 0 8px rgba(212,168,67,0.25)", "0 0 22px rgba(212,168,67,0.55)", "0 0 8px rgba(212,168,67,0.25)"] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    {isLive ? formatAssetPrice(leadAsset.price) : "Connecting"}
+                  </motion.p>
+                </div>
+              </div>
+
+              <MarketPulseChart dir={leadAsset.dir} />
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-3">
+              {marketData.signals.slice(0, 3).map((signal, index) => (
+                <SignalCommandCard key={`${signal.pair}-${index}`} signal={signal} index={index} isLive={isLive} />
+              ))}
+            </div>
+
+            <div className="rounded-3xl border border-[#d4a843]/15 bg-black/30 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-black uppercase tracking-[0.12em] text-white">
+                  {isArabic ? "الأصول المتداولة" : "Trading assets"}
+                </h2>
+                <span className="text-[9px] font-black uppercase text-[#22c55e]">{isLive ? "Live API" : "Waiting feed"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                {assets.map((asset, index) => (
+                  <AssetMiniTile key={asset.pair} asset={asset} index={index} isLive={isLive} />
+                ))}
+              </div>
+            </div>
+          </main>
+
+          <aside className="space-y-4">
+            <div className="rounded-3xl border border-[#d4a843]/20 bg-black/35 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-black uppercase text-white">{isArabic ? "وكلاء الأسعار" : "Price agents"}</h2>
+                <span className="text-[10px] font-black text-[#22c55e]">5/5 Active</span>
+              </div>
+              {[
+                [isArabic ? "قارئ الاتجاه" : "Trend oracle", isArabic ? "تحليل اتجاه السوق" : "Market trend analysis"],
+                [isArabic ? "عبقري الدخول" : "Entry genius", isArabic ? "مناطق دخول دقيقة" : "Optimal entry zones"],
+                [isArabic ? "حارس المخاطر" : "Risk guardian", isArabic ? "حماية المخاطر" : "Risk management"],
+                [isArabic ? "حارس الأخبار" : "News sentinel", isArabic ? "أخبار وزخم" : "News and sentiment"],
+                [isArabic ? "محسن الربح" : "Profit maximizer", isArabic ? "تحسين الأهداف" : "Target optimization"],
+              ].map(([name, task], index) => (
+                <motion.div
+                  key={name}
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + index * 0.06 }}
+                  className="mb-2 flex items-center gap-3 rounded-2xl border border-[#1f2b22] bg-[#08120c]/80 p-3"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#d4a843]/25 bg-[#d4a843]/10 text-[#d4a843]">
+                    <Zap size={16} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black text-white">{name}</p>
+                    <p className="truncate text-[10px] text-[#8b948e]">{task}</p>
+                  </div>
+                  <span className="rounded-full bg-[#22c55e]/15 px-2 py-1 text-[8px] font-black text-[#22c55e]">ACTIVE</span>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="rounded-3xl border border-[#22c55e]/20 bg-[#03120a]/80 p-4">
+              <h2 className="mb-4 text-sm font-black uppercase text-white">{isArabic ? "إدارة المخاطر" : "Risk management"}</h2>
+              <div className="flex items-center gap-4">
+                <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-[#22c55e]/25 bg-[#22c55e]/10">
+                  <motion.div
+                    className="absolute inset-2 rounded-full border-4 border-[#22c55e]"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                  />
+                  <span className="text-3xl font-black text-[#22c55e]">18</span>
+                </div>
+                <div className="flex-1 space-y-2">
+                  {["Position sizing", "Drawdown control", "Correlation risk", "Volatility protection"].map((item) => (
+                    <div key={item} className="flex items-center justify-between text-xs">
+                      <span className="text-[#b8c2bb]">{item}</span>
+                      <span className="text-[#22c55e]">OK</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+function ConsoleMetric({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="rounded-2xl border border-[#1f2b22] bg-black/35 p-3">
+      <p className="text-[8px] font-black uppercase tracking-wider text-[#6b756e]">{label}</p>
+      <p className="mt-1 truncate text-sm font-black uppercase" style={{ color }}>{value}</p>
+    </div>
+  )
+}
+
+function SignalCommandCard({ signal, index, isLive }: { signal: typeof SIGNALS[number]; index: number; isLive: boolean }) {
+  const isBuy = signal.type === "BUY"
+  const color = isBuy ? "#22c55e" : "#e11d48"
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.72 + index * 0.08 }}
+      className="rounded-2xl border bg-black/35 p-4"
+      style={{ borderColor: `${color}30` }}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ color, backgroundColor: `${color}18` }}>
+            {isBuy ? <TrendingUp size={17} /> : <TrendingDown size={17} />}
+          </div>
+          <div>
+            <p className="text-lg font-black" style={{ color }}>{signal.type}</p>
+            <p className="text-[10px] text-[#8b948e]">{signal.pair}</p>
+          </div>
+        </div>
+        <span className="text-xl font-black text-white">{signal.conf}%</span>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-[#66756b]">Live price</p>
+          <p className="font-mono text-sm font-black text-[#d4a843]">{isLive ? formatAssetPrice(signal.price) : "Connecting"}</p>
+        </div>
+        <div className="w-24">
+          <MiniSparkline dir={isBuy ? "up" : "down"} />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
 
 function LiveChart({ goldPrice }: { goldPrice: number | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
