@@ -14,6 +14,7 @@ import {
   verifyPassword,
 } from "./lib/security";
 import { env } from "./lib/env";
+import { fetchServerMarketQuotes } from "./lib/market";
 import { replenishPool, seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
 import { vipCodes, vipSubscribers } from "../db/schema";
@@ -70,6 +71,27 @@ app.use("/api/trpc/*", async (c) => {
 });
 
 // 6. VIP2 Gold Chart AI router (isolated — won't affect existing routes)
+app.get("/api/market/quotes", async (c) => {
+  const pairsParam = c.req.query("pairs") || "XAU/USD";
+  const pairs = pairsParam
+    .split(",")
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  if (pairs.length === 0) {
+    return c.json({ quotes: {} });
+  }
+
+  try {
+    const quotes = await fetchServerMarketQuotes(pairs);
+    return c.json({ quotes });
+  } catch (error) {
+    console.error("[Market] /api/market/quotes failed:", error instanceof Error ? error.message : String(error));
+    return c.json({ quotes: {}, error: "Market prices unavailable" }, 503);
+  }
+});
+
 app.post("/api/admin/login", async (c) => {
   const ip = getClientIp(c.req.raw);
   const limit = checkRateLimit(`admin-login:${ip}`, 5);
