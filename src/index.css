@@ -175,6 +175,93 @@ a[href="/#/developer"] {
   .tv-button-glow {
     box-shadow: 0 0 26px rgba(212, 168, 67, 0.18);
   }
+
+  .vip-shell {
+    position: relative;
+    overflow-x: hidden;
+    background:
+      radial-gradient(circle at 50% -6%, rgba(24, 200, 255, 0.14), transparent 30%),
+      radial-gradient(circle at 4% 40%, rgba(155, 92, 255, 0.09), transparent 26%),
+      radial-gradient(circle at 92% 38%, rgba(212, 168, 67, 0.11), transparent 28%),
+      linear-gradient(180deg, #020509 0%, #020304 48%, #03100c 100%) !important;
+  }
+
+  .vip-shell::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(24, 200, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34, 226, 116, 0.035) 1px, transparent 1px),
+      radial-gradient(circle at 50% 36%, rgba(24, 200, 255, 0.08), transparent 28%);
+    background-size: 62px 62px, 62px 62px, 100% 100%;
+    opacity: 0.55;
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1), transparent 92%);
+  }
+
+  .vip-shell::after {
+    content: "";
+    position: fixed;
+    inset: auto 10% 0 10%;
+    height: 1px;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(24, 200, 255, 0.65), rgba(212, 168, 67, 0.5), transparent);
+    box-shadow: 0 0 70px rgba(24, 200, 255, 0.25);
+  }
+
+  .vip-shell > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .vip-shell header,
+  .vip-shell [class*="sticky top"] {
+    background: rgba(2, 5, 9, 0.84) !important;
+    border-color: rgba(24, 200, 255, 0.16) !important;
+    backdrop-filter: blur(18px);
+    box-shadow: 0 14px 46px rgba(0, 0, 0, 0.32);
+  }
+
+  .vip-shell main {
+    background: radial-gradient(circle at 50% 2%, rgba(24, 200, 255, 0.05), transparent 34%);
+  }
+
+  .vip-shell [class*="bg-[#0d0d0d]"],
+  .vip-shell [class*="bg-[#0a0a0a]"],
+  .vip-shell [class*="bg-[#141414]"],
+  .vip-shell [class*="bg-[#0f0f0f]"] {
+    background:
+      linear-gradient(145deg, rgba(8, 16, 26, 0.92), rgba(5, 7, 10, 0.86)) !important;
+  }
+
+  .vip-shell [class*="border-[#1f1f1f]"] {
+    border-color: rgba(24, 200, 255, 0.16) !important;
+  }
+
+  .vip-shell [class*="rounded-xl"],
+  .vip-shell [class*="rounded-2xl"] {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 18px 44px rgba(0, 0, 0, 0.22);
+  }
+
+  .vip-shell h1,
+  .vip-shell h2 {
+    text-shadow: 0 0 18px rgba(24, 200, 255, 0.34);
+  }
+
+  .vip-shell input,
+  .vip-shell select {
+    background: rgba(3, 8, 12, 0.82) !important;
+    border-color: rgba(24, 200, 255, 0.16) !important;
+  }
+
+  .vip-shell button:hover {
+    box-shadow: 0 0 28px rgba(212, 168, 67, 0.12);
+  }
 }
 
 .custom-scrollbar::-webkit-scrollbar {

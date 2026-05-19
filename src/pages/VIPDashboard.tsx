@@ -209,7 +209,7 @@ function VIPDashboardInner() {
 
   if (savedSessionToken && sessionLoading) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-3">
+      <div className="vip-shell min-h-screen bg-[#050505] text-white flex items-center justify-center px-3">
         <div className="flex items-center gap-3 text-[#d4a843] text-sm">
           <Loader2 size={18} className="animate-spin" />
           Verifying VIP session...
@@ -219,7 +219,7 @@ function VIPDashboardInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-3 py-8">
+    <div className="vip-shell min-h-screen bg-[#050505] text-white flex items-center justify-center px-3 py-8">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-[#0d0d0d] border border-[#d4a843]/20 rounded-2xl p-5 sm:p-8 text-center">
         <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#d4a843]/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -403,7 +403,7 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
   }
 
   return (
-    <div className="min-h-screen bg-[#030305] text-white">
+    <div className="vip-shell min-h-screen bg-[#030305] text-white">
       {/* Mobile Header */}
       <header className="bg-[#0d0d0d] border-b border-[#1f1f1f] sticky top-0 z-50">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
