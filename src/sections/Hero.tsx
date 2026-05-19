@@ -530,38 +530,221 @@ function SignalsFeed({ signals, updatedAt }: { signals: typeof SIGNALS; updatedA
    ═══════════════════════════════════════════ */
 
 function AssetsGrid({ assets, updatedAt }: { assets: typeof ASSETS; updatedAt: number | null }) {
-  const { t } = useLanguage()
+  const { language, t } = useLanguage()
+  const isArabic = language === "ar"
+  const isLive = Boolean(updatedAt)
+  const bullishCount = assets.filter((asset) => asset.dir === "up").length
+  const marketStatus = bullishCount >= Math.ceil(assets.length / 2)
+    ? { label: isArabic ? "صاعد" : "Bullish", color: "#22c55e", glow: "rgba(34,197,94,0.28)" }
+    : { label: isArabic ? "حذر" : "Cautious", color: "#f59e0b", glow: "rgba(245,158,11,0.24)" }
+  const leadAsset = assets[0]
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xs font-bold flex items-center gap-1.5">
-          <Globe size={12} className="text-[#d4a843]" /> {t("hero.tradingAssets")}
-        </h2>
-        <span className="text-[9px] text-[#666666] font-mono">
-          {updatedAt ? "LIVE API" : "CONNECTING"}
-        </span>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.78 }}
+        className="relative overflow-hidden rounded-3xl border border-[#d4a843]/25 bg-[#07110c]/85 p-4 sm:p-5 shadow-[0_0_55px_rgba(34,197,94,0.08)]"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_18%,rgba(34,197,94,0.16),transparent_28%),radial-gradient(circle_at_8%_82%,rgba(212,168,67,0.12),transparent_28%)]" />
+        <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(34,197,94,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(212,168,67,0.05)_1px,transparent_1px)] [background-size:42px_42px]" />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {assets.map((a, i) => (
-          <motion.div key={a.pair} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 + i * 0.08 }}
-            className="bg-[#0a0a0f]/60 border border-[#1f1f1f] rounded-xl p-3 hover:border-[#d4a843]/15 transition-all group">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-bold text-white">{a.pair}</span>
-              <div className={`flex items-center gap-0.5 ${a.dir === "up" ? "text-[#22c55e]" : "text-[#e11d48]"}`}>
-                {a.dir === "up" ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-                <span className="text-[8px] font-bold">{a.change > 0 ? "+" : ""}{a.change}%</span>
+        <div className="relative z-10 mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <Globe size={14} className="text-[#d4a843]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#d4a843]">{t("hero.tradingAssets")}</span>
+            </div>
+            <h2 className="text-xl font-black uppercase tracking-[0.08em] text-white sm:text-2xl">
+              {isArabic ? "لوحة الأسعار الذكية" : "Live Market Intelligence"}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <motion.div
+              className="rounded-2xl border px-4 py-2 text-right"
+              style={{ borderColor: `${marketStatus.color}55`, backgroundColor: `${marketStatus.color}12`, boxShadow: `0 0 28px ${marketStatus.glow}` }}
+              animate={{ boxShadow: [`0 0 12px ${marketStatus.glow}`, `0 0 34px ${marketStatus.glow}`, `0 0 12px ${marketStatus.glow}`] }}
+              transition={{ duration: 2.5, repeat: Infinity }}
+            >
+              <p className="text-[8px] uppercase tracking-wider text-[#88998b]">{isArabic ? "حالة السوق" : "Market status"}</p>
+              <p className="text-sm font-black uppercase" style={{ color: marketStatus.color }}>{marketStatus.label}</p>
+            </motion.div>
+            <div className="flex items-center gap-1.5 rounded-full border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#22c55e] shadow-[0_0_12px_rgba(34,197,94,0.95)]" />
+              <span className="text-[9px] font-black uppercase text-[#22c55e]">{isLive ? "Live API" : "Connecting"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
+          <div className="rounded-2xl border border-[#22c55e]/20 bg-black/30 p-4">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#a0a0a0]">{isArabic ? "الأصل الرئيسي" : "Primary market"}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-2xl font-black text-white">{leadAsset.pair}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${leadAsset.dir === "up" ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#e11d48]/15 text-[#e11d48]"}`}>
+                    {leadAsset.dir === "up" ? "BUY PRESSURE" : "SELL PRESSURE"}
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <motion.div
+                  className="font-mono text-2xl font-black text-[#d4a843]"
+                  animate={{ opacity: [0.78, 1, 0.78] }}
+                  transition={{ duration: 1.8, repeat: Infinity }}
+                >
+                  {isLive ? formatAssetPrice(leadAsset.price) : "Connecting"}
+                </motion.div>
+                <div className={`mt-1 flex items-center justify-end gap-1 text-xs font-black ${leadAsset.dir === "up" ? "text-[#22c55e]" : "text-[#e11d48]"}`}>
+                  {leadAsset.dir === "up" ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                  {leadAsset.change > 0 ? "+" : ""}{leadAsset.change}%
+                </div>
               </div>
             </div>
-            <motion.p className="text-sm font-black font-mono text-[#d4a843]"
-              animate={{ opacity: [0.75, 1, 0.75] }} transition={{ duration: 3, repeat: Infinity, delay: i * 0.5 }}>
-              {updatedAt ? `$${a.price.toLocaleString(undefined, { minimumFractionDigits: a.price > 1000 ? 2 : 4, maximumFractionDigits: a.price > 1000 ? 2 : 5 })}` : "Connecting"}
-            </motion.p>
-            <MiniSparkline dir={a.dir} />
-          </motion.div>
-        ))}
+
+            <MarketPulseChart dir={leadAsset.dir} />
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {[
+                { label: isArabic ? "السيولة" : "Liquidity", value: "High" },
+                { label: isArabic ? "الزخم" : "Momentum", value: leadAsset.dir === "up" ? "Bullish" : "Bearish" },
+                { label: isArabic ? "الدقة" : "Signal score", value: "92%" },
+              ].map((item, index) => (
+                <div key={item.label} className="rounded-xl border border-[#1f3a29] bg-[#07130c]/80 p-3">
+                  <p className="text-[8px] uppercase tracking-wider text-[#66756b]">{item.label}</p>
+                  <p className="mt-1 text-xs font-black text-[#22c55e]">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
+            {assets.slice(1, 5).map((asset, index) => (
+              <AssetPriceRow key={asset.pair} asset={asset} index={index} isLive={isLive} />
+            ))}
+          </div>
+        </div>
+
+        <div className="relative z-10 mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {assets.map((asset, index) => (
+            <AssetMiniTile key={asset.pair} asset={asset} index={index} isLive={isLive} />
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+function AssetPriceRow({ asset, index, isLive }: { asset: typeof ASSETS[number]; index: number; isLive: boolean }) {
+  const isUp = asset.dir === "up"
+  const color = isUp ? "#22c55e" : "#e11d48"
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.88 + index * 0.08 }}
+      className="relative overflow-hidden rounded-2xl border bg-black/30 p-3"
+      style={{ borderColor: `${color}22` }}
+    >
+      <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/5" style={{ color }}>
+            {isUp ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-black text-white">{asset.pair}</p>
+            <p className="text-[9px] uppercase tracking-wider text-[#66756b]">{isUp ? "Demand rising" : "Pressure active"}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="font-mono text-xs font-black text-[#d4a843]">{isLive ? formatAssetPrice(asset.price) : "Connecting"}</p>
+          <p className="text-[10px] font-black" style={{ color }}>{asset.change > 0 ? "+" : ""}{asset.change}%</p>
+        </div>
       </div>
+    </motion.div>
+  )
+}
+
+function AssetMiniTile({ asset, index, isLive }: { asset: typeof ASSETS[number]; index: number; isLive: boolean }) {
+  const isUp = asset.dir === "up"
+  const color = isUp ? "#22c55e" : "#e11d48"
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 1 + index * 0.06 }}
+      className="group rounded-2xl border border-[#1f1f1f] bg-[#050806]/75 p-3 transition-all hover:border-[#d4a843]/30"
+    >
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-black text-white">{asset.pair}</span>
+        <span className="text-[8px] font-black" style={{ color }}>{asset.change > 0 ? "+" : ""}{asset.change}%</span>
+      </div>
+      <motion.p
+        className="font-mono text-xs font-black text-[#d4a843]"
+        animate={{ opacity: [0.72, 1, 0.72] }}
+        transition={{ duration: 2.4, repeat: Infinity, delay: index * 0.2 }}
+      >
+        {isLive ? formatAssetPrice(asset.price) : "Connecting"}
+      </motion.p>
+      <MiniSparkline dir={asset.dir} />
+    </motion.div>
+  )
+}
+
+function formatAssetPrice(price: number) {
+  return `$${price.toLocaleString(undefined, {
+    minimumFractionDigits: price > 1000 ? 2 : 4,
+    maximumFractionDigits: price > 1000 ? 2 : 5,
+  })}`
+}
+
+function MarketPulseChart({ dir }: { dir: string }) {
+  const color = dir === "up" ? "#22c55e" : "#e11d48"
+  const points = dir === "up"
+    ? "0,118 42,102 82,110 126,84 168,92 210,66 252,74 296,42 340,30 380,14"
+    : "0,28 42,44 82,36 126,66 168,58 210,88 252,82 296,108 340,100 380,122"
+
+  return (
+    <div className="relative h-40 overflow-hidden rounded-2xl border border-[#1f3a29] bg-[#03120a]">
+      <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(34,197,94,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,197,94,0.08)_1px,transparent_1px)] [background-size:34px_34px]" />
+      <svg viewBox="0 0 380 140" className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="marketGlow" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.34" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+          <filter id="lineGlow">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <polygon points={`0,140 ${points} 380,140`} fill="url(#marketGlow)" />
+        <motion.polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth="4"
+          filter="url(#lineGlow)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 2.2, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+        />
+      </svg>
+      <motion.div
+        className="absolute bottom-6 right-8 h-4 w-4 rounded-full"
+        style={{ backgroundColor: color, boxShadow: `0 0 28px ${color}` }}
+        animate={{ scale: [0.8, 1.35, 0.8], opacity: [0.55, 1, 0.55] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+      />
     </div>
   )
 }
