@@ -166,6 +166,56 @@ client.exec(`
     last_used_at INTEGER
   );
 
+  CREATE TABLE IF NOT EXISTS trader_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL UNIQUE,
+    starting_capital TEXT NOT NULL DEFAULT '0',
+    current_balance TEXT NOT NULL DEFAULT '0',
+    risk_percent TEXT NOT NULL DEFAULT '1',
+    reward_ratio TEXT NOT NULL DEFAULT '2',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    created_at INTEGER,
+    updated_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS trader_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    asset TEXT DEFAULT '',
+    direction TEXT DEFAULT '',
+    outcome TEXT NOT NULL DEFAULT 'WIN',
+    amount TEXT NOT NULL DEFAULT '0',
+    lot_size TEXT DEFAULT '',
+    risk_percent TEXT DEFAULT '',
+    strategy TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    lesson_learned TEXT DEFAULT '',
+    created_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memory_key TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    asset TEXT DEFAULT '',
+    strategy TEXT DEFAULT '',
+    wins INTEGER NOT NULL DEFAULT 0,
+    losses INTEGER NOT NULL DEFAULT 0,
+    breakeven INTEGER NOT NULL DEFAULT 0,
+    lessons TEXT DEFAULT '',
+    updated_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS daily_analysis_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usage_key TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER
+  );
+
   -- Helpful indexes for the admin queries
   CREATE INDEX IF NOT EXISTS idx_vip_payments_status     ON vip_payments(status);
   CREATE INDEX IF NOT EXISTS idx_vip_payments_submitted  ON vip_payments(submitted_at);
@@ -183,7 +233,10 @@ client.exec(`
   CREATE INDEX IF NOT EXISTS idx_users_email             ON users(email);
   CREATE INDEX IF NOT EXISTS idx_user_sessions_token     ON user_sessions(session_token);
   CREATE INDEX IF NOT EXISTS idx_user_sessions_user      ON user_sessions(user_id);
-  CREATE INDEX IF NOT EXISTS idx_free_usage_key           ON free_usage(identity_key);
+  CREATE INDEX IF NOT EXISTS idx_free_usage_key          ON free_usage(identity_key);
+  CREATE INDEX IF NOT EXISTS idx_trader_trades_user      ON trader_trades(user_id);
+  CREATE INDEX IF NOT EXISTS idx_agent_memory_user       ON agent_memory(user_id);
+  CREATE INDEX IF NOT EXISTS idx_daily_usage_user        ON daily_analysis_usage(user_id);
 `);
 
 // ─── Lightweight migration: add `code_type` to vip_codes if it's an old DB ───

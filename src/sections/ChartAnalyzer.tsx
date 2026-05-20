@@ -150,6 +150,14 @@ export default function ChartAnalyzer() {
   });
   const consumeTrial = trpc.trial.consume.useMutation();
 
+  // Subscriber daily quota (monthly 10 / yearly 20 / $25 trial 3 per day).
+  // Only meaningful for VIP subscribers; non-subscribers use the free tiers.
+  const dailyQuota = trpc.dashboard.dailyQuota.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const consumeDaily = trpc.dashboard.consumeDaily.useMutation();
+
   // Sync server trial state into local UI state.
   useEffect(() => {
     const data = trialStatus.data;
@@ -158,8 +166,20 @@ export default function ChartAnalyzer() {
     setTrialRemaining(data.remaining);
   }, [trialStatus.data, developerMode]);
 
+  // A subscriber is someone the daily-quota endpoint recognises as VIP.
+  const isSubscriber = Boolean(dailyQuota.data?.loggedIn && dailyQuota.data.isSubscriber);
+  const dailyRemaining = dailyQuota.data?.loggedIn && dailyQuota.data.isSubscriber
+    ? dailyQuota.data.remaining
+    : 0;
+  const dailyLimit = dailyQuota.data?.loggedIn && dailyQuota.data.isSubscriber
+    ? dailyQuota.data.limit
+    : 0;
+
   const unlimitedAccess = developerMode || trialStage === "unlimited";
-  const canAnalyze = unlimitedAccess || trialStage === "anon" || trialStage === "account";
+  // Subscribers can analyze while they still have daily quota left.
+  const subscriberCanAnalyze = isSubscriber && dailyRemaining > 0;
+  const canAnalyze = unlimitedAccess || subscriberCanAnalyze
+    || (!isSubscriber && (trialStage === "anon" || trialStage === "account"));
 
   const assetDecimals = getDefaultDecimals(selectedAsset);
 
@@ -194,9 +214,27 @@ export default function ChartAnalyzer() {
 
     const unlimited = hasDeveloperAccess || trialStage === "unlimited";
 
+    // ─── Subscribers: enforce the per-day analysis quota ───
+    // Monthly 10/day, Yearly 20/day, $25 trial 3/day. Developers bypass.
+    if (!hasDeveloperAccess && isSubscriber) {
+      try {
+        const q = await dailyQuota.refetch();
+        if (q.data?.loggedIn && q.data.isSubscriber && q.data.remaining <= 0) {
+          alert(
+            `You've used all ${q.data.limit} analyses for today. ` +
+            `Your daily limit resets tomorrow.`,
+          );
+          return;
+        }
+      } catch {
+        /* network blip — consumeDaily below still guards the limit */
+      }
+    }
+
     // Check the trial state against the SERVER (source of truth). If the
     // visitor is out of free analyses, route them to signup or paywall.
-    if (!unlimited) {
+    // Subscribers skip this — they use the daily quota above instead.
+    if (!unlimited && !isSubscriber) {
       try {
         const status = await trialStatus.refetch();
         const data = status.data;
@@ -269,8 +307,19 @@ export default function ChartAnalyzer() {
       setUsedOpenAI(data.reasons.length > 0 && data.reasons[0].includes("price action"));
       setResult(data);
 
-      // Record the consumed analysis on the SERVER for non-unlimited users.
-      if (!unlimited) {
+      // Record the consumed analysis on the SERVER.
+      if (hasDeveloperAccess) {
+        // Developers: unlimited, nothing to record.
+      } else if (isSubscriber) {
+        // Subscribers consume from their daily quota.
+        try {
+          await consumeDaily.mutateAsync({});
+          dailyQuota.refetch();
+        } catch {
+          /* server unreachable — next refetch will resync */
+        }
+      } else {
+        // Free-tier visitors consume from the 2+2 trial system.
         try {
           const res = await consumeTrial.mutateAsync({});
           if (!res.unlimited) {
@@ -431,10 +480,16 @@ export default function ChartAnalyzer() {
             </div>
 
             {/* Free Analysis Counter / Tier Status */}
-            {unlimitedAccess ? (
+            {isSubscriber ? (
               <div className="mb-3 flex items-center justify-center gap-2">
                 <span className="text-[10px] text-[#d4a843] bg-[#d4a843]/10 border border-[#d4a843]/20 rounded-full px-3 py-1">
-                  {developerMode ? "Developer unlimited analysis" : "VIP unlimited analysis"}
+                  {dailyRemaining} of {dailyLimit} daily analyses remaining
+                </span>
+              </div>
+            ) : developerMode ? (
+              <div className="mb-3 flex items-center justify-center gap-2">
+                <span className="text-[10px] text-[#d4a843] bg-[#d4a843]/10 border border-[#d4a843]/20 rounded-full px-3 py-1">
+                  Developer unlimited analysis
                 </span>
               </div>
             ) : trialStage === "anon" ? (
@@ -483,7 +538,7 @@ export default function ChartAnalyzer() {
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full border border-[#18c8ff]/20 bg-[#06101a]/75 text-[#b8c7d9] font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 hover:border-[#d4a843]/60 hover:text-white hover:shadow-[0_0_24px_rgba(212,168,67,0.12)] transition-all duration-200">
                   <Brain size={18} />
                   {t("analyzer.reanalyze")}
-                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{unlimitedAccess ? "∞" : `${trialRemaining} left`}</span>
+                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{unlimitedAccess ? "∞" : isSubscriber ? `${dailyRemaining} today` : `${trialRemaining} left`}</span>
                 </motion.button>
               )}
 

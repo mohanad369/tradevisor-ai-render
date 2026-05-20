@@ -154,3 +154,70 @@ export const freeUsage = sqliteTable("free_usage", {
   firstSeenAt: integer("first_seen_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+// ─── Trader Dashboard: Trading Account ───
+// One row per user — their capital state and growth-plan settings.
+export const traderAccounts = sqliteTable("trader_accounts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull().unique(),
+  startingCapital: text("starting_capital").notNull().default("0"),
+  currentBalance: text("current_balance").notNull().default("0"),
+  // Risk per trade as a percentage of balance (e.g. "1" or "2").
+  riskPercent: text("risk_percent").notNull().default("1"),
+  // Reward-to-risk ratio numerator (risk is always 1). Default 2 → 1:2.
+  rewardRatio: text("reward_ratio").notNull().default("2"),
+  currency: text("currency").notNull().default("USD"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+
+// ─── Trader Dashboard: Trade Journal ───
+// One row per trade the user logs (win / loss / breakeven).
+export const traderTrades = sqliteTable("trader_trades", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tradeId: text("trade_id").notNull().unique(),
+  userId: text("user_id").notNull(),
+  asset: text("asset").default(""),
+  direction: text("direction").default(""),          // "BUY" | "SELL"
+  outcome: text("outcome").notNull().default("WIN"), // "WIN" | "LOSS" | "BE"
+  // Signed P/L amount in account currency (+ for win, - for loss).
+  amount: text("amount").notNull().default("0"),
+  lotSize: text("lot_size").default(""),
+  riskPercent: text("risk_percent").default(""),
+  // Optional link back to the analysis that produced this trade.
+  strategy: text("strategy").default(""),
+  notes: text("notes").default(""),
+  // Lesson extracted by the agents from a losing/failed trade.
+  lessonLearned: text("lesson_learned").default(""),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+
+// ─── Agent Memory ───
+// Aggregated performance memory the AI agents read before a new analysis,
+// so their advice reflects this user's real history (not a fixed number).
+// Keyed per (userId, asset+strategy bucket).
+export const agentMemory = sqliteTable("agent_memory", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  memoryKey: text("memory_key").notNull().unique(),   // "<userId>:<asset>:<strategy>"
+  userId: text("user_id").notNull(),
+  asset: text("asset").default(""),
+  strategy: text("strategy").default(""),
+  wins: integer("wins").notNull().default(0),
+  losses: integer("losses").notNull().default(0),
+  breakeven: integer("breakeven").notNull().default(0),
+  // Short rolling text of recent lessons, newest first (capped).
+  lessons: text("lessons").default(""),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+
+// ─── Daily Analysis Quota (subscribers) ───
+// Per-user, per-day counter for the subscriber analysis limit
+// (monthly 10/day, yearly 20/day, $25 trial 3/day).
+export const dailyAnalysisUsage = sqliteTable("daily_analysis_usage", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  usageKey: text("usage_key").notNull().unique(),     // "<userId>:<YYYY-MM-DD>"
+  userId: text("user_id").notNull(),
+  day: text("day").notNull(),
+  used: integer("used").notNull().default(0),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});

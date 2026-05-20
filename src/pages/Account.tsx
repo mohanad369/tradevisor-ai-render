@@ -103,6 +103,12 @@ export default function Account() {
                 >
                   Open VIP Dashboard <ArrowRight size={15} />
                 </button>
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="mt-2 w-full border border-[#a78bfa]/40 text-[#a78bfa] font-semibold py-2.5 rounded-xl hover:bg-[#a78bfa]/10 transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  Open Trader Dashboard <ArrowRight size={15} />
+                </button>
               </div>
             ) : (
               <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4">
