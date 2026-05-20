@@ -80,7 +80,7 @@ export default function Admin() {
   const navigate = useNavigate()
   const { isAuthenticated, login: adminLogin, logout } = useAuth()
   const [password, setPassword] = useState('')
-  const [activeTab, setActiveTab] = useState<'overview'|'subscribers'|'verifications'|'tradingview'|'monthly'|'yearly'|'referrals'|'settings'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview'|'subscribers'|'users'|'verifications'|'tradingview'|'monthly'|'yearly'|'referrals'|'settings'>('overview')
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [pendingUsers, setPendingUsers] = useState<any[]>([])
   const [stats, setStats] = useState(getStats())
@@ -134,6 +134,30 @@ export default function Admin() {
   const { data: trpcReferrals } = trpc.vip.getReferrals.useQuery(undefined, {
     enabled: isAuthenticated && trpcAvailable,
     refetchInterval: 5000,
+    retry: false
+  })
+
+  const { data: registeredUsers = [], refetch: refetchUsers } = trpc.auth.adminListUsers.useQuery(undefined, {
+    enabled: isAuthenticated && trpcAvailable && activeTab === 'users',
+    refetchInterval: 10000,
+    retry: false
+  })
+  const { data: userStats } = trpc.auth.adminUserStats.useQuery(undefined, {
+    enabled: isAuthenticated && trpcAvailable,
+    refetchInterval: 10000,
+    retry: false
+  })
+  const setUserStatusMutation = trpc.auth.adminSetUserStatus.useMutation({
+    onSuccess: () => { refetchUsers() }
+  })
+  const deleteUserMutation = trpc.auth.adminDeleteUser.useMutation({
+    onSuccess: () => { refetchUsers() }
+  })
+  const [userSearch, setUserSearch] = useState("")
+
+  const { data: visitStats } = trpc.auth.adminVisitStats.useQuery(undefined, {
+    enabled: isAuthenticated && trpcAvailable,
+    refetchInterval: 15000,
     retry: false
   })
 
@@ -680,6 +704,7 @@ export default function Admin() {
           {[
             { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
             { id: 'subscribers' as const, label: 'Subscribers', icon: Users },
+            { id: 'users' as const, label: 'Registered Users', icon: UserPlus },
             { id: 'verifications' as const, label: 'Verifications', icon: CreditCard },
             { id: 'tradingview' as const, label: 'TradingView', icon: TrendingUp },
             { id: 'monthly' as const, label: 'Monthly Subs', icon: Key },
@@ -725,6 +750,7 @@ export default function Admin() {
               {[
                 { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
                 { id: 'subscribers' as const, label: 'Subscribers', icon: Users },
+                { id: 'users' as const, label: 'Registered Users', icon: UserPlus },
                 { id: 'verifications' as const, label: 'Verifications', icon: CreditCard },
                 { id: 'monthly' as const, label: 'Monthly Subs', icon: Key },
                 { id: 'referrals' as const, label: 'Referrals', icon: Gift },
@@ -766,6 +792,22 @@ export default function Admin() {
                   </div>
                 </div>
               )}
+              <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl p-4 mb-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#d4a843]/10 flex items-center justify-center">
+                  <UserPlus size={18} className="text-[#d4a843]" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-bold">
+                    {userStats?.total ?? 0} Accounts · {(visitStats?.allTime ?? 0).toLocaleString()} Visits
+                  </div>
+                  <div className="text-[10px] text-[#666666]">
+                    +{userStats?.newToday ?? 0} new accounts today · {visitStats?.today ?? 0} visits today · {visitStats?.last7Days ?? 0} this week
+                  </div>
+                </div>
+                <button onClick={() => setActiveTab('users')} className="text-[10px] text-[#d4a843] hover:text-[#e8c76a] whitespace-nowrap">
+                  View all &rarr;
+                </button>
+              </div>
               <div className="bg-[#0d0d0d] border border-[#d4a843]/20 rounded-xl p-4 mb-6">
                 <div className="flex items-center gap-2 mb-3">
                   <UserPlus size={16} className="text-[#d4a843]" />
@@ -834,6 +876,179 @@ export default function Admin() {
                   </div>
                 ))}
                 {(!subscribers || subscribers.length === 0) && <p className="text-[#666666] text-xs text-center py-4">No subscribers yet</p>}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'users' && (
+            <div>
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <UserPlus size={18} className="text-[#d4a843]" /> Users & Visitors
+                  </h2>
+                  <p className="text-xs text-[#666666] mt-1">
+                    Registered accounts are separate from VIP. VIP status is shown only by matching email.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl p-4 mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp size={15} className="text-[#18c8ff]" />
+                  <h3 className="text-sm font-bold">Site Visits</h3>
+                  <span className="text-[9px] text-[#666666]">one count per browser session</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Today', value: visitStats?.today ?? 0, accent: '#22c55e' },
+                    { label: 'Last 7 Days', value: visitStats?.last7Days ?? 0, accent: '#18c8ff' },
+                    { label: 'Last 30 Days', value: visitStats?.last30Days ?? 0, accent: '#d4a843' },
+                    { label: 'All Time', value: visitStats?.allTime ?? 0, accent: '#a0a0a0' },
+                  ].map(card => (
+                    <div key={card.label} className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-3">
+                      <p className="text-[10px] text-[#666666] uppercase tracking-wide">{card.label}</p>
+                      <p className="text-2xl font-bold mt-1" style={{ color: card.accent }}>{card.value.toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+                {visitStats?.last14 && visitStats.last14.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-[10px] text-[#666666] mb-2">Last 14 days</p>
+                    <div className="flex items-end gap-1 h-20">
+                      {(() => {
+                        const max = Math.max(1, ...visitStats.last14.map(d => d.count))
+                        return visitStats.last14.map(d => (
+                          <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group relative">
+                            <div
+                              className="w-full bg-[#18c8ff]/30 hover:bg-[#18c8ff]/60 rounded-t transition-colors"
+                              style={{ height: `${Math.max(4, (d.count / max) * 100)}%` }}
+                            />
+                            <span className="absolute -top-5 text-[9px] text-white bg-[#1f1f1f] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                              {d.count} · {d.day.slice(5)}
+                            </span>
+                          </div>
+                        ))
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-sm font-bold flex items-center gap-2">
+                    <UserPlus size={15} className="text-[#d4a843]" /> Registered Accounts
+                  </h3>
+                  <p className="text-[11px] text-[#666666] mt-0.5">An account does not grant VIP access by itself.</p>
+                </div>
+                <div className="relative w-full lg:w-80">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666666]" />
+                  <input
+                    value={userSearch}
+                    onChange={event => setUserSearch(event.target.value)}
+                    placeholder="Search email or name..."
+                    className="w-full bg-[#141414] border border-[#1f1f1f] rounded-xl pl-9 pr-4 py-2.5 text-white text-sm placeholder-[#666666] focus:outline-none focus:border-[#d4a843]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                {[
+                  { label: 'Total Accounts', value: userStats?.total ?? 0, accent: '#d4a843' },
+                  { label: 'New Today', value: userStats?.newToday ?? 0, accent: '#22c55e' },
+                  { label: 'New This Week', value: userStats?.newThisWeek ?? 0, accent: '#18c8ff' },
+                  { label: 'New This Month', value: userStats?.newThisMonth ?? 0, accent: '#a0a0a0' },
+                ].map(card => (
+                  <div key={card.label} className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl p-4">
+                    <p className="text-[10px] text-[#666666] uppercase tracking-wide">{card.label}</p>
+                    <p className="text-2xl font-bold mt-1" style={{ color: card.accent }}>{card.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {!trpcAvailable && (
+                <div className="bg-[#e11d48]/10 border border-[#e11d48]/20 rounded-xl p-3 text-[#e11d48] text-xs mb-4">
+                  The secure server is unavailable. Registered users cannot be loaded right now.
+                </div>
+              )}
+
+              <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#1f1f1f] text-[#666666] text-[11px] uppercase tracking-wide">
+                        <th className="text-left font-medium px-4 py-3">Email</th>
+                        <th className="text-left font-medium px-4 py-3">Name</th>
+                        <th className="text-left font-medium px-4 py-3">Registered</th>
+                        <th className="text-left font-medium px-4 py-3">Last Login</th>
+                        <th className="text-left font-medium px-4 py-3">VIP</th>
+                        <th className="text-left font-medium px-4 py-3">Status</th>
+                        <th className="text-right font-medium px-4 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {registeredUsers
+                        .filter(u => {
+                          const q = userSearch.trim().toLowerCase()
+                          if (!q) return true
+                          return u.email.toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
+                        })
+                        .map(u => (
+                          <tr key={u.userId} className="border-b border-[#141414] last:border-0 hover:bg-[#141414]/50">
+                            <td className="px-4 py-3 text-white break-all">{u.email}</td>
+                            <td className="px-4 py-3 text-[#a0a0a0]">{u.name || '-'}</td>
+                            <td className="px-4 py-3 text-[#a0a0a0] whitespace-nowrap">
+                              {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-[#a0a0a0] whitespace-nowrap">
+                              {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}
+                            </td>
+                            <td className="px-4 py-3">
+                              {u.vipActive
+                                ? <span className="bg-[#d4a843]/15 text-[#d4a843] text-[10px] font-semibold px-2 py-0.5 rounded-full">VIP</span>
+                                : <span className="text-[#666666] text-[10px]">Free</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              {u.status === 'ACTIVE'
+                                ? <span className="text-[#22c55e] text-[10px] font-semibold">Active</span>
+                                : <span className="text-[#e11d48] text-[10px] font-semibold">Disabled</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setUserStatusMutation.mutate({
+                                    userId: u.userId,
+                                    status: u.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE',
+                                  })}
+                                  className="text-[10px] px-2 py-1 rounded-md border border-[#1f1f1f] text-[#a0a0a0] hover:border-[#d4a843]/40 hover:text-[#d4a843] transition-colors"
+                                >
+                                  {u.status === 'ACTIVE' ? 'Disable' : 'Enable'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Delete account ${u.email}? This cannot be undone.`)) {
+                                      deleteUserMutation.mutate({ userId: u.userId })
+                                    }
+                                  }}
+                                  className="text-[10px] px-2 py-1 rounded-md border border-[#1f1f1f] text-[#a0a0a0] hover:border-[#e11d48]/40 hover:text-[#e11d48] transition-colors"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      {registeredUsers.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-10 text-center text-[#666666] text-sm">
+                            No registered users yet. They will appear here as soon as people sign up.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

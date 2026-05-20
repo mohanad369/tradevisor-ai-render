@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Flame, Crown, Menu, X } from "lucide-react";
+import { Flame, Crown, Menu, X, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useLanguage } from "@/lib/language";
+import { useUserAuth } from "@/contexts/UserAuthContext";
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { isLoggedIn } = useUserAuth();
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 20);
@@ -55,6 +57,10 @@ export default function Navbar() {
                   <Crown size={12} /> VIP
                 </button>
               </div>
+              <button onClick={() => { setMobileMenuOpen(false); navigate("/account"); }}
+                className="w-full flex items-center justify-center gap-1.5 text-white text-xs border border-[#1f1f1f] px-3 py-2.5 rounded-full cursor-pointer mt-2 hover:border-[#d4a843]/40 transition-colors">
+                <UserIcon size={12} /> {isLoggedIn ? "My Account" : "Log In / Sign Up"}
+              </button>
             </motion.div>
           </motion.div>
         )}
@@ -90,6 +96,12 @@ export default function Navbar() {
             className="flex items-center gap-1 text-[#d4a843] hover:text-[#e8c76a] text-[10px] sm:text-xs border border-[#d4a843]/30 px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/60 hover:bg-[#d4a843]/10 bg-[#d4a843]/5 transition-colors tv-button-glow">
             <Crown size={11} className="sm:hidden" /><Crown size={12} className="hidden sm:block" />
             <span className="font-semibold">{t("nav.vip")}</span>
+          </button>
+
+          <button onClick={() => navigate("/account")}
+            className="flex items-center gap-1 text-white hover:text-[#d4a843] text-[10px] sm:text-xs border border-[#1f1f1f] px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:border-[#d4a843]/40 transition-colors">
+            <UserIcon size={11} className="sm:hidden" /><UserIcon size={12} className="hidden sm:block" />
+            <span className="font-semibold hidden sm:inline">{isLoggedIn ? "Account" : "Log In"}</span>
           </button>
 
           {/* Mobile hamburger */}

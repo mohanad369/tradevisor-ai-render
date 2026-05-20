@@ -129,6 +129,34 @@ client.exec(`
     updated_at INTEGER
   );
 
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT DEFAULT '',
+    password_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at INTEGER,
+    last_login_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS user_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_token TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    ip TEXT DEFAULT '',
+    user_agent TEXT DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER,
+    expires_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS visit_stats (
+    day TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER
+  );
+
   -- Helpful indexes for the admin queries
   CREATE INDEX IF NOT EXISTS idx_vip_payments_status     ON vip_payments(status);
   CREATE INDEX IF NOT EXISTS idx_vip_payments_submitted  ON vip_payments(submitted_at);
@@ -143,6 +171,9 @@ client.exec(`
   CREATE INDEX IF NOT EXISTS idx_referrals_referrer      ON referrals(referrer_code);
   CREATE INDEX IF NOT EXISTS idx_payment_invoices_order  ON payment_invoices(order_id);
   CREATE INDEX IF NOT EXISTS idx_payment_invoices_status ON payment_invoices(status);
+  CREATE INDEX IF NOT EXISTS idx_users_email             ON users(email);
+  CREATE INDEX IF NOT EXISTS idx_user_sessions_token     ON user_sessions(session_token);
+  CREATE INDEX IF NOT EXISTS idx_user_sessions_user      ON user_sessions(user_id);
 `);
 
 // ─── Lightweight migration: add `code_type` to vip_codes if it's an old DB ───

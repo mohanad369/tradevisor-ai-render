@@ -21,8 +21,13 @@ const trpcClient = trpc.createClient({
       url: `${apiOrigin}/api/trpc`,
       transformer: superjson,
       headers() {
-        const token = typeof window !== "undefined" ? localStorage.getItem("tradevisor_admin_session") : null;
-        return token ? { authorization: `Bearer ${token}` } : {};
+        if (typeof window === "undefined") return {};
+        const headers: Record<string, string> = {};
+        const adminToken = localStorage.getItem("tradevisor_admin_session");
+        if (adminToken) headers.authorization = `Bearer ${adminToken}`;
+        const userToken = localStorage.getItem("tradevisor_user_token");
+        if (userToken) headers["x-user-token"] = userToken;
+        return headers;
       },
     }),
   ],

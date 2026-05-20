@@ -32,7 +32,7 @@ app.use(cors({
     ? [env.PUBLIC_SITE_ORIGIN, env.PUBLIC_SITE_ORIGIN_WWW].filter(Boolean) as string[]
     : ["http://localhost:3000", "http://localhost:5173"],
   allowMethods: ["GET", "POST", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "x-trpc-source", "x-csrf-token", "x-nowpayments-sig"],
+  allowHeaders: ["Content-Type", "Authorization", "x-trpc-source", "x-csrf-token", "x-nowpayments-sig", "x-user-token"],
   credentials: true,
   maxAge: 600,
 }));

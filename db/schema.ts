@@ -111,3 +111,31 @@ export const paymentInvoices = sqliteTable("payment_invoices", {
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull().unique(),
+  email: text("email").notNull().unique(),
+  name: text("name").default(""),
+  passwordHash: text("password_hash").notNull(),
+  status: text("status").notNull().default("ACTIVE"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
+});
+
+export const userSessions = sqliteTable("user_sessions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sessionToken: text("session_token").notNull().unique(),
+  userId: text("user_id").notNull(),
+  ip: text("ip").default(""),
+  userAgent: text("user_agent").default(""),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  expiresAt: integer("expires_at", { mode: "timestamp" }),
+});
+
+export const visitStats = sqliteTable("visit_stats", {
+  day: text("day").primaryKey(),
+  count: integer("count").notNull().default(0),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});

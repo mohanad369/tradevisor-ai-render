@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { createHashRouter, RouterProvider } from 'react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { UserAuthProvider } from '@/contexts/UserAuthContext'
 import { trpc } from '@/lib/trpc'
 import { trpcClient, queryClient } from '@/lib/trpcClient'
 import { LanguageProvider } from '@/lib/language'
@@ -15,8 +16,10 @@ import Developer from './pages/Developer.tsx'
 import Privacy from './pages/Privacy.tsx'
 import CandlePredictor from './pages/CandlePredictor.tsx'
 import VIPDashboard from './pages/VIPDashboard.tsx'
+import Account from './pages/Account.tsx'
+import VisitTracker from './components/VisitTracker.tsx'
 
-const cleanPathRoutes = new Set(['/admin', '/developer', '/login', '/privacy', '/candles', '/vip'])
+const cleanPathRoutes = new Set(['/admin', '/developer', '/login', '/privacy', '/candles', '/vip', '/account'])
 const currentPath = window.location.pathname.replace(/\/$/, '') || '/'
 
 if (cleanPathRoutes.has(currentPath) && !window.location.hash) {
@@ -31,6 +34,7 @@ const router = createHashRouter([
   { path: '/privacy', element: <Privacy /> },
   { path: '/candles', element: <CandlePredictor /> },
   { path: '/vip', element: <VIPDashboard /> },
+  { path: '/account', element: <Account /> },
 ])
 
 createRoot(document.getElementById('root')!).render(
@@ -39,7 +43,10 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <LanguageProvider>
           <AuthProvider>
-            <RouterProvider router={router} />
+            <UserAuthProvider>
+              <VisitTracker />
+              <RouterProvider router={router} />
+            </UserAuthProvider>
           </AuthProvider>
         </LanguageProvider>
       </QueryClientProvider>
