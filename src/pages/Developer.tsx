@@ -8,6 +8,8 @@ type DeveloperLoginResponse =
   | {
       success: true
       sessionToken: string
+      userToken?: string
+      user?: { userId: string; email: string; name: string } | null
       email: string
       code: string
       expires: string
@@ -66,6 +68,12 @@ export default function Developer() {
       localStorage.setItem("tradevisor_current_user_code", data.code)
       localStorage.setItem("tradevisor_dev_mode", "true")
       localStorage.removeItem("tradevisor_analysis_count")
+
+      // Also store the user-account token so the Trader Dashboard
+      // (/dashboard, user-account system) recognizes the developer.
+      if (data.userToken) {
+        localStorage.setItem("tradevisor_user_token", data.userToken)
+      }
 
       navigate("/vip")
     } catch {

@@ -428,6 +428,10 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
             <span className="hidden lg:block text-[10px] text-[#666666] max-w-[180px] truncate">{email}</span>
+            <button onClick={() => navigate("/dashboard")}
+              className="flex items-center gap-1 text-[10px] text-[#a78bfa] hover:text-[#c4b5fd] px-2 sm:px-3 py-1.5 rounded-lg hover:bg-[#a78bfa]/10 transition-all">
+              <span className="hidden sm:inline">Trader </span>Dashboard
+            </button>
             <button onClick={() => navigate("/")}
               className="text-[10px] text-[#666666] hover:text-white px-2 sm:px-3 py-1.5 rounded-lg hover:bg-[#141414] transition-all">
               {vt("Home")}

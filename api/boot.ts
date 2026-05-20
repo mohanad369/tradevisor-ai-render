@@ -20,7 +20,7 @@ import { fetchServerMarketQuotes } from "./lib/market";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { replenishPool, seedVIPCodes } from "../db/seed";
 import { db } from "../db/db";
-import { paymentInvoices, vipCodes, vipPayments, vipSessions, vipSubscribers } from "../db/schema";
+import { paymentInvoices, users, userSessions, vipCodes, vipPayments, vipSessions, vipSubscribers } from "../db/schema";
 import { and, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 
@@ -206,9 +206,58 @@ app.post("/api/developer/login", async (c) => {
       expiresAt,
     });
 
+    // ── Also provision a USER ACCOUNT for the developer ──
+    // The Trader Dashboard runs on the user-account system (users +
+    // user_sessions, x-user-token). Developer login must issue one too,
+    // otherwise /dashboard sees no logged-in user.
+    let [devUser] = await db.select().from(users)
+      .where(eq(users.email, developerEmail));
+
+    if (!devUser) {
+      const devUserId = `usr_dev_${randomBytes(8).toString("base64url")}`;
+      await db.insert(users).values({
+        userId: devUserId,
+        email: developerEmail,
+        name: "Developer",
+        // Random hash — developer never logs in via the password form,
+        // only through this endpoint, so this value is never used.
+        passwordHash: `dev$${randomBytes(24).toString("hex")}`,
+        status: "ACTIVE",
+        lastLoginAt: new Date(),
+      });
+      [devUser] = await db.select().from(users)
+        .where(eq(users.email, developerEmail));
+    } else {
+      await db.update(users)
+        .set({ status: "ACTIVE", lastLoginAt: new Date() })
+        .where(eq(users.userId, devUser.userId));
+    }
+
+    let userToken = "";
+    if (devUser) {
+      // Retire old developer user-sessions, issue a fresh one.
+      await db.update(userSessions)
+        .set({ active: false })
+        .where(eq(userSessions.userId, devUser.userId));
+
+      userToken = `uss_dev_${randomBytes(24).toString("base64url")}`;
+      await db.insert(userSessions).values({
+        sessionToken: userToken,
+        userId: devUser.userId,
+        ip,
+        userAgent: c.req.header("user-agent") || "",
+        active: true,
+        expiresAt,
+      });
+    }
+
     return c.json({
       success: true,
       sessionToken,
+      userToken,
+      user: devUser
+        ? { userId: devUser.userId, email: devUser.email, name: devUser.name || "Developer" }
+        : null,
       subscriber,
       email: subscriber.email,
       code: subscriber.code,
