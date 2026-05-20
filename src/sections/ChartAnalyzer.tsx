@@ -16,23 +16,11 @@ import type { Strategy, Asset } from "@/data/strategies";
 import { useLanguage } from "@/lib/language";
 import { trpc } from "@/lib/trpc";
 
-const ANALYSIS_COUNT_KEY = "tradevisor_analysis_count";
-const FREE_LIMIT = 4;
 const DEV_MODE_KEY = "tradevisor_dev_mode";
 
-// localStorage is only a fast UI hint — the SERVER is the source of
-// truth for the free limit (see trial.* tRPC procedures). Clearing
-// localStorage no longer grants extra free analyses.
-function getAnalysisCount(): number {
-  try {
-    return parseInt(localStorage.getItem(ANALYSIS_COUNT_KEY) || "0", 10);
-  } catch { return 0; }
-}
-function setAnalysisCountLocal(count: number): void {
-  try {
-    localStorage.setItem(ANALYSIS_COUNT_KEY, String(count));
-  } catch { /* storage may be unavailable */ }
-}
+// The SERVER is the source of truth for the free-trial limit (see the
+// trial.* tRPC procedures). localStorage is no longer used to count
+// analyses — clearing it does not grant extra free analyses.
 function isDeveloperMode(): boolean {
   try {
     return localStorage.getItem(DEV_MODE_KEY) === "true";
@@ -141,12 +129,20 @@ export default function ChartAnalyzer() {
   const [realPrice, setRealPrice] = useState<number | undefined>(undefined);
   const [manualPrice, setManualPrice] = useState<string>("");
   const [usedOpenAI, setUsedOpenAI] = useState(false);
-  const [analysisCount, setAnalysisCount] = useState(getAnalysisCount());
   const [developerMode, setDeveloperMode] = useState(isDeveloperMode());
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  // Server-backed free-trial state (source of truth — survives a
-  // localStorage wipe or a fresh browser).
-  const [serverUnlimited, setServerUnlimited] = useState(false);
+
+  // Server-backed two-tier trial state (source of truth — survives a
+  // localStorage wipe or a fresh browser):
+  //   stage "anon"      → has anonymous free analyses left
+  //   stage "signup"    → anonymous quota used; must create an account
+  //   stage "account"   → logged in, has account free analyses left
+  //   stage "paywall"   → both tiers used; must subscribe
+  //   stage "unlimited" → VIP / developer
+  const [trialStage, setTrialStage] = useState<
+    "anon" | "signup" | "account" | "paywall" | "unlimited"
+  >("anon");
+  const [trialRemaining, setTrialRemaining] = useState<number>(2);
 
   const trialStatus = trpc.trial.status.useQuery(undefined, {
     retry: false,
@@ -154,18 +150,16 @@ export default function ChartAnalyzer() {
   });
   const consumeTrial = trpc.trial.consume.useMutation();
 
-  // Sync the server count into local UI state once it loads.
+  // Sync server trial state into local UI state.
   useEffect(() => {
     const data = trialStatus.data;
     if (!data) return;
-    if (data.unlimited) {
-      setServerUnlimited(true);
-      return;
-    }
-    setServerUnlimited(false);
-    setAnalysisCount(data.used);
-    setAnalysisCountLocal(data.used);
-  }, [trialStatus.data]);
+    setTrialStage(developerMode ? "unlimited" : data.stage);
+    setTrialRemaining(data.remaining);
+  }, [trialStatus.data, developerMode]);
+
+  const unlimitedAccess = developerMode || trialStage === "unlimited";
+  const canAnalyze = unlimitedAccess || trialStage === "anon" || trialStage === "account";
 
   const assetDecimals = getDefaultDecimals(selectedAsset);
 
@@ -198,28 +192,30 @@ export default function ChartAnalyzer() {
     const hasDeveloperAccess = isDeveloperMode();
     setDeveloperMode(hasDeveloperAccess);
 
-    // VIP / developer / unlimited accounts skip the limit entirely.
-    const unlimited = hasDeveloperAccess || serverUnlimited;
+    const unlimited = hasDeveloperAccess || trialStage === "unlimited";
 
-    // Check the free limit against the SERVER (the localStorage count is
-    // only a hint and can be wiped). If the server says the visitor is
-    // out of free analyses, show the subscribe modal.
+    // Check the trial state against the SERVER (source of truth). If the
+    // visitor is out of free analyses, route them to signup or paywall.
     if (!unlimited) {
       try {
         const status = await trialStatus.refetch();
-        if (status.data && !status.data.unlimited && status.data.remaining <= 0) {
-          setAnalysisCount(status.data.used);
-          setAnalysisCountLocal(status.data.used);
-          setShowPaymentModal(true);
-          return;
+        const data = status.data;
+        if (data && !data.unlimited) {
+          setTrialStage(data.stage);
+          setTrialRemaining(data.remaining);
+          if (data.stage === "signup") {
+            // Anonymous quota used — send them to create a free account.
+            navigate("/account");
+            return;
+          }
+          if (data.stage === "paywall") {
+            // Both free tiers used — show the subscribe modal.
+            setShowPaymentModal(true);
+            return;
+          }
         }
       } catch {
-        // If the server check fails, fall back to the local hint so a
-        // network blip doesn't hand out unlimited free analyses.
-        if (getAnalysisCount() >= FREE_LIMIT) {
-          setShowPaymentModal(true);
-          return;
-        }
+        /* network blip — fall through; consume() below still guards us */
       }
     }
 
@@ -278,14 +274,11 @@ export default function ChartAnalyzer() {
         try {
           const res = await consumeTrial.mutateAsync({});
           if (!res.unlimited) {
-            setAnalysisCount(res.used);
-            setAnalysisCountLocal(res.used);
+            setTrialStage(res.stage);
+            setTrialRemaining(res.remaining);
           }
         } catch {
-          // Server unreachable — bump the local hint so the UI still moves.
-          const fallback = getAnalysisCount() + 1;
-          setAnalysisCount(fallback);
-          setAnalysisCountLocal(fallback);
+          /* server unreachable — next status refetch will resync */
         }
       }
     } catch (error: any) {
@@ -437,47 +430,76 @@ export default function ChartAnalyzer() {
               )}
             </div>
 
-            {/* Free Analysis Counter */}
-            {(developerMode || serverUnlimited) ? (
+            {/* Free Analysis Counter / Tier Status */}
+            {unlimitedAccess ? (
               <div className="mb-3 flex items-center justify-center gap-2">
                 <span className="text-[10px] text-[#d4a843] bg-[#d4a843]/10 border border-[#d4a843]/20 rounded-full px-3 py-1">
                   {developerMode ? "Developer unlimited analysis" : "VIP unlimited analysis"}
                 </span>
               </div>
-            ) : analysisCount < FREE_LIMIT && (
+            ) : trialStage === "anon" ? (
               <div className="mb-3 flex items-center justify-center gap-2">
                 <span className="text-[10px] text-[#666666] bg-[#141414] border border-[#1f1f1f] rounded-full px-3 py-1">
-                  {FREE_LIMIT - analysisCount} free analysis{(FREE_LIMIT - analysisCount) !== 1 ? 'es' : ''} remaining
+                  {trialRemaining} free analysis{trialRemaining !== 1 ? "es" : ""} remaining &mdash; create a free account for 2 more
                 </span>
               </div>
-            )}
+            ) : trialStage === "account" ? (
+              <div className="mb-3 flex items-center justify-center gap-2">
+                <span className="text-[10px] text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-full px-3 py-1">
+                  {trialRemaining} free account analysis{trialRemaining !== 1 ? "es" : ""} remaining
+                </span>
+              </div>
+            ) : null}
 
             {/* Action Buttons */}
             <div className="mt-4">
-              {uploadedImage && !result && !isAnalyzing && (developerMode || serverUnlimited || analysisCount < FREE_LIMIT) && (
+              {/* Analyze — visitor still has free analyses (anon or account tier) */}
+              {uploadedImage && !result && !isAnalyzing && canAnalyze && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full bg-gradient-to-r from-[#18c8ff] via-[#d4a843] to-[#22c55e] text-[#020509] font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 shadow-[0_0_34px_rgba(24,200,255,0.18)]">
                   <Sparkles size={18} />
                   {t("analyzer.analyze")}
                 </motion.button>
               )}
-              {uploadedImage && !result && !isAnalyzing && !developerMode && !serverUnlimited && analysisCount >= FREE_LIMIT && (
+
+              {/* Signup gate — anonymous quota used, must create an account */}
+              {uploadedImage && !result && !isAnalyzing && !unlimitedAccess && trialStage === "signup" && (
+                <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => navigate("/account")} className="w-full bg-gradient-to-r from-[#18c8ff] to-[#22c55e] text-[#020509] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 shadow-[0_0_30px_rgba(24,200,255,0.22)]">
+                  <Sparkles size={18} />
+                  Create a free account for 2 more analyses
+                </motion.button>
+              )}
+
+              {/* Paywall — both free tiers used */}
+              {uploadedImage && !result && !isAnalyzing && !unlimitedAccess && trialStage === "paywall" && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse shadow-[0_0_30px_rgba(212,168,67,0.22)]">
                   <Lock size={18} />
-                  {t("analyzer.unlock")}
+                  Go VIP &mdash; profit with TradeVisor
                   <Crown size={16} />
                 </motion.button>
               )}
-              {result && (developerMode || serverUnlimited || analysisCount < FREE_LIMIT) && (
+
+              {/* Re-analyze — still has free analyses */}
+              {result && canAnalyze && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full border border-[#18c8ff]/20 bg-[#06101a]/75 text-[#b8c7d9] font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 hover:border-[#d4a843]/60 hover:text-white hover:shadow-[0_0_24px_rgba(212,168,67,0.12)] transition-all duration-200">
                   <Brain size={18} />
                   {t("analyzer.reanalyze")}
-                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{(developerMode || serverUnlimited) ? "∞" : `${FREE_LIMIT - analysisCount} left`}</span>
+                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{unlimitedAccess ? "∞" : `${trialRemaining} left`}</span>
                 </motion.button>
               )}
-              {result && !developerMode && !serverUnlimited && analysisCount >= FREE_LIMIT && (
+
+              {/* Re-analyze blocked — signup gate */}
+              {result && !unlimitedAccess && trialStage === "signup" && (
+                <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => navigate("/account")} className="w-full bg-gradient-to-r from-[#18c8ff] to-[#22c55e] text-[#020509] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 shadow-[0_0_30px_rgba(24,200,255,0.22)]">
+                  <Sparkles size={18} />
+                  Create a free account for 2 more analyses
+                </motion.button>
+              )}
+
+              {/* Re-analyze blocked — paywall */}
+              {result && !unlimitedAccess && trialStage === "paywall" && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse shadow-[0_0_30px_rgba(212,168,67,0.22)]">
                   <Lock size={18} />
-                  {t("analyzer.unlock")}
+                  Go VIP &mdash; profit with TradeVisor
                   <Crown size={16} />
                 </motion.button>
               )}

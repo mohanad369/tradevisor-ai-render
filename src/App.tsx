@@ -6,6 +6,7 @@ import SpringSalePopup from './components/SpringSalePopup'
 import SupportChatWidget from './components/SupportChatWidget'
 import Disclaimer from './pages/Disclaimer'
 import Hero from './sections/Hero'
+import WelcomeBanner from './components/WelcomeBanner'
 import ChartAnalyzer from './sections/ChartAnalyzer'
 import AIAgentsWorkflow from './sections/AIAgentsWorkflow'
 import CommunityWins from './sections/CommunityWins'
@@ -60,6 +61,7 @@ export default function App() {
     <div className="min-h-screen bg-[#050505] text-white font-sans antialiased">
       <Navbar />
       <main>
+        <WelcomeBanner />
         <Hero />
         <AIAgentsWorkflow />
         <ChartAnalyzer />
