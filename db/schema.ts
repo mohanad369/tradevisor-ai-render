@@ -139,3 +139,18 @@ export const visitStats = sqliteTable("visit_stats", {
   count: integer("count").notNull().default(0),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+// ─── Free Trial Usage ───
+// Tracks how many free chart analyses each visitor has consumed, so the
+// 4-free limit cannot be bypassed by clearing localStorage or opening a
+// new browser. Keyed by a stable identifier: the logged-in userId when
+// available, otherwise a hash of the visitor's IP.
+export const freeUsage = sqliteTable("free_usage", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  // "user:<userId>" or "ip:<sha256 of ip>" — never the raw IP.
+  identityKey: text("identity_key").notNull().unique(),
+  kind: text("kind").notNull().default("ip"),       // "user" | "ip"
+  used: integer("used").notNull().default(0),       // analyses consumed
+  firstSeenAt: integer("first_seen_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});

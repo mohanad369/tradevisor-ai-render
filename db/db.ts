@@ -157,6 +157,15 @@ client.exec(`
     updated_at INTEGER
   );
 
+  CREATE TABLE IF NOT EXISTS free_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    identity_key TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL DEFAULT 'ip',
+    used INTEGER NOT NULL DEFAULT 0,
+    first_seen_at INTEGER,
+    last_used_at INTEGER
+  );
+
   -- Helpful indexes for the admin queries
   CREATE INDEX IF NOT EXISTS idx_vip_payments_status     ON vip_payments(status);
   CREATE INDEX IF NOT EXISTS idx_vip_payments_submitted  ON vip_payments(submitted_at);
@@ -174,6 +183,7 @@ client.exec(`
   CREATE INDEX IF NOT EXISTS idx_users_email             ON users(email);
   CREATE INDEX IF NOT EXISTS idx_user_sessions_token     ON user_sessions(session_token);
   CREATE INDEX IF NOT EXISTS idx_user_sessions_user      ON user_sessions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_free_usage_key           ON free_usage(identity_key);
 `);
 
 // ─── Lightweight migration: add `code_type` to vip_codes if it's an old DB ───

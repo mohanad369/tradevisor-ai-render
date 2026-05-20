@@ -57,7 +57,15 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-[#d4a843] mt-1">•</span>
+                <span><strong className="text-white">Account Data:</strong> If you create an account, we store your email address, optional name, and a securely hashed (never plain-text) password.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#d4a843] mt-1">•</span>
                 <span><strong className="text-white">Local Storage:</strong> We use browser localStorage to save your preferences, order history, and session tokens locally on your device.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#d4a843] mt-1">•</span>
+                <span><strong className="text-white">IP Address:</strong> We store a one-way hashed (not reversible) form of your IP address to enforce free-trial limits and prevent abuse. The raw IP address is not retained.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-[#d4a843] mt-1">•</span>

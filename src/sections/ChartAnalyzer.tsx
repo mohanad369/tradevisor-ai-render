@@ -14,20 +14,24 @@ import CryptoPaymentModal from "@/components/CryptoPaymentModal";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
 import { useLanguage } from "@/lib/language";
+import { trpc } from "@/lib/trpc";
 
 const ANALYSIS_COUNT_KEY = "tradevisor_analysis_count";
 const FREE_LIMIT = 4;
 const DEV_MODE_KEY = "tradevisor_dev_mode";
 
+// localStorage is only a fast UI hint — the SERVER is the source of
+// truth for the free limit (see trial.* tRPC procedures). Clearing
+// localStorage no longer grants extra free analyses.
 function getAnalysisCount(): number {
   try {
     return parseInt(localStorage.getItem(ANALYSIS_COUNT_KEY) || "0", 10);
   } catch { return 0; }
 }
-function incrementAnalysisCount(): number {
-  const count = getAnalysisCount() + 1;
-  localStorage.setItem(ANALYSIS_COUNT_KEY, String(count));
-  return count;
+function setAnalysisCountLocal(count: number): void {
+  try {
+    localStorage.setItem(ANALYSIS_COUNT_KEY, String(count));
+  } catch { /* storage may be unavailable */ }
 }
 function isDeveloperMode(): boolean {
   try {
@@ -140,6 +144,28 @@ export default function ChartAnalyzer() {
   const [analysisCount, setAnalysisCount] = useState(getAnalysisCount());
   const [developerMode, setDeveloperMode] = useState(isDeveloperMode());
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // Server-backed free-trial state (source of truth — survives a
+  // localStorage wipe or a fresh browser).
+  const [serverUnlimited, setServerUnlimited] = useState(false);
+
+  const trialStatus = trpc.trial.status.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const consumeTrial = trpc.trial.consume.useMutation();
+
+  // Sync the server count into local UI state once it loads.
+  useEffect(() => {
+    const data = trialStatus.data;
+    if (!data) return;
+    if (data.unlimited) {
+      setServerUnlimited(true);
+      return;
+    }
+    setServerUnlimited(false);
+    setAnalysisCount(data.used);
+    setAnalysisCountLocal(data.used);
+  }, [trialStatus.data]);
 
   const assetDecimals = getDefaultDecimals(selectedAsset);
 
@@ -172,11 +198,29 @@ export default function ChartAnalyzer() {
     const hasDeveloperAccess = isDeveloperMode();
     setDeveloperMode(hasDeveloperAccess);
 
-    // Check if user exceeded free limit
-    const currentCount = getAnalysisCount();
-    if (!hasDeveloperAccess && currentCount >= FREE_LIMIT) {
-      setShowPaymentModal(true);
-      return;
+    // VIP / developer / unlimited accounts skip the limit entirely.
+    const unlimited = hasDeveloperAccess || serverUnlimited;
+
+    // Check the free limit against the SERVER (the localStorage count is
+    // only a hint and can be wiped). If the server says the visitor is
+    // out of free analyses, show the subscribe modal.
+    if (!unlimited) {
+      try {
+        const status = await trialStatus.refetch();
+        if (status.data && !status.data.unlimited && status.data.remaining <= 0) {
+          setAnalysisCount(status.data.used);
+          setAnalysisCountLocal(status.data.used);
+          setShowPaymentModal(true);
+          return;
+        }
+      } catch {
+        // If the server check fails, fall back to the local hint so a
+        // network blip doesn't hand out unlimited free analyses.
+        if (getAnalysisCount() >= FREE_LIMIT) {
+          setShowPaymentModal(true);
+          return;
+        }
+      }
     }
 
     setResult(null);
@@ -229,10 +273,20 @@ export default function ChartAnalyzer() {
       setUsedOpenAI(data.reasons.length > 0 && data.reasons[0].includes("price action"));
       setResult(data);
 
-      // Increment analysis count only for non-developer users.
-      if (!hasDeveloperAccess) {
-        const newCount = incrementAnalysisCount();
-        setAnalysisCount(newCount);
+      // Record the consumed analysis on the SERVER for non-unlimited users.
+      if (!unlimited) {
+        try {
+          const res = await consumeTrial.mutateAsync({});
+          if (!res.unlimited) {
+            setAnalysisCount(res.used);
+            setAnalysisCountLocal(res.used);
+          }
+        } catch {
+          // Server unreachable — bump the local hint so the UI still moves.
+          const fallback = getAnalysisCount() + 1;
+          setAnalysisCount(fallback);
+          setAnalysisCountLocal(fallback);
+        }
       }
     } catch (error: any) {
       alert(`Analysis failed: ${error.message || "Unknown error"}`);
@@ -384,10 +438,10 @@ export default function ChartAnalyzer() {
             </div>
 
             {/* Free Analysis Counter */}
-            {developerMode ? (
+            {(developerMode || serverUnlimited) ? (
               <div className="mb-3 flex items-center justify-center gap-2">
                 <span className="text-[10px] text-[#d4a843] bg-[#d4a843]/10 border border-[#d4a843]/20 rounded-full px-3 py-1">
-                  Developer unlimited analysis
+                  {developerMode ? "Developer unlimited analysis" : "VIP unlimited analysis"}
                 </span>
               </div>
             ) : analysisCount < FREE_LIMIT && (
@@ -400,27 +454,27 @@ export default function ChartAnalyzer() {
 
             {/* Action Buttons */}
             <div className="mt-4">
-              {uploadedImage && !result && !isAnalyzing && (developerMode || analysisCount < FREE_LIMIT) && (
+              {uploadedImage && !result && !isAnalyzing && (developerMode || serverUnlimited || analysisCount < FREE_LIMIT) && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full bg-gradient-to-r from-[#18c8ff] via-[#d4a843] to-[#22c55e] text-[#020509] font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 shadow-[0_0_34px_rgba(24,200,255,0.18)]">
                   <Sparkles size={18} />
                   {t("analyzer.analyze")}
                 </motion.button>
               )}
-              {uploadedImage && !result && !isAnalyzing && !developerMode && analysisCount >= FREE_LIMIT && (
+              {uploadedImage && !result && !isAnalyzing && !developerMode && !serverUnlimited && analysisCount >= FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse shadow-[0_0_30px_rgba(212,168,67,0.22)]">
                   <Lock size={18} />
                   {t("analyzer.unlock")}
                   <Crown size={16} />
                 </motion.button>
               )}
-              {result && (developerMode || analysisCount < FREE_LIMIT) && (
+              {result && (developerMode || serverUnlimited || analysisCount < FREE_LIMIT) && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full border border-[#18c8ff]/20 bg-[#06101a]/75 text-[#b8c7d9] font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 hover:border-[#d4a843]/60 hover:text-white hover:shadow-[0_0_24px_rgba(212,168,67,0.12)] transition-all duration-200">
                   <Brain size={18} />
                   {t("analyzer.reanalyze")}
-                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{developerMode ? "dev" : `${FREE_LIMIT - analysisCount} left`}</span>
+                  <span className="text-[10px] bg-[#141414] text-[#666666] px-2 py-0.5 rounded-full ml-1">{(developerMode || serverUnlimited) ? "∞" : `${FREE_LIMIT - analysisCount} left`}</span>
                 </motion.button>
               )}
-              {result && !developerMode && analysisCount >= FREE_LIMIT && (
+              {result && !developerMode && !serverUnlimited && analysisCount >= FREE_LIMIT && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => setShowPaymentModal(true)} className="w-full bg-gradient-to-r from-[#d4a843] to-[#f2a900] text-[#050505] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 animate-pulse shadow-[0_0_30px_rgba(212,168,67,0.22)]">
                   <Lock size={18} />
                   {t("analyzer.unlock")}
