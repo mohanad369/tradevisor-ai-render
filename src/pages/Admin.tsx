@@ -362,6 +362,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (!isAuthenticated) return
+    if (trpcAvailable) return
     initCodes()
     refreshLocal()
     const interval = setInterval(refreshLocal, 3000)
