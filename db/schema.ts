@@ -117,6 +117,7 @@ export const users = sqliteTable("users", {
   userId: text("user_id").notNull().unique(),
   email: text("email").notNull().unique(),
   name: text("name").default(""),
+  phone: text("phone").default(""),
   passwordHash: text("password_hash").notNull(),
   status: text("status").notNull().default("ACTIVE"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
@@ -220,4 +221,20 @@ export const dailyAnalysisUsage = sqliteTable("daily_analysis_usage", {
   day: text("day").notNull(),
   used: integer("used").notNull().default(0),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+
+// ─── Pending Signups (email OTP verification) ───
+// Holds an unverified signup until the user enters the emailed OTP code.
+// On success the row is consumed and a real `users` row is created.
+export const pendingSignups = sqliteTable("pending_signups", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  email: text("email").notNull().unique(),
+  name: text("name").default(""),
+  phone: text("phone").notNull().default(""),
+  passwordHash: text("password_hash").notNull(),
+  // OTP is stored hashed, never in plain text.
+  otpHash: text("otp_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });

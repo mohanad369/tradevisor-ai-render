@@ -134,10 +134,23 @@ client.exec(`
     user_id TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
     name TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
     password_hash TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'ACTIVE',
     created_at INTEGER,
     last_login_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS pending_signups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    password_hash TEXT NOT NULL,
+    otp_hash TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS user_sessions (
@@ -251,6 +264,18 @@ try {
   }
 } catch (err) {
   console.error("[DB] Migration check failed:", err);
+}
+
+// ─── Lightweight migration: add `phone` to users if it's an old DB ───
+try {
+  const cols = client.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  const hasPhone = cols.some((c) => c.name === "phone");
+  if (!hasPhone) {
+    console.log("[DB] Migrating: adding users.phone column");
+    client.exec(`ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''`);
+  }
+} catch (err) {
+  console.error("[DB] users.phone migration check failed:", err);
 }
 
 console.log("[DB] Schema ready (all tables ensured).");

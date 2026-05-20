@@ -1,12 +1,32 @@
 import { z } from "zod";
 import { and, eq, desc, sql } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt, createHash } from "node:crypto";
 import { db } from "../../db/db";
-import { users, userSessions, vipSubscribers, visitStats } from "../../db/schema";
+import { users, userSessions, vipSubscribers, visitStats, pendingSignups } from "../../db/schema";
 import { createRouter, publicQuery, adminQuery } from "../middleware";
 import { hashPassword, verifyPassword, isAcceptablePassword } from "../lib/password";
+import { sendOtpEmail, isSmtpConfigured } from "../lib/email";
 
 const SESSION_DAYS = 30;
+const OTP_TTL_MINUTES = 10;
+const OTP_MAX_ATTEMPTS = 5;
+
+/** Generate a 6-digit numeric OTP. */
+function generateOtp(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+/** One-way hash for OTP codes and phone numbers. */
+function sha(value: string): string {
+  return createHash("sha256").update(`tradevisor:${value}`).digest("hex");
+}
+
+/** Normalize a phone number to digits only (keeps a leading +). */
+function normalizePhone(raw: string): string {
+  const trimmed = raw.trim();
+  const plus = trimmed.startsWith("+") ? "+" : "";
+  return plus + trimmed.replace(/[^0-9]/g, "");
+}
 
 function newUserId(): string {
   return `usr_${randomBytes(12).toString("base64url")}`;
@@ -63,41 +83,138 @@ function publicUser(u: typeof users.$inferSelect) {
 export const authRouter = createRouter({
 
   // ─── Sign up a new account ───
+  // ─── Step 1: request signup — validates input, sends an email OTP ───
   signup: publicQuery
     .input(z.object({
       email: z.string().email().max(150),
       password: z.string().min(1).max(200),
       name: z.string().max(80).optional(),
+      phone: z.string().min(5).max(30),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const email = input.email.trim().toLowerCase();
+      const phone = normalizePhone(input.phone);
 
       const policy = isAcceptablePassword(input.password);
       if (!policy.ok) return { success: false, error: policy.reason };
 
-      const [existing] = await db.select().from(users).where(eq(users.email, email));
-      if (existing) {
+      if (phone.replace(/[^0-9]/g, "").length < 6) {
+        return { success: false, error: "Please enter a valid phone number" };
+      }
+
+      // ── Block duplicate EMAIL ──
+      const [existingUser] = await db.select().from(users).where(eq(users.email, email));
+      if (existingUser) {
         return { success: false, error: "An account with this email already exists" };
       }
 
+      // ── Block duplicate PHONE — one phone number = one account, ever ──
+      // Phones are stored hashed, so we compare hashes.
+      const phoneHash = sha(phone);
+      const allUsers = await db.select().from(users);
+      const phoneTaken = allUsers.some((u) => u.phone && u.phone === phoneHash);
+      if (phoneTaken) {
+        return { success: false, error: "This phone number is already registered" };
+      }
+
+      if (!isSmtpConfigured()) {
+        return { success: false, error: "Email verification is temporarily unavailable. Please try again later." };
+      }
+
+      // Create / refresh a pending signup with a fresh OTP.
+      const otp = generateOtp();
+      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+
+      // Remove any earlier pending signup for this email, then insert fresh.
+      await db.delete(pendingSignups).where(eq(pendingSignups.email, email));
+      await db.insert(pendingSignups).values({
+        email,
+        name: input.name?.trim() || "",
+        phone: phoneHash,
+        passwordHash: hashPassword(input.password),
+        otpHash: sha(otp),
+        attempts: 0,
+        expiresAt,
+      });
+
+      try {
+        await sendOtpEmail(email, otp);
+      } catch (err: any) {
+        console.error("[auth.signup] OTP email failed:", err?.message);
+        return { success: false, error: "Could not send the verification email. Check the address and try again." };
+      }
+
+      return { success: true, otpSent: true, email };
+    }),
+
+  // ─── Step 2: verify the OTP — creates the real account + session ───
+  verifyOtp: publicQuery
+    .input(z.object({
+      email: z.string().email().max(150),
+      otp: z.string().min(4).max(8),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const email = input.email.trim().toLowerCase();
+
+      const [pending] = await db.select().from(pendingSignups)
+        .where(eq(pendingSignups.email, email));
+      if (!pending) {
+        return { success: false, error: "No pending signup found. Please sign up again." };
+      }
+
+      if (new Date(pending.expiresAt) < new Date()) {
+        await db.delete(pendingSignups).where(eq(pendingSignups.email, email));
+        return { success: false, error: "The code has expired. Please sign up again." };
+      }
+
+      if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+        await db.delete(pendingSignups).where(eq(pendingSignups.email, email));
+        return { success: false, error: "Too many incorrect attempts. Please sign up again." };
+      }
+
+      if (sha(input.otp.trim()) !== pending.otpHash) {
+        await db.update(pendingSignups)
+          .set({ attempts: pending.attempts + 1 })
+          .where(eq(pendingSignups.email, email));
+        const left = OTP_MAX_ATTEMPTS - (pending.attempts + 1);
+        return { success: false, error: `Incorrect code. ${left > 0 ? `${left} attempts left.` : "Please sign up again."}` };
+      }
+
+      // ── Re-check duplicates at the moment of creation (race safety) ──
+      const [dupEmail] = await db.select().from(users).where(eq(users.email, email));
+      if (dupEmail) {
+        await db.delete(pendingSignups).where(eq(pendingSignups.email, email));
+        return { success: false, error: "An account with this email already exists" };
+      }
+      const allUsers = await db.select().from(users);
+      if (pending.phone && allUsers.some((u) => u.phone === pending.phone)) {
+        await db.delete(pendingSignups).where(eq(pendingSignups.email, email));
+        return { success: false, error: "This phone number is already registered" };
+      }
+
+      // Create the verified account.
       const userId = newUserId();
       try {
         await db.insert(users).values({
           userId,
           email,
-          name: input.name?.trim() || "",
-          passwordHash: hashPassword(input.password),
+          name: pending.name || "",
+          phone: pending.phone, // stored hashed
+          passwordHash: pending.passwordHash,
           status: "ACTIVE",
         });
       } catch (err: any) {
         if (String(err?.message || "").includes("UNIQUE")) {
           return { success: false, error: "An account with this email already exists" };
         }
-        console.error("[auth.signup] insert failed:", err?.message);
+        console.error("[auth.verifyOtp] insert failed:", err?.message);
         return { success: false, error: "Could not create account" };
       }
 
-      // Issue a session straight away so signup logs them in.
+      // Consume the pending signup.
+      await db.delete(pendingSignups).where(eq(pendingSignups.email, email));
+
+      // Issue a session — the user is now logged in.
       const sessionToken = newSessionToken();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + SESSION_DAYS);
@@ -110,11 +227,42 @@ export const authRouter = createRouter({
         active: true,
         expiresAt,
       });
-
       await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.userId, userId));
 
       const [created] = await db.select().from(users).where(eq(users.userId, userId));
       return { success: true, sessionToken, user: publicUser(created) };
+    }),
+
+  // ─── Resend the OTP for a pending signup ───
+  resendOtp: publicQuery
+    .input(z.object({ email: z.string().email().max(150) }))
+    .mutation(async ({ input }) => {
+      const email = input.email.trim().toLowerCase();
+      const [pending] = await db.select().from(pendingSignups)
+        .where(eq(pendingSignups.email, email));
+      if (!pending) {
+        return { success: false, error: "No pending signup found. Please sign up again." };
+      }
+      if (!isSmtpConfigured()) {
+        return { success: false, error: "Email verification is temporarily unavailable." };
+      }
+
+      const otp = generateOtp();
+      await db.update(pendingSignups)
+        .set({
+          otpHash: sha(otp),
+          attempts: 0,
+          expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000),
+        })
+        .where(eq(pendingSignups.email, email));
+
+      try {
+        await sendOtpEmail(email, otp);
+      } catch (err: any) {
+        console.error("[auth.resendOtp] failed:", err?.message);
+        return { success: false, error: "Could not send the verification email." };
+      }
+      return { success: true, otpSent: true };
     }),
 
   // ─── Log in ───
