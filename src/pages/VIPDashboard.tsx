@@ -384,7 +384,10 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
   const { language } = useLanguage()
   const vt = (text: string) => text === "bankZero" ? (language === "ar" ? "استراتيجية البنوك صفر انعكاس" : "Bank Zero Reversal") : vipText(language, text)
   const subscriber = initialSubscriber || getSubscribers().find(s => s.email === email && s.code === code)
-  const isDeveloperMode = localStorage.getItem("tradevisor_dev_mode") === "true"
+  const isDeveloperMode =
+    localStorage.getItem("tradevisor_dev_mode") === "true" &&
+    localStorage.getItem("tradevisor_current_user_email") === "developer@tradevisor.ai" &&
+    Boolean(localStorage.getItem("tradevisor_session_token"))
 
   const logoutMutation = trpc.vip.logout.useMutation({
     onSuccess: () => { /* silently kill session */ },
@@ -393,11 +396,25 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
 
   const handleLogout = () => {
     const token = localStorage.getItem("tradevisor_session_token")
+    const currentEmail = localStorage.getItem("tradevisor_current_user_email")
+    const currentCode = localStorage.getItem("tradevisor_current_user_code")
+    const exitingDeveloper = localStorage.getItem("tradevisor_dev_mode") === "true" || currentEmail === "developer@tradevisor.ai"
     if (token) logoutMutation.mutate({ sessionToken: token })
-    localStorage.removeItem("tradevisor_current_user_email")
-    localStorage.removeItem("tradevisor_current_user_code")
-    localStorage.removeItem("tradevisor_session_token")
+
+    if (!exitingDeveloper || currentEmail === "developer@tradevisor.ai") {
+      localStorage.removeItem("tradevisor_current_user_email")
+      localStorage.removeItem("tradevisor_current_user_code")
+      localStorage.removeItem("tradevisor_session_token")
+    } else if (!currentEmail || !currentCode) {
+      localStorage.removeItem("tradevisor_session_token")
+    }
+
     localStorage.removeItem("tradevisor_dev_mode")
+    localStorage.removeItem("tradevisor_admin_token")
+    localStorage.removeItem("tradevisor_admin_session")
+    if (currentEmail === "developer@tradevisor.ai") {
+      localStorage.removeItem("tradevisor_user_token")
+    }
     toast.addToast("Logged out successfully.", "info")
     setTimeout(() => window.location.reload(), 400)
   }

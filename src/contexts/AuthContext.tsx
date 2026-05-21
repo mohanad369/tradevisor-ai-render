@@ -80,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAdmin(false);
     localStorage.removeItem("tradevisor_admin_token");
     localStorage.removeItem("tradevisor_admin_session");
+    localStorage.removeItem("tradevisor_dev_mode");
     window.location.href = "/";
   };
 

@@ -18,12 +18,23 @@ import { trpc } from "@/lib/trpc";
 
 const DEV_MODE_KEY = "tradevisor_dev_mode";
 
-// The SERVER is the source of truth for the free-trial limit (see the
-// trial.* tRPC procedures). localStorage is no longer used to count
-// analyses — clearing it does not grant extra free analyses.
+// The SERVER is the source of truth for public analysis access (see the
+// trial.* tRPC procedures). Anonymous visitors must log in; accounts get 2 analyses.
 function isDeveloperMode(): boolean {
   try {
-    return localStorage.getItem(DEV_MODE_KEY) === "true";
+    const devMode = localStorage.getItem(DEV_MODE_KEY) === "true";
+    if (!devMode) return false;
+
+    const email = localStorage.getItem("tradevisor_current_user_email");
+    const sessionToken = localStorage.getItem("tradevisor_session_token");
+    const isDeveloperEmail = email === "developer@tradevisor.ai";
+
+    if (isDeveloperEmail && sessionToken) return true;
+
+    localStorage.removeItem(DEV_MODE_KEY);
+    localStorage.removeItem("tradevisor_admin_token");
+    localStorage.removeItem("tradevisor_admin_session");
+    return false;
   } catch { return false; }
 }
 
@@ -132,17 +143,17 @@ export default function ChartAnalyzer() {
   const [developerMode, setDeveloperMode] = useState(isDeveloperMode());
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Server-backed two-tier trial state (source of truth — survives a
+  // Server-backed public access state (source of truth — survives a
   // localStorage wipe or a fresh browser):
-  //   stage "anon"      → has anonymous free analyses left
-  //   stage "signup"    → anonymous quota used; must create an account
-  //   stage "account"   → logged in, has account free analyses left
-  //   stage "paywall"   → both tiers used; must subscribe
+  //   stage "anon"      → public free analysis is available
+  //   stage "signup"    → account signup/login is required
+  //   stage "account"   → logged-in account has free analysis left
+  //   stage "paywall"   → account free tier used; must subscribe
   //   stage "unlimited" → VIP / developer
   const [trialStage, setTrialStage] = useState<
     "anon" | "signup" | "account" | "paywall" | "unlimited"
   >("anon");
-  const [trialRemaining, setTrialRemaining] = useState<number>(2);
+  const [trialRemaining, setTrialRemaining] = useState<number>(0);
 
   const trialStatus = trpc.trial.status.useQuery(undefined, {
     retry: false,
@@ -231,8 +242,8 @@ export default function ChartAnalyzer() {
       }
     }
 
-    // Check the trial state against the SERVER (source of truth). If the
-    // visitor is out of free analyses, route them to signup or paywall.
+    // Check public access against the SERVER (source of truth). Anonymous
+    // visitors must create/login to an account; accounts get 2 analyses.
     // Subscribers skip this — they use the daily quota above instead.
     if (!unlimited && !isSubscriber) {
       try {
@@ -242,7 +253,7 @@ export default function ChartAnalyzer() {
           setTrialStage(data.stage);
           setTrialRemaining(data.remaining);
           if (data.stage === "signup") {
-            // Anonymous quota used — send them to create a free account.
+            // Anonymous visitors must create/login to an account first.
             navigate("/account");
             return;
           }
@@ -319,7 +330,7 @@ export default function ChartAnalyzer() {
           /* server unreachable — next refetch will resync */
         }
       } else {
-        // Free-tier visitors consume from the 2+2 trial system.
+        // Logged-in accounts consume from the 2-analysis account trial.
         try {
           const res = await consumeTrial.mutateAsync({});
           if (!res.unlimited) {
@@ -492,23 +503,17 @@ export default function ChartAnalyzer() {
                   Developer unlimited analysis
                 </span>
               </div>
-            ) : trialStage === "anon" ? (
-              <div className="mb-3 flex items-center justify-center gap-2">
-                <span className="text-[10px] text-[#666666] bg-[#141414] border border-[#1f1f1f] rounded-full px-3 py-1">
-                  {trialRemaining} free analysis{trialRemaining !== 1 ? "es" : ""} remaining &mdash; create a free account for 2 more
-                </span>
-              </div>
             ) : trialStage === "account" ? (
               <div className="mb-3 flex items-center justify-center gap-2">
                 <span className="text-[10px] text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-full px-3 py-1">
-                  {trialRemaining} free account analysis{trialRemaining !== 1 ? "es" : ""} remaining
+                  {trialRemaining} account analysis{trialRemaining !== 1 ? "es" : ""} remaining
                 </span>
               </div>
             ) : null}
 
             {/* Action Buttons */}
             <div className="mt-4">
-              {/* Analyze — visitor still has free analyses (anon or account tier) */}
+              {/* Analyze — public access, subscriber quota, or unlimited access */}
               {uploadedImage && !result && !isAnalyzing && canAnalyze && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full bg-gradient-to-r from-[#18c8ff] via-[#d4a843] to-[#22c55e] text-[#020509] font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 shadow-[0_0_34px_rgba(24,200,255,0.18)]">
                   <Sparkles size={18} />
@@ -516,11 +521,11 @@ export default function ChartAnalyzer() {
                 </motion.button>
               )}
 
-              {/* Signup gate — anonymous quota used, must create an account */}
+              {/* Signup gate — anonymous visitors must create/login first */}
               {uploadedImage && !result && !isAnalyzing && !unlimitedAccess && trialStage === "signup" && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => navigate("/account")} className="w-full bg-gradient-to-r from-[#18c8ff] to-[#22c55e] text-[#020509] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 shadow-[0_0_30px_rgba(24,200,255,0.22)]">
                   <Sparkles size={18} />
-                  Create a free account for 2 more analyses
+                  Create or log in to get 2 analyses
                 </motion.button>
               )}
 
@@ -533,7 +538,7 @@ export default function ChartAnalyzer() {
                 </motion.button>
               )}
 
-              {/* Re-analyze — still has free analyses */}
+              {/* Re-analyze — access is available */}
               {result && canAnalyze && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze} className="w-full border border-[#18c8ff]/20 bg-[#06101a]/75 text-[#b8c7d9] font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 hover:border-[#d4a843]/60 hover:text-white hover:shadow-[0_0_24px_rgba(212,168,67,0.12)] transition-all duration-200">
                   <Brain size={18} />
@@ -546,7 +551,7 @@ export default function ChartAnalyzer() {
               {result && !unlimitedAccess && trialStage === "signup" && (
                 <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={() => navigate("/account")} className="w-full bg-gradient-to-r from-[#18c8ff] to-[#22c55e] text-[#020509] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all duration-200 shadow-[0_0_30px_rgba(24,200,255,0.22)]">
                   <Sparkles size={18} />
-                  Create a free account for 2 more analyses
+                  Create or log in to get 2 analyses
                 </motion.button>
               )}
 

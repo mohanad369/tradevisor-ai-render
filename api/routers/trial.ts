@@ -8,9 +8,9 @@ import { createRouter, publicQuery } from "../middleware";
 /**
  * Free-trial tracking for the public chart analyzer — two-tier system.
  *
- *   Anonymous visitor   → 2 free analyses (keyed on hashed IP)
- *   Registered account  → 2 MORE free analyses (keyed on userId)
- *   After both tiers    → must subscribe (VIP)
+ *   Anonymous visitor   → must create/login to an account
+ *   Registered account  → 2 free analyses (keyed on userId)
+ *   After account tier  → must subscribe (VIP)
  *
  * VIP / developer accounts are never limited.
  *
@@ -18,8 +18,8 @@ import { createRouter, publicQuery } from "../middleware";
  * nothing that directly identifies a person.
  */
 
-const ANON_LIMIT = 2;     // free analyses before an account is required
-const ACCOUNT_LIMIT = 2;  // additional free analyses after signing up
+const ANON_LIMIT = 0;     // anonymous visitors cannot analyze for free
+const ACCOUNT_LIMIT = 2;  // logged-in accounts get two free analyses
 
 function clientIp(req: Request): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
@@ -95,7 +95,7 @@ async function bumpUsage(key: string, kind: "user" | "ip"): Promise<number> {
  *   stage: "anon"    → still has anonymous free analyses
  *          "signup"  → anonymous quota used; must create an account
  *          "account" → logged in, still has account free analyses
- *          "paywall" → both tiers used; must subscribe
+ *          "paywall" → account free tier used; must subscribe
  *          "unlimited" → VIP or developer
  */
 async function buildState(identity: Identity) {
