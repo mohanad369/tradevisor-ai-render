@@ -7,6 +7,7 @@ import {
   traderTrades,
   agentMemory,
   dailyAnalysisUsage,
+  aiAnalyses,
   userSessions,
   users,
   vipSubscribers,
@@ -212,6 +213,8 @@ export const dashboardRouter = createRouter({
       strategy: z.string().max(60).optional(),
       notes: z.string().max(600).optional(),
       lessonLearned: z.string().max(600).optional(),
+      // When set, this trade was taken from a saved AI analysis.
+      analysisId: z.string().max(60).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const user = await resolveUser(ctx.req);
@@ -225,20 +228,46 @@ export const dashboardRouter = createRouter({
       else if (input.outcome === "LOSS") signed = -Math.abs(input.amount);
       else signed = 0;
 
+      // If linked to an AI analysis, pull its details so the trade and
+      // the agent memory reflect what the AI actually advised.
+      let linkedAnalysis: typeof aiAnalyses.$inferSelect | undefined;
+      if (input.analysisId) {
+        [linkedAnalysis] = await db.select().from(aiAnalyses)
+          .where(and(
+            eq(aiAnalyses.analysisId, input.analysisId),
+            eq(aiAnalyses.userId, user.userId),
+          ));
+      }
+
+      const asset = input.asset || linkedAnalysis?.asset || "";
+      const strategy = linkedAnalysis
+        ? `AI: ${linkedAnalysis.strategy || "analysis"}`
+        : (input.strategy || "");
+      const isAi = Boolean(linkedAnalysis);
+
       const tradeId = `trd_${randomBytes(9).toString("base64url")}`;
       await db.insert(traderTrades).values({
         tradeId,
         userId: user.userId,
-        asset: input.asset || "",
-        direction: input.direction || "",
+        asset,
+        direction: input.direction || linkedAnalysis?.signal || "",
         outcome: input.outcome,
         amount: String(signed),
         lotSize: input.lotSize !== undefined ? String(input.lotSize) : "",
         riskPercent: input.riskPercent !== undefined ? String(input.riskPercent) : "",
-        strategy: input.strategy || "",
+        strategy,
+        analysisId: input.analysisId || "",
+        source: isAi ? "ai" : "manual",
         notes: input.notes || "",
         lessonLearned: input.lessonLearned || "",
       });
+
+      // Stamp the outcome back onto the AI analysis record.
+      if (linkedAnalysis) {
+        await db.update(aiAnalyses)
+          .set({ outcome: input.outcome })
+          .where(eq(aiAnalyses.analysisId, linkedAnalysis.analysisId));
+      }
 
       // Move the running balance.
       const newBalance = num(account.currentBalance) + signed;
@@ -249,13 +278,81 @@ export const dashboardRouter = createRouter({
       // Feed the agent memory so future analyses learn from this result.
       await updateAgentMemory(
         user.userId,
-        input.asset || "",
-        input.strategy || "",
+        asset,
+        strategy,
         input.outcome,
         input.lessonLearned || "",
       );
 
       return { success: true, tradeId, newBalance: Number(newBalance.toFixed(2)) };
+    }),
+
+  // ─── Save an AI analysis (called by the chart analyzer) ───
+  saveAnalysis: publicQuery
+    .input(z.object({
+      asset: z.string().max(40).optional(),
+      strategy: z.string().max(60).optional(),
+      timeframe: z.string().max(20).optional(),
+      signal: z.string().max(20).optional(),
+      confidence: z.number().min(0).max(100).optional(),
+      entry: z.string().max(40).optional(),
+      stopLoss: z.string().max(40).optional(),
+      takeProfit: z.string().max(40).optional(),
+      summary: z.string().max(600).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const user = await resolveUser(ctx.req);
+      // Silently no-op for logged-out visitors — analyses are only
+      // saved for account holders who can use the dashboard.
+      if (!user) return { saved: false };
+
+      const analysisId = `anl_${randomBytes(9).toString("base64url")}`;
+      await db.insert(aiAnalyses).values({
+        analysisId,
+        userId: user.userId,
+        asset: input.asset || "",
+        strategy: input.strategy || "",
+        timeframe: input.timeframe || "",
+        signal: input.signal || "",
+        confidence: input.confidence ?? 0,
+        entry: input.entry || "",
+        stopLoss: input.stopLoss || "",
+        takeProfit: input.takeProfit || "",
+        summary: input.summary || "",
+        outcome: "",
+      });
+      return { saved: true, analysisId };
+    }),
+
+  // ─── List the user's recent AI analyses (for the trade form) ───
+  myAnalyses: publicQuery
+    .input(z.object({ onlyUnlogged: z.boolean().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      const user = await resolveUser(ctx.req);
+      if (!user) return { loggedIn: false as const };
+
+      const rows = await db.select().from(aiAnalyses)
+        .where(eq(aiAnalyses.userId, user.userId))
+        .orderBy(desc(aiAnalyses.createdAt));
+
+      const list = (input?.onlyUnlogged ? rows.filter((r) => !r.outcome) : rows)
+        .slice(0, 40)
+        .map((r) => ({
+          analysisId: r.analysisId,
+          asset: r.asset,
+          strategy: r.strategy,
+          timeframe: r.timeframe,
+          signal: r.signal,
+          confidence: r.confidence ?? 0,
+          entry: r.entry,
+          stopLoss: r.stopLoss,
+          takeProfit: r.takeProfit,
+          summary: r.summary,
+          outcome: r.outcome || "",
+          createdAt: r.createdAt,
+        }));
+
+      return { loggedIn: true as const, analyses: list };
     }),
 
   // ─── Delete a logged trade (reverses its balance effect) ───

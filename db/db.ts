@@ -202,8 +202,27 @@ client.exec(`
     lot_size TEXT DEFAULT '',
     risk_percent TEXT DEFAULT '',
     strategy TEXT DEFAULT '',
+    analysis_id TEXT DEFAULT '',
+    source TEXT DEFAULT 'manual',
     notes TEXT DEFAULT '',
     lesson_learned TEXT DEFAULT '',
+    created_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS ai_analyses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_id TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    asset TEXT DEFAULT '',
+    strategy TEXT DEFAULT '',
+    timeframe TEXT DEFAULT '',
+    signal TEXT DEFAULT '',
+    confidence INTEGER DEFAULT 0,
+    entry TEXT DEFAULT '',
+    stop_loss TEXT DEFAULT '',
+    take_profit TEXT DEFAULT '',
+    summary TEXT DEFAULT '',
+    outcome TEXT DEFAULT '',
     created_at INTEGER
   );
 
@@ -276,6 +295,21 @@ try {
   }
 } catch (err) {
   console.error("[DB] users.phone migration check failed:", err);
+}
+
+// ─── Lightweight migration: add analysis_id / source to trader_trades ───
+try {
+  const cols = client.prepare("PRAGMA table_info(trader_trades)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "analysis_id")) {
+    console.log("[DB] Migrating: adding trader_trades.analysis_id column");
+    client.exec(`ALTER TABLE trader_trades ADD COLUMN analysis_id TEXT DEFAULT ''`);
+  }
+  if (!cols.some((c) => c.name === "source")) {
+    console.log("[DB] Migrating: adding trader_trades.source column");
+    client.exec(`ALTER TABLE trader_trades ADD COLUMN source TEXT DEFAULT 'manual'`);
+  }
+} catch (err) {
+  console.error("[DB] trader_trades migration check failed:", err);
 }
 
 console.log("[DB] Schema ready (all tables ensured).");

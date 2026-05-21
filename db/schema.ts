@@ -185,8 +185,10 @@ export const traderTrades = sqliteTable("trader_trades", {
   amount: text("amount").notNull().default("0"),
   lotSize: text("lot_size").default(""),
   riskPercent: text("risk_percent").default(""),
-  // Optional link back to the analysis that produced this trade.
   strategy: text("strategy").default(""),
+  // Link to the AI analysis this trade was taken from (empty = manual).
+  analysisId: text("analysis_id").default(""),
+  source: text("source").default("manual"),   // "ai" | "manual"
   notes: text("notes").default(""),
   // Lesson extracted by the agents from a losing/failed trade.
   lessonLearned: text("lesson_learned").default(""),
@@ -236,5 +238,29 @@ export const pendingSignups = sqliteTable("pending_signups", {
   otpHash: text("otp_hash").notNull(),
   attempts: integer("attempts").notNull().default(0),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+
+// ─── AI Analyses ───
+// Each chart analysis a logged-in user runs is saved here, so the Trader
+// Dashboard can let them log a trade FROM a real AI analysis (not a
+// hand-typed strategy). Linking trades to analyses is what lets the
+// agent memory learn which AI calls actually worked.
+export const aiAnalyses = sqliteTable("ai_analyses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  analysisId: text("analysis_id").notNull().unique(),
+  userId: text("user_id").notNull(),
+  asset: text("asset").default(""),
+  strategy: text("strategy").default(""),
+  timeframe: text("timeframe").default(""),
+  // AI verdict: "BUY" | "SELL" | "NEUTRAL"
+  signal: text("signal").default(""),
+  confidence: integer("confidence").default(0),     // 0-100
+  entry: text("entry").default(""),
+  stopLoss: text("stop_loss").default(""),
+  takeProfit: text("take_profit").default(""),
+  summary: text("summary").default(""),
+  // Set once the user logs the trade outcome for this analysis.
+  outcome: text("outcome").default(""),             // "" | "WIN" | "LOSS" | "BE"
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });

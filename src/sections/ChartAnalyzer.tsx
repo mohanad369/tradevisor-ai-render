@@ -168,6 +168,8 @@ export default function ChartAnalyzer() {
     refetchOnWindowFocus: false,
   });
   const consumeDaily = trpc.dashboard.consumeDaily.useMutation();
+  // Saves each analysis so the Trader Dashboard can log a trade from it.
+  const saveAnalysis = trpc.dashboard.saveAnalysis.useMutation();
 
   // Sync server trial state into local UI state.
   useEffect(() => {
@@ -317,6 +319,24 @@ export default function ChartAnalyzer() {
       // Check if OpenAI was used (has specific OpenAI response characteristics)
       setUsedOpenAI(data.reasons.length > 0 && data.reasons[0].includes("price action"));
       setResult(data);
+
+      // Fire-and-forget: logged-in users get their AI analyses saved for
+      // Trader Dashboard trade journaling; logged-out visitors are ignored server-side.
+      try {
+        saveAnalysis.mutate({
+          asset: selectedAsset.name,
+          strategy: selectedStrategy.name,
+          timeframe: selectedTimeframe,
+          signal: data.signal,
+          confidence: Math.round(Number(data.confidence) || 0),
+          entry: String(data.entry ?? ""),
+          stopLoss: String(data.stopLoss ?? ""),
+          takeProfit: String(data.takeProfit1 ?? ""),
+          summary: Array.isArray(data.reasons) ? data.reasons.slice(0, 3).join(" · ").slice(0, 580) : "",
+        });
+      } catch {
+        /* non-blocking */
+      }
 
       // Record the consumed analysis on the SERVER.
       if (hasDeveloperAccess) {
