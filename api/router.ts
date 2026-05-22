@@ -7,6 +7,7 @@ import { newsRouter } from "./routers/news";
 import { authRouter } from "./routers/auth";
 import { trialRouter } from "./routers/trial";
 import { dashboardRouter } from "./routers/dashboard";
+import { goldFlowRouter } from "./routers/goldFlow";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true })),
@@ -18,6 +19,7 @@ export const appRouter = createRouter({
   auth: authRouter,
   trial: trialRouter,
   dashboard: dashboardRouter,
+  goldFlow: goldFlowRouter,
 });
 
 export type AppRouter = typeof appRouter;

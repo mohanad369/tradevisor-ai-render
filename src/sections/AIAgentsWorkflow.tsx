@@ -5,6 +5,7 @@ import {
   BrainCircuit,
   CheckCircle2,
   Crosshair,
+  Gauge,
   Network,
   Newspaper,
   Radar,
@@ -85,6 +86,18 @@ const agents = [
     icon: ShieldCheck,
     color: "#fb7185",
     position: "lg:col-start-3 lg:row-start-3",
+  },
+  {
+    id: "07",
+    name: { en: "Gold Flow Agent", ar: "ÙˆÙƒÙŠÙ„ ØªØ¯ÙÙ‘Ù‚ Ø§Ù„Ø°Ù‡Ø¨" },
+    role: {
+      en: "Specialised in XAU/USD — reads live gold momentum, pressure, and key levels.",
+      ar: "Ù…ØªØ®ØµÙ‘Øµ ÙÙŠ Ø§Ù„Ø°Ù‡Ø¨ — ÙŠÙ‚Ø±Ø£ Ø²Ø®Ù… Ø§Ù„Ø°Ù‡Ø¨ ÙˆØ¶ØºØ· Ø§Ù„Ø³ÙˆÙ‚ ÙˆØ§Ù„Ù…Ø³ØªÙˆÙŠØ§Øª Ø§Ù„Ø­ÙŠØ©.",
+    },
+    status: { en: "Tracking gold flow", ar: "ÙŠØªØ§Ø¨Ø¹ ØªØ¯ÙÙ‘Ù‚ Ø§Ù„Ø°Ù‡Ø¨" },
+    icon: Gauge,
+    color: "#f5c542",
+    position: "lg:col-start-2 lg:row-start-2",
   },
 ];
 
@@ -169,7 +182,7 @@ export default function AIAgentsWorkflow() {
               <AIHub />
             </div>
 
-            <div className="relative z-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[1fr_150px_1fr]">
+            <div className="relative z-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[1fr_auto_1fr]">
               {agents.map((agent, index) => (
                 <AgentCard key={agent.id} agent={agent} index={index} language={language} />
               ))}

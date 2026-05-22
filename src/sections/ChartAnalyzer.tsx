@@ -11,6 +11,7 @@ import ChartUpload from "@/components/ChartUpload";
 import AnalysisResultPanel, { AnalysisOverlay } from "@/components/AnalysisOverlay";
 import LivePriceTicker from "@/components/LivePriceTicker";
 import CryptoPaymentModal from "@/components/CryptoPaymentModal";
+import GoldFlowAgent from "@/components/GoldFlowAgent";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
 import { useLanguage } from "@/lib/language";
@@ -509,6 +510,9 @@ export default function ChartAnalyzer() {
                 <AnalysisOverlay result={result} assetDecimals={assetDecimals} />
               )}
             </div>
+
+            {/* Gold Flow Agent — XAU/USD only, independent from the main analysis flow. */}
+            <GoldFlowAgent assetName={selectedAsset.name} />
 
             {/* Free Analysis Counter / Tier Status */}
             {isSubscriber ? (
