@@ -5,6 +5,11 @@ const config: CapacitorConfig = {
   appName: "Tradevisor AI",
   webDir: "dist",
   bundledWebRuntime: false,
+  server: {
+    url: "https://tradevisortrading.com",
+    cleartext: false,
+    allowNavigation: ["tradevisortrading.com", "www.tradevisortrading.com"],
+  },
   android: {
     allowMixedContent: false,
     captureInput: true,
