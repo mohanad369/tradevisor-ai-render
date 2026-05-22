@@ -29,7 +29,7 @@ export default function WelcomeIntroSlide() {
     <AnimatePresence>
       {visible && (
         <motion.div
-          className="fixed inset-0 z-[9999] overflow-hidden bg-black"
+          className="fixed inset-0 z-[9999] min-h-[100dvh] overflow-hidden bg-black"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.55, ease: "easeInOut" }}
@@ -37,7 +37,7 @@ export default function WelcomeIntroSlide() {
           <motion.img
             src="/assets/tradevisor-ai-welcome.jpg"
             alt="Welcome to TradeVisor AI"
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover object-center"
             initial={{ scale: 1.08, opacity: 0.74 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 4.8, ease: "easeOut" }}
@@ -47,22 +47,22 @@ export default function WelcomeIntroSlide() {
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.7),transparent_42%,rgba(0,0,0,0.78))]" />
 
           <motion.div
-            className="absolute left-1/2 top-1/2 w-[min(92vw,920px)] -translate-x-1/2 -translate-y-1/2 text-center"
+            className="absolute left-1/2 top-1/2 z-10 w-full max-w-[920px] -translate-x-1/2 -translate-y-1/2 px-5 text-center sm:w-[min(92vw,920px)] sm:px-0"
             initial={{ opacity: 0, y: 28, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 1, delay: 0.25, ease: "easeOut" }}
           >
-            <div className="mx-auto mb-5 h-px w-28 bg-gradient-to-r from-transparent via-[#18c8ff] to-transparent shadow-[0_0_26px_rgba(24,200,255,0.9)]" />
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.5em] text-[#18c8ff] drop-shadow-[0_0_14px_rgba(24,200,255,0.65)]">
+            <div className="mx-auto mb-4 h-px w-20 bg-gradient-to-r from-transparent via-[#18c8ff] to-transparent shadow-[0_0_26px_rgba(24,200,255,0.9)] sm:mb-5 sm:w-28" />
+            <p className="mb-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[#18c8ff] drop-shadow-[0_0_14px_rgba(24,200,255,0.65)] sm:text-[11px] sm:tracking-[0.5em]">
               Smart Trading Intelligence
             </p>
-            <h1 className="text-4xl font-black uppercase leading-[0.95] tracking-[0.08em] text-white drop-shadow-[0_0_30px_rgba(24,200,255,0.6)] sm:text-6xl lg:text-7xl">
+            <h1 className="mx-auto max-w-[18rem] text-[2.15rem] font-black uppercase leading-[1.02] tracking-[0.02em] text-white drop-shadow-[0_0_30px_rgba(24,200,255,0.6)] min-[390px]:max-w-[21rem] min-[390px]:text-[2.55rem] sm:max-w-none sm:text-6xl sm:tracking-[0.08em] lg:text-7xl">
               Welcome To
-              <span className="mt-3 block bg-gradient-to-r from-[#18c8ff] via-white to-[#f03cff] bg-clip-text text-transparent">
+              <span className="mt-2 block bg-gradient-to-r from-[#18c8ff] via-white to-[#f03cff] bg-clip-text text-transparent sm:mt-3">
                 TradeVisor AI
               </span>
             </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-[#c7d7e8] sm:text-base">
+            <p className="mx-auto mt-4 max-w-[21rem] text-xs leading-relaxed text-[#c7d7e8] sm:mt-5 sm:max-w-2xl sm:text-base">
               AI agents, live market logic, and risk-first trade intelligence working together before every decision.
             </p>
           </motion.div>
