@@ -20,6 +20,7 @@ import { trackVIPLogin, trackVIPSubscribe, trackPaymentSubmit, trackPageView } f
 import { checkSubscriberAccess, getSubscribers } from "@/lib/vipSystem"
 import { analyzeChartClientSide, type AnalysisResult } from "@/lib/analyzer"
 import VIP2GoldChartAI from "@/addons/vip2/components/VIP2GoldChartAI"
+import GoldFlowAgent from "@/components/GoldFlowAgent"
 import EducationTab from "@/components/EducationTab"
 import PartnerTab from "@/components/PartnerTab"
 import Jarvis from "@/components/Jarvis"
@@ -296,7 +297,7 @@ const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "partner", label: "Partner", icon: Users },
   { id: "brokers", label: "Brokers", icon: Building2 },
   { id: "performance", label: "Stats", icon: Trophy },
-  { id: "goldai", label: "Gold AI", icon: Sparkles },
+  { id: "goldai", label: "Gold Flow", icon: Sparkles },
   { id: "education", label: "School", icon: GraduationCap },
   { id: "account", label: "Account", icon: Settings },
 ]
@@ -309,7 +310,7 @@ const vipAr: Record<string, string> = {
   partner: "الشراكة",
   brokers: "الوسطاء",
   performance: "الإحصائيات",
-  goldai: "ذهب AI",
+  goldai: "تحليل الذهب",
   education: "التعليم",
   account: "الحساب",
   "VIP Dashboard": "لوحة VIP",
@@ -742,7 +743,7 @@ function AIAnalyzerTab() {
       </div>
 
       {/* Controls */}
-      <div className="bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6">
+      <div className="relative z-40 overflow-visible bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="relative">
             <button onClick={() => setShowAssetDropdown(!showAssetDropdown)}
@@ -754,11 +755,12 @@ function AIAnalyzerTab() {
             <AnimatePresence>
               {showAssetDropdown && (
                 <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                  className="absolute top-full mt-2 left-0 bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl shadow-xl z-50 w-48 sm:w-56 max-h-64 overflow-y-auto">
+                  className="absolute top-full mt-2 left-0 z-[90] w-72 max-h-[22rem] overflow-y-auto rounded-xl border border-[#18c8ff]/25 bg-[#061018] shadow-[0_20px_70px_rgba(0,0,0,0.72),0_0_30px_rgba(24,200,255,0.12)] backdrop-blur-xl">
                   {assets.map(a => (
                     <button key={a.id} onClick={() => { setSelectedAsset(a); setManualPrice(""); setShowAssetDropdown(false); setResult(null); }}
-                      className={`w-full text-left px-3 sm:px-4 py-2 text-xs sm:text-sm hover:bg-[#141414] transition-colors ${selectedAsset.id === a.id ? "text-[#d4a843]" : "text-[#a0a0a0]"}`}>
-                      {a.name}
+                      className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-xs sm:text-sm transition-colors hover:bg-[#10202d] ${selectedAsset.id === a.id ? "text-[#f5c542]" : "text-[#d7e8f6]"}`}>
+                      <span>{a.name}</span>
+                      {selectedAsset.id === a.id && <span className="h-2 w-2 rounded-full bg-[#22c55e] shadow-[0_0_10px_rgba(34,197,94,0.75)]" />}
                     </button>
                   ))}
                 </motion.div>
@@ -809,6 +811,9 @@ function AIAnalyzerTab() {
             <ChartUploadArea onImageUpload={src => { setUploadedImage(src); setResult(null) }} uploadedImage={uploadedImage} onClear={() => { setUploadedImage(null); setResult(null) }} />
             {uploadedImage && result && <AnalysisOverlayVIP result={result} assetDecimals={assetDecimals} />}
           </div>
+
+          <GoldFlowAgent assetName={selectedAsset.name} />
+
           <div className="mt-3 sm:mt-4">
             {uploadedImage && !result && !isAnalyzing && (
               <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleAnalyze}
