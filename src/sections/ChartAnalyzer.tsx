@@ -430,7 +430,7 @@ export default function ChartAnalyzer() {
           </motion.div>
 
         {/* Controls */}
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.15 }} className="relative mb-6 overflow-hidden rounded-[28px] border border-[#d4a843]/20 bg-[#070b10]/85 p-4 shadow-[0_0_80px_rgba(212,168,67,0.06)] backdrop-blur-xl">
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.15 }} className="relative z-40 mb-6 overflow-visible rounded-[28px] border border-[#d4a843]/20 bg-[#070b10]/85 p-4 shadow-[0_0_80px_rgba(212,168,67,0.06)] backdrop-blur-xl">
           <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a843]/70 to-transparent" />
           <div className="flex flex-wrap items-center gap-3">
             {/* Asset Selector */}
@@ -442,10 +442,11 @@ export default function ChartAnalyzer() {
               </button>
               <AnimatePresence>
                 {showAssetDropdown && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="absolute top-full mt-2 left-0 bg-[#06101a] border border-[#18c8ff]/20 rounded-xl shadow-[0_24px_80px_rgba(0,0,0,0.65)] z-50 w-56 max-h-64 overflow-y-auto">
+                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="absolute left-0 top-full z-[90] mt-2 w-72 max-h-[22rem] overflow-y-auto overscroll-contain rounded-2xl border border-[#18c8ff]/25 bg-[#04101b]/95 p-1 shadow-[0_24px_90px_rgba(0,0,0,0.82),0_0_32px_rgba(24,200,255,0.12)] backdrop-blur-xl">
                     {assets.map((a) => (
-                      <button key={a.id} onClick={() => { setSelectedAsset(a); setManualPrice(""); setShowAssetDropdown(false); setResult(null); }} className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[#18c8ff]/10 transition-colors ${selectedAsset.id === a.id ? "text-[#d4a843]" : "text-[#a0a0a0]"}`}>
+                      <button key={a.id} onClick={() => { setSelectedAsset(a); setManualPrice(""); setShowAssetDropdown(false); setResult(null); }} className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm transition-colors hover:bg-[#18c8ff]/10 ${selectedAsset.id === a.id ? "bg-[#d4a843]/10 text-[#d4a843]" : "text-[#c6d1df]"}`}>
                         {a.name}
+                        {selectedAsset.id === a.id && <span className="h-2 w-2 rounded-full bg-[#d4a843] shadow-[0_0_12px_rgba(212,168,67,0.8)]" />}
                       </button>
                     ))}
                   </motion.div>

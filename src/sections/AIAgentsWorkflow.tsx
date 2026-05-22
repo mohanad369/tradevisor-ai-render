@@ -89,12 +89,12 @@ const agents = [
   },
   {
     id: "07",
-    name: { en: "Gold Flow Agent", ar: "ÙˆÙƒÙŠÙ„ ØªØ¯ÙÙ‘Ù‚ Ø§Ù„Ø°Ù‡Ø¨" },
+    name: { en: "Gold Flow Agent", ar: "وكيل تدفق الذهب" },
     role: {
       en: "Specialised in XAU/USD — reads live gold momentum, pressure, and key levels.",
-      ar: "Ù…ØªØ®ØµÙ‘Øµ ÙÙŠ Ø§Ù„Ø°Ù‡Ø¨ — ÙŠÙ‚Ø±Ø£ Ø²Ø®Ù… Ø§Ù„Ø°Ù‡Ø¨ ÙˆØ¶ØºØ· Ø§Ù„Ø³ÙˆÙ‚ ÙˆØ§Ù„Ù…Ø³ØªÙˆÙŠØ§Øª Ø§Ù„Ø­ÙŠØ©.",
+      ar: "متخصص في الذهب، يقرأ زخم XAU/USD وضغط السوق والمستويات الحية.",
     },
-    status: { en: "Tracking gold flow", ar: "ÙŠØªØ§Ø¨Ø¹ ØªØ¯ÙÙ‘Ù‚ Ø§Ù„Ø°Ù‡Ø¨" },
+    status: { en: "Tracking gold flow", ar: "يتابع تدفق الذهب" },
     icon: Gauge,
     color: "#f5c542",
     position: "lg:col-start-2 lg:row-start-2",
@@ -127,6 +127,8 @@ const featureStrip = [
 export default function AIAgentsWorkflow() {
   const { language } = useLanguage();
   const isArabic = language === "ar";
+  const coreAgents = agents.filter((agent) => agent.id !== "07");
+  const goldAgent = agents.find((agent) => agent.id === "07")!;
   const steps = isArabic
     ? [
         "الأخبار تدخل إلى الوكيل الأول ويتم تقييم تأثيرها على السوق.",
@@ -183,10 +185,12 @@ export default function AIAgentsWorkflow() {
             </div>
 
             <div className="relative z-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[1fr_auto_1fr]">
-              {agents.map((agent, index) => (
+              {coreAgents.map((agent, index) => (
                 <AgentCard key={agent.id} agent={agent} index={index} language={language} />
               ))}
             </div>
+
+            <GoldFlowSpotlight agent={goldAgent} language={language} />
           </div>
 
           <motion.aside
@@ -351,6 +355,52 @@ function AgentCard({
       </div>
 
       <p className="relative z-10 mt-5 text-sm leading-relaxed text-[#b5c2cf]">{agent.role[language]}</p>
+    </motion.div>
+  );
+}
+
+function GoldFlowSpotlight({
+  agent,
+  language,
+}: {
+  agent: (typeof agents)[number];
+  language: "en" | "ar";
+}) {
+  const Icon = agent.icon;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18, scale: 0.98 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.5, delay: 0.22 }}
+      className="relative z-20 mx-auto mt-5 max-w-3xl overflow-hidden rounded-[26px] border bg-[#080d12]/90 p-4 shadow-[0_0_46px_rgba(245,197,66,0.16),inset_0_0_34px_rgba(245,197,66,0.04)] lg:mt-3"
+      style={{ borderColor: `${agent.color}8a` }}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_50%,rgba(245,197,66,0.18),transparent_32%),radial-gradient(circle_at_88%_50%,rgba(56,189,248,0.13),transparent_30%)]" />
+      <motion.div
+        className="absolute inset-x-10 top-0 h-px"
+        style={{ backgroundColor: agent.color }}
+        animate={{ opacity: [0.35, 1, 0.35], scaleX: [0.72, 1, 0.72] }}
+        transition={{ duration: 2.2, repeat: Infinity }}
+      />
+      <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border bg-black/40"
+            style={{ borderColor: `${agent.color}70`, color: agent.color, boxShadow: `0 0 24px ${agent.color}35` }}
+          >
+            <Icon size={27} />
+          </div>
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#8aa1b7]">Agent {agent.id}</div>
+            <h3 className="text-xl font-black uppercase leading-tight text-white">{agent.name[language]}</h3>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[#b5c2cf]">{agent.role[language]}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-[#f5c542]/30 bg-[#f5c542]/10 px-4 py-3 text-sm font-black text-[#f5c542] shadow-[0_0_22px_rgba(245,197,66,0.12)]">
+          {agent.status[language]}
+        </div>
+      </div>
     </motion.div>
   );
 }
