@@ -4,6 +4,7 @@ import Navbar from './sections/Navbar'
 import Footer from './sections/Footer'
 import SpringSalePopup from './components/SpringSalePopup'
 import SupportChatWidget from './components/SupportChatWidget'
+import WelcomeIntroSlide from './components/WelcomeIntroSlide'
 import Disclaimer from './pages/Disclaimer'
 import Hero from './sections/Hero'
 import WelcomeBanner from './components/WelcomeBanner'
@@ -59,6 +60,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans antialiased">
+      <WelcomeIntroSlide />
       <Navbar />
       <main>
         <WelcomeBanner />
