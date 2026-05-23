@@ -22,6 +22,17 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    flavorDimensions "edition"
+    productFlavors {
+        standard {
+            dimension "edition"
+        }
+        admin {
+            dimension "edition"
+            applicationIdSuffix ".admin"
+            versionNameSuffix "-admin"
+        }
+    }
 }
 
 repositories {
