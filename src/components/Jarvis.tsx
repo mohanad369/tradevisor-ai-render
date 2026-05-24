@@ -1,15 +1,24 @@
 import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-  Bot, X, Send, User, Loader2, Crown, TrendingUp, BookOpen,
-  Sparkles, Zap, ChevronDown, Diamond, Flame, Settings, KeyRound
+  Bot, X, Send, User, Loader2, Sparkles, ChevronDown, MessageCircle,
 } from "lucide-react"
+import { trpc } from "@/lib/trpc"
 
 type Message = {
   role: "user" | "jarvis"
   content: string
   timestamp: number
 }
+
+// Live support — direct Telegram link to the owner.
+const TELEGRAM_SUPPORT = "https://t.me/Mohanad_333"
+
+// Per-conversation limit: a visitor can chat for ~2 minutes, after which
+// Jarvis hands them off to live support. We also cap the message count
+// so the owner's API cost per conversation stays predictable.
+const CONVERSATION_LIMIT_MS = 2 * 60 * 1000
+const MAX_USER_MESSAGES = 12
 
 const QUICK_QUESTIONS = [
   "What is SMC?",
@@ -20,61 +29,66 @@ const QUICK_QUESTIONS = [
   "What is ICT?",
 ]
 
-const SYSTEM_PROMPT = `You are Jarvis, the elite AI trading assistant for Tradevisor. You speak Arabic and English fluently.
-
-TRADEVISOR VIP PRICES (memorize exactly):
-- Monthly: $69
-- 3 Months: $249  
-- Yearly: $669 (best value)
-- Payment: USDT TRC20 to wallet TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA
-- Admin email: mohanadmaria777@gmail.com
-- VIP codes are 8-character alphanumeric
-
-VIP DASHBOARD FEATURES:
-- AI Analyzer: Upload chart images for AI analysis
-- AI Signals: Daily trading signals
-- Daily Picks: Curated trading opportunities
-- Live Charts: TradingView with drawing tools
-- Lot Calculator: Position sizing tool
-- Strategies: Proven trading strategies
-- Brokers: Recommended brokers list
-- Performance: Track your trading stats
-- Gold Chart AI: AI-powered gold analysis
-- Education: SMC, ICT, and Classic trading schools (30 video lessons)
-- TradingView Link: Connect your TradingView account
-
-IMPORTANT RULES:
-- Never say "this is not financial advice" or "educational only"
-- Be confident and professional in your trading guidance
-- Always use the exact VIP prices: $69/month, $249/3months, $669/year
-- If asked about market direction, give clear analysis with reasoning
-- For gold (XAU/USD): mention key levels, trend, and potential setups
-- Help users navigate the platform features
-- Encourage VIP subscription for full access`
+const WELCOME_MESSAGE =
+  "👋 Hi! I'm Jarvis, your TradeVisor AI assistant.\n\n" +
+  "I can help you with:\n" +
+  "• Trading concepts — SMC, ICT, price action\n" +
+  "• Gold (XAU/USD) analysis & key levels\n" +
+  "• VIP plans and how to subscribe\n" +
+  "• Using the dashboard & platform features\n\n" +
+  "Ask me anything — in any language. 🌍"
 
 export default function Jarvis() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "jarvis",
-      content: "Hello! I'm Jarvis, your AI trading assistant. Ask me about SMC, ICT, gold analysis, or how to join VIP!",
-      timestamp: Date.now(),
-    },
+    { role: "jarvis", content: WELCOME_MESSAGE, timestamp: Date.now() },
   ])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem("jarvis_api_key") || "")
-  const [apiProvider, setApiProvider] = useState<"gemini" | "openai">(() => (localStorage.getItem("jarvis_api_provider") as "gemini" | "openai") || "gemini")
+  const [limitReached, setLimitReached] = useState(false)
+
+  // Conversation clock — starts on the first user message.
+  const conversationStart = useRef<number | null>(null)
+  const userMsgCount = useRef(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const chat = trpc.jarvis.chat.useMutation()
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
   useEffect(() => { if (isOpen) setTimeout(() => inputRef.current?.focus(), 300) }, [isOpen])
 
+  // Once the conversation starts, end it after the time limit.
+  useEffect(() => {
+    if (conversationStart.current === null || limitReached) return
+    const elapsed = Date.now() - conversationStart.current
+    const remaining = CONVERSATION_LIMIT_MS - elapsed
+    if (remaining <= 0) { endConversation(); return }
+    const t = setTimeout(() => endConversation(), remaining)
+    return () => clearTimeout(t)
+  }, [messages, limitReached])
+
+  const endConversation = () => {
+    if (limitReached) return
+    setLimitReached(true)
+    setMessages(prev => [...prev, {
+      role: "jarvis",
+      timestamp: Date.now(),
+      content:
+        "⏳ This is the end of the free chat session.\n\n" +
+        "For more help, talk directly with our live support team on Telegram — " +
+        "they'll answer you personally. Just tap the button below. 👇",
+    }])
+  }
+
   const handleSend = async (text: string = input) => {
-    if (!text.trim() || loading) return
+    if (!text.trim() || loading || limitReached) return
+
+    // Start the conversation clock on the first user message.
+    if (conversationStart.current === null) conversationStart.current = Date.now()
+    userMsgCount.current += 1
+
     const userMsg: Message = { role: "user", content: text.trim(), timestamp: Date.now() }
     setMessages(prev => [...prev, userMsg])
     setInput("")
@@ -82,111 +96,56 @@ export default function Jarvis() {
     setIsTyping(true)
 
     try {
-      let reply = ""
+      // Send recent turns as context. Map our "jarvis" role to "assistant".
+      const history = messages
+        .filter(m => m.content !== WELCOME_MESSAGE)
+        .slice(-8)
+        .map(m => ({
+          role: (m.role === "jarvis" ? "assistant" : "user") as "assistant" | "user",
+          content: m.content,
+        }))
 
-      if (apiKey && apiProvider === "gemini") {
-        // Google Gemini API
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              { role: "user", parts: [{ text: SYSTEM_PROMPT }] },
-              ...messages.slice(-8).map(m => ({ role: m.role === "jarvis" ? "model" : "user", parts: [{ text: m.content }] })),
-              { role: "user", parts: [{ text: text.trim() }] },
-            ],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 800 },
-          }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          reply = data.candidates?.[0]?.content?.parts?.[0]?.text || ""
-        }
-      } else if (apiKey && apiProvider === "openai") {
-        // OpenAI API
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: "gpt-3.5-turbo",
-            messages: [
-              { role: "system", content: SYSTEM_PROMPT },
-              ...messages.slice(-8).map(m => ({ role: m.role === "jarvis" ? "assistant" : "user", content: m.content })),
-              { role: "user", content: text.trim() },
-            ],
-            max_tokens: 800,
-            temperature: 0.7,
-          }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          reply = data.choices?.[0]?.message?.content || ""
-        }
-      }
+      const res = await chat.mutateAsync({ message: text.trim(), history })
+      const reply = res.ok && res.reply ? res.reply : getFallbackReply(text.trim())
 
-      // Fallback if API fails or no key
-      if (!reply) {
-        reply = getFallbackReply(text.trim())
-      }
-
-      const delay = Math.min(reply.length * 8, 1200)
+      // Small natural delay before showing the reply.
+      const delay = Math.min(reply.length * 6, 900)
       await new Promise(r => setTimeout(r, delay))
 
       setMessages(prev => [...prev, { role: "jarvis", content: reply, timestamp: Date.now() }])
     } catch {
-      setMessages(prev => [...prev, { role: "jarvis", content: getFallbackReply(text.trim()), timestamp: Date.now() }])
+      setMessages(prev => [...prev, {
+        role: "jarvis", content: getFallbackReply(text.trim()), timestamp: Date.now(),
+      }])
     } finally {
       setLoading(false)
       setIsTyping(false)
+      // End the conversation if the message cap is hit.
+      if (userMsgCount.current >= MAX_USER_MESSAGES) {
+        setTimeout(() => endConversation(), 600)
+      }
     }
   }
 
+  // Offline / error fallback — keeps Jarvis useful if the server is down.
   const getFallbackReply = (query: string): string => {
     const q = query.toLowerCase()
-
-    if (/مرحبا|سلام|هاي|اهلا|hey|hello|hi/.test(q)) {
-      return "أهلاً وسهلاً! أنا جارفيس مساعدك الذكي.\n\nاسألني عن:\n• التحليل الفني (SMC, ICT)\n• إشارات الذهب XAU/USD\n• الاشتراك VIP\n• كيفية استخدام المنصة"
+    if (/مرحبا|سلام|هاي|اهلا|hey|hello|hi|bonjour/.test(q)) {
+      return "👋 Hi! Ask me about trading concepts, gold analysis, or VIP plans."
     }
-
-    if (/vip|اشتراك|اشترك|سعر|price|cost/.test(q)) {
-      return `VIP Dashboard يحتوي على كل شيء:\n• AI Analyzer لتحليل الشارتات\n• إشارات يومية\n• شارت TradingView متقدم مع أدوات الرسم\n• 30 درس تعليمي (SMC + ICT + Classic)\n• Gold Chart AI\n• Education Schools\n\nالأسعار:\n• $69/شهر\n• $249/3 أشهر\n• $669/سنة (الأفضل قيمة!)\n\nالدفع: USDT TRC20\nالمحفظة: TYLqLhbtJSAaPZbibEZ1JtHfAD2ZJ71qHA`
+    if (/vip|اشتراك|اشترك|سعر|price|cost|abonn/.test(q)) {
+      return "TradeVisor VIP plans:\n• Monthly: $69\n• 3 Months: $249\n• Yearly: $669 (best value)\n• $25 / 3-day trial\n\nPayment: USDT TRC20. Open the VIP page to subscribe."
     }
-
-    if (/gold|ذهب|xau/.test(q)) {
-      return `XAU/USD (الذهب) تحليل فني:\n\nالأفضل للتداول:\n• London Killzone: 10 ص - 1 م (توقيت السعودية)\n• New York Killzone: 3 م - 6 م (توقيت السعودية)\n• Timeframe: 15m للدخول، 1H للاتجاه\n\nمستويات مهمة لمتابعة:\n• أعلى 2400 = مقاومة نفسية\n• أقل 2300 = دعم نفسي\n• EMA 200 على 4H يحدد الاتجاه العام\n\nتاب Gold Chart AI بالـ VIP Dashboard لتحليل مباشر!`
+    if (/gold|ذهب|xau|or\b/.test(q)) {
+      return "For XAU/USD (gold): watch the London & New York sessions, use 15m for entries and 1H for trend. The VIP Gold tools and the Gold Flow Agent give live analysis."
     }
-
     if (/smc|smart money/.test(q)) {
-      return `SMC — Smart Money Concepts\n\nالمفاهيم الرئيسية:\n1. Supply & Demand Zones — مناطق العرض والطلب\n2. Order Blocks — بلوكات الأوامر\n3. Fair Value Gaps (FVG) — الفجوات السعرية\n4. Liquidity Sweeps — سحب السيولة\n5. Break of Structure (BOS) — كسر البنية\n6. Change of Character (CHoCH) — تغيير طابع السوق\n7. Premium & Discount\n8. AMD Cycle (Accumulation, Manipulation, Distribution)\n\nعندنا 10 دروس كاملة عن SMC بقسم Education بالـ VIP!`
+      return "SMC (Smart Money Concepts): order blocks, fair value gaps, liquidity sweeps, break of structure. The VIP Education center has full SMC lessons."
     }
-
     if (/ict|inner circle/.test(q)) {
-      return `ICT — Inner Circle Trader\n\nمنهجية مايكل هدلسون:\n1. Killzones — أوقات التداول الرئيسية\n2. Order Blocks — بلوكات الأوامر\n3. Fair Value Gaps — الفجوات السعرية\n4. Breaker Blocks — بلوكات الكسر\n5. Mitigation Blocks — بلوكات التخفيف\n6. Liquidity Pools — تجمعات السيولة\n7. Market Structure — بنية السوق\n8. Displacement — الإزاحة السعرية\n\n10 دروس كاملة عن ICT بقسم Education!`
+      return "ICT (Inner Circle Trader): killzones, order blocks, fair value gaps, liquidity pools. Full ICT lessons are in the VIP Education center."
     }
-
-    if (/تحليل|اناليسز|chart|شارت/.test(q)) {
-      return `لتحليل الشارت:\n1. حدد الاتجاه العام (EMA 50/200)\n2. رسم Support & Resistance رئيسية\n3. ابحث عن Candlestick Patterns\n4. تأكد بالVolume\n5. ادخل فقط عند Confluence (تقاطع إشارات)\n\nبـ VIP تقدر ترفع صورة الشارت بـ AI Analyzer وأحللك إياها بالذكاء الاصطناعي!`
-    }
-
-    if (/risk|مانيجمنت|ستوب|stop/.test(q)) {
-      return `Risk Management — القواعد الذهبية:\n• Risk per trade: 1-2% فقط\n• Risk/Reward: 1:2 على الأقل\n• Stop Loss: محدد قبل الدخول\n• لا تنتقم من السوق بعد خسارة\n• التزم بخطة التداول\n• سجل كل صفقة بـ Journal`
-    }
-
-    if (/وقت|time|session| killzone|سوق/.test(q)) {
-      return `أفضل أوقات التداول:\n\n🇬🇧 London: 10 ص - 1 م (توقيت السعودية)\n• EUR/GBP/CHF أكثر سيولة\n\n🇺🇸 New York: 3 م - 6 م (توقيت السعودية)\n• XAU/USD وأزواج الدولار الأفضل\n• الأخبار الاقتصادية الأمريكية\n\n⚠️ تجنب:\n• الجمعة بعد الظهر\n• الأخبار الكبيرة بدون خبرة\n• الأوقات ذات السيولة المنخفضة`
-    }
-
-    if (/شكر|thanks|thank/.test(q)) {
-      return "عفواً! أنا جاهز لأي سؤال. بالتوفيق بالصفقات!"
-    }
-
-    return `سؤال جيد! "${query}"\n\nبإمكاني مساعدتك بـ:\n• تحليل SMC و ICT\n• إشارات الذهب XAU/USD\n• معلومات الاشتراك VIP ($69/شهر)\n• استخدام منصة Tradevisor\n\nجرب تسألني سؤال محدد أكثر!`
-  }
-
-  const saveSettings = () => {
-    localStorage.setItem("jarvis_api_key", apiKey)
-    localStorage.setItem("jarvis_api_provider", apiProvider)
-    setShowSettings(false)
+    return "I'm having trouble reaching the server right now. Please try again in a moment — or contact live support on Telegram."
   }
 
   return (
@@ -216,66 +175,17 @@ export default function Jarvis() {
                 <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#22c55e] rounded-full border-2 border-[#0a0a0f]" />
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold">Jarvis AI</span>
-                  {!apiKey && <span className="text-[8px] bg-[#e11d48]/10 text-[#e11d48] px-1.5 py-0.5 rounded-full">Setup Required</span>}
-                </div>
+                <span className="text-sm font-bold">Jarvis AI</span>
                 <div className="flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-[#22c55e] rounded-full" />
-                  <span className="text-[9px] text-[#22c55e]">{apiKey ? "AI Connected" : "Basic Mode"}</span>
+                  <span className="text-[9px] text-[#22c55e]">Online</span>
                   {isTyping && <span className="text-[9px] text-[#666666] ml-1">typing...</span>}
                 </div>
               </div>
-              <button onClick={() => setShowSettings(!showSettings)} className="text-[#666666] hover:text-[#d4a843] p-1">
-                <Settings size={16} />
-              </button>
               <button onClick={() => setIsOpen(false)} className="text-[#666666] hover:text-white">
                 <ChevronDown size={18} />
               </button>
             </div>
-
-            {/* Settings Panel */}
-            <AnimatePresence>
-              {showSettings && (
-                <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden border-b border-[#1f1f1f]">
-                  <div className="p-4 bg-[#0d0d0d] space-y-3">
-                    <div>
-                      <label className="text-[9px] text-[#666666] block mb-1.5">AI Provider</label>
-                      <div className="flex gap-2">
-                        {(["gemini", "openai"] as const).map(p => (
-                          <button key={p} onClick={() => setApiProvider(p)}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${apiProvider === p ? "bg-[#d4a843] text-[#050505]" : "bg-[#141414] text-[#a0a0a0] border border-[#1f1f1f]"}`}>
-                            {p === "gemini" ? "Google Gemini" : "OpenAI GPT"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[9px] text-[#666666] block mb-1.5">API Key</label>
-                      <div className="relative">
-                        <KeyRound size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666666]" />
-                        <input
-                          type="password"
-                          value={apiKey}
-                          onChange={e => setApiKey(e.target.value)}
-                          placeholder={apiProvider === "gemini" ? "Gemini API Key..." : "OpenAI API Key..."}
-                          className="w-full bg-[#0a0a0a] border border-[#1f1f1f] rounded-xl pl-8 pr-3 py-2 text-[10px] text-white placeholder-[#555] focus:border-[#d4a843] focus:outline-none"
-                        />
-                      </div>
-                      <p className="text-[8px] text-[#666666] mt-1">
-                        {apiProvider === "gemini"
-                          ? "Get free key from: aistudio.google.com/app/apikey"
-                          : "Get key from: platform.openai.com/api-keys"}
-                      </p>
-                    </div>
-                    <button onClick={saveSettings}
-                      className="w-full bg-[#d4a843] text-[#050505] text-xs font-bold py-2 rounded-xl hover:bg-[#e8c76a] transition-all">
-                      Save & Connect
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
@@ -307,11 +217,27 @@ export default function Jarvis() {
                   </div>
                 </div>
               )}
+
+              {/* Live support handoff — shown once the limit is reached */}
+              {limitReached && (
+                <motion.a
+                  href={TELEGRAM_SUPPORT}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center justify-center gap-2 bg-[#229ED9] text-white text-xs font-bold py-3 rounded-xl hover:bg-[#2ba9e0] transition-all"
+                >
+                  <MessageCircle size={15} />
+                  Contact Live Support on Telegram
+                </motion.a>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 
             {/* Quick Questions */}
-            {messages.length <= 2 && !showSettings && (
+            {messages.length <= 2 && !limitReached && (
               <div className="px-4 pb-2">
                 <p className="text-[9px] text-[#666666] mb-2 flex items-center gap-1"><Sparkles size={10} /> Quick questions</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -327,21 +253,28 @@ export default function Jarvis() {
 
             {/* Input */}
             <div className="border-t border-[#1f1f1f] p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  ref={inputRef}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSend()}
-                  placeholder={apiKey ? "Ask me anything..." : "Setup AI key for smart replies..."}
-                  disabled={loading}
-                  className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-[#555] focus:border-[#d4a843]/30 focus:outline-none disabled:opacity-50"
-                />
-                <button onClick={() => handleSend()} disabled={loading || !input.trim()}
-                  className="w-9 h-9 rounded-xl bg-[#d4a843] text-[#050505] flex items-center justify-center hover:bg-[#e8c76a] transition-all disabled:opacity-50 flex-shrink-0">
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                </button>
-              </div>
+              {limitReached ? (
+                <a href={TELEGRAM_SUPPORT} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 bg-[#229ED9] text-white text-xs font-bold py-2.5 rounded-xl hover:bg-[#2ba9e0] transition-all">
+                  <MessageCircle size={14} /> Continue on Telegram
+                </a>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSend()}
+                    placeholder="Ask me anything..."
+                    disabled={loading}
+                    className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-[#555] focus:border-[#d4a843]/30 focus:outline-none disabled:opacity-50"
+                  />
+                  <button onClick={() => handleSend()} disabled={loading || !input.trim()}
+                    className="w-9 h-9 rounded-xl bg-[#d4a843] text-[#050505] flex items-center justify-center hover:bg-[#e8c76a] transition-all disabled:opacity-50 flex-shrink-0">
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
