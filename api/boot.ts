@@ -89,6 +89,18 @@ app.use("/api/trpc/*", async (c) => {
   });
 });
 
+// ─── Health check ───
+// render.yaml's healthCheckPath points here. Render polls it to know the
+// service is alive; if it fails, Render marks the deploy unhealthy.
+// Also doubles as a lightweight uptime probe for external monitors.
+app.get("/api/health", (c) => {
+  return c.json({
+    status: "ok",
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // 6. VIP2 Gold Chart AI router (isolated — won't affect existing routes)
 app.get("/api/market/quotes", async (c) => {
   const pairsParam = c.req.query("pairs") || "XAU/USD";
@@ -509,9 +521,14 @@ async function activateHostedPayment(payment: typeof vipPayments.$inferSelect) {
 if (env.IS_PRODUCTION) {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");
+  const { startBackupScheduler } = await import("./lib/backup");
+  const { installCrashHandlers } = await import("./lib/alerting");
+  installCrashHandlers();
   serveStaticFiles(app);
   const port = parseInt(process.env.PORT || "3000");
   serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
     console.log(`Server running on port ${port}`);
+    // Begin periodic database snapshots (disaster recovery).
+    startBackupScheduler();
   });
 }

@@ -529,4 +529,18 @@ export const authRouter = createRouter({
       last14,
     };
   }),
+
+  // ─── Database backups (disaster recovery) ───
+  adminListBackups: adminQuery.query(async () => {
+    const { listBackups } = await import("../lib/backup");
+    return { backups: listBackups() };
+  }),
+
+  adminRunBackup: adminQuery.mutation(async () => {
+    const { runBackup } = await import("../lib/backup");
+    const file = await runBackup();
+    return file
+      ? { success: true as const, file: file.split("/").pop() }
+      : { success: false as const, error: "Backup failed — check server logs." };
+  }),
 });

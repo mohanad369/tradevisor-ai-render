@@ -315,3 +315,9 @@ try {
 console.log("[DB] Schema ready (all tables ensured).");
 
 export const db = drizzle(client, { schema });
+
+// Exposed for the backup system (uses SQLite's native online backup API)
+// and for any maintenance task that needs the raw connection.
+export const sqliteClient = client;
+export const DATABASE_PATH = DB_PATH;
+export const DATABASE_DIR = DB_DIR;

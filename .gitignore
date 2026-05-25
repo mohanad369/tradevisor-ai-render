@@ -43,3 +43,7 @@ artifacts/
 # Test coverage
 coverage/
 .nyc_output/
+
+# Database backups (disaster recovery snapshots)
+backups/
+*.db.backup
