@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { ReactNode } from "react"
 import { motion } from "framer-motion"
 import {
   Upload, X, Loader2, TrendingUp, TrendingDown, Target,
@@ -28,6 +29,12 @@ const ASSETS = [
 
 type FrameImages = Record<string, string> // tf -> base64 data URI
 
+type ScalpingAnalyzerTabProps = {
+  beforeAnalyze?: () => Promise<boolean> | boolean
+  onAnalysisComplete?: (result: any, assetName: string) => void | Promise<void>
+  accessBadge?: ReactNode
+}
+
 function fileToDataUri(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader()
@@ -37,7 +44,7 @@ function fileToDataUri(file: File): Promise<string> {
   })
 }
 
-export default function ScalpingAnalyzerTab() {
+export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete, accessBadge }: ScalpingAnalyzerTabProps = {}) {
   const [asset, setAsset] = useState(ASSETS[0])
   const [images, setImages] = useState<FrameImages>({})
   const [error, setError] = useState("")
@@ -68,7 +75,6 @@ export default function ScalpingAnalyzerTab() {
 
   const handleAnalyze = async () => {
     setError("")
-    setResult(null)
     const frames = FRAME_SLOTS
       .filter((s) => images[s.tf])
       .map((s) => ({ timeframe: s.tf, imageBase64: images[s.tf] }))
@@ -79,8 +85,19 @@ export default function ScalpingAnalyzerTab() {
     }
 
     try {
+      if (beforeAnalyze) {
+        const allowed = await beforeAnalyze()
+        if (!allowed) return
+      }
+
+      setResult(null)
       const res = await analyze.mutateAsync({ assetName: asset, frames })
       setResult(res)
+      try {
+        await onAnalysisComplete?.(res, asset)
+      } catch {
+        /* non-blocking: quota/status will resync from the server */
+      }
     } catch (err: any) {
       setError(err?.message || "Analysis failed. Please try again.")
     }
@@ -99,6 +116,8 @@ export default function ScalpingAnalyzerTab() {
           them top-down for a precise scalping plan. All 3 give the best accuracy.
         </p>
       </div>
+
+      {accessBadge}
 
       {/* Asset selector */}
       <div>

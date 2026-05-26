@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Brain, Sparkles, Loader2, ArrowDown, BarChart3, TrendingUp, DollarSign, Zap, Lock, Crown, Network, FileSearch, ShieldCheck, Cpu } from "lucide-react";
+import { Brain, Sparkles, Loader2, ArrowDown, BarChart3, TrendingUp, DollarSign, Zap, Lock, Crown, Network, FileSearch, ShieldCheck, Cpu, Layers } from "lucide-react";
 import { useNavigate } from "react-router";
 import { analyzeChartClientSide, type AnalysisResult } from "@/lib/analyzer";
 import { getCachedPrice } from "@/lib/goldapi";
@@ -12,6 +12,7 @@ import AnalysisResultPanel, { AnalysisOverlay } from "@/components/AnalysisOverl
 import LivePriceTicker from "@/components/LivePriceTicker";
 import CryptoPaymentModal from "@/components/CryptoPaymentModal";
 import GoldFlowAgent from "@/components/GoldFlowAgent";
+import ScalpingAnalyzerTab from "@/components/ScalpingAnalyzerTab";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
 import { useLanguage } from "@/lib/language";
@@ -143,6 +144,7 @@ export default function ChartAnalyzer() {
   const [usedOpenAI, setUsedOpenAI] = useState(false);
   const [developerMode, setDeveloperMode] = useState(isDeveloperMode());
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [analyzerMode, setAnalyzerMode] = useState<"standard" | "scalping">("standard");
 
   // Server-backed public access state (source of truth — survives a
   // localStorage wipe or a fresh browser):
@@ -196,6 +198,74 @@ export default function ChartAnalyzer() {
     || (!isSubscriber && (trialStage === "anon" || trialStage === "account"));
 
   const assetDecimals = getDefaultDecimals(selectedAsset);
+
+  const ensureAnalysisAccess = async () => {
+    const hasDeveloperAccess = isDeveloperMode();
+    setDeveloperMode(hasDeveloperAccess);
+    const unlimited = hasDeveloperAccess || trialStage === "unlimited";
+
+    if (!hasDeveloperAccess && isSubscriber) {
+      try {
+        const q = await dailyQuota.refetch();
+        if (q.data?.loggedIn && q.data.isSubscriber && q.data.remaining <= 0) {
+          alert(
+            `You've used all ${q.data.limit} analyses for today. ` +
+            `Your daily limit resets tomorrow.`,
+          );
+          return false;
+        }
+      } catch {
+        /* consumeDaily below still guards the limit */
+      }
+    }
+
+    if (!unlimited && !isSubscriber) {
+      try {
+        const status = await trialStatus.refetch();
+        const data = status.data;
+        if (data && !data.unlimited) {
+          setTrialStage(data.stage);
+          setTrialRemaining(data.remaining);
+          if (data.stage === "signup") {
+            navigate("/account");
+            return false;
+          }
+          if (data.stage === "paywall") {
+            setShowPaymentModal(true);
+            return false;
+          }
+        }
+      } catch {
+        /* consume() below still guards us */
+      }
+    }
+
+    return true;
+  };
+
+  const recordSuccessfulAnalysis = async () => {
+    if (isDeveloperMode()) return;
+
+    if (isSubscriber) {
+      try {
+        await consumeDaily.mutateAsync({});
+        dailyQuota.refetch();
+      } catch {
+        /* server unreachable - next refetch will resync */
+      }
+      return;
+    }
+
+    try {
+      const res = await consumeTrial.mutateAsync({});
+      if (!res.unlimited) {
+        setTrialStage(res.stage);
+        setTrialRemaining(res.remaining);
+      }
+    } catch {
+      /* server unreachable - next status refetch will resync */
+    }
+  };
 
   // Fetch live market price for the selected asset when available.
   useEffect(() => {
@@ -386,6 +456,66 @@ export default function ChartAnalyzer() {
           </p>
         </motion.div>
 
+        <div className="mb-6 flex flex-wrap justify-center gap-3">
+          <button
+            onClick={() => setAnalyzerMode("standard")}
+            className={`flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-black transition-all ${analyzerMode === "standard" ? "border-[#d4a843]/70 bg-[#d4a843] text-[#020509] shadow-[0_0_26px_rgba(212,168,67,0.22)]" : "border-[#18c8ff]/20 bg-[#06101a]/80 text-[#b8c7d9] hover:border-[#18c8ff]/55 hover:text-white"}`}
+          >
+            <Brain size={16} />
+            Standard AI Analyzer
+          </button>
+          <button
+            onClick={() => setAnalyzerMode("scalping")}
+            className={`flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-black transition-all ${analyzerMode === "scalping" ? "border-[#d4a843]/70 bg-[#d4a843] text-[#020509] shadow-[0_0_26px_rgba(212,168,67,0.22)]" : "border-[#18c8ff]/20 bg-[#06101a]/80 text-[#b8c7d9] hover:border-[#18c8ff]/55 hover:text-white"}`}
+          >
+            <Layers size={16} />
+            Multi-Timeframe Scalping
+          </button>
+        </div>
+
+        {analyzerMode === "scalping" ? (
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-[30px] border border-[#18c8ff]/20 bg-[#050b12]/90 p-4 sm:p-6 shadow-[0_0_100px_rgba(24,200,255,0.08)] backdrop-blur-xl"
+          >
+            <ScalpingAnalyzerTab
+              beforeAnalyze={ensureAnalysisAccess}
+              onAnalysisComplete={async (scalpingResult, assetName) => {
+                try {
+                  saveAnalysis.mutate({
+                    asset: assetName,
+                    strategy: "Multi-Timeframe Scalping",
+                    timeframe: "15m/5m/1m",
+                    signal: scalpingResult.signal,
+                    confidence: Math.round(Number(scalpingResult.confidence) || 0),
+                    entry: String(scalpingResult.entry ?? ""),
+                    stopLoss: String(scalpingResult.stopLoss ?? ""),
+                    takeProfit: String(scalpingResult.takeProfit1 ?? ""),
+                    summary: Array.isArray(scalpingResult.reasons)
+                      ? scalpingResult.reasons.slice(0, 3).join(" - ").slice(0, 580)
+                      : "",
+                  });
+                } catch {
+                  /* non-blocking */
+                }
+                await recordSuccessfulAnalysis();
+              }}
+              accessBadge={
+                <div className="rounded-2xl border border-[#18c8ff]/15 bg-black/30 px-4 py-3 text-xs text-[#b8c7d9]">
+                  {isSubscriber
+                    ? `${dailyRemaining} of ${dailyLimit} daily analyses remaining`
+                    : developerMode
+                      ? "Developer unlimited analysis"
+                      : trialStage === "account"
+                        ? `${trialRemaining} free account analyses remaining`
+                        : "Create or log in to use your 2 free analyses"}
+                </div>
+              }
+            />
+          </motion.div>
+        ) : (
+          <>
         {/* Live Price + Manual Price Input */}
         <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-6 rounded-[28px] border border-[#18c8ff]/20 bg-[#06101a]/80 p-3 sm:p-4 shadow-[0_0_90px_rgba(24,200,255,0.09)] backdrop-blur-xl">
           <div className="grid gap-3 lg:grid-cols-[0.9fr_1.5fr]">
@@ -635,6 +765,8 @@ export default function ChartAnalyzer() {
             </AnimatePresence>
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* Payment Modal after limit reached */}
