@@ -43,6 +43,30 @@ export interface RealNewsPayload {
   poweredBy: "claude-web-search" | "fallback";
 }
 
+/** Real market data — when provided, the market-context agent uses it
+ *  instead of placeholder numbers. Sourced from the gold-flow / market feed. */
+export interface RealMarketData {
+  /** Latest traded price. */
+  price?: number;
+  /** % change over the recent short-term window. */
+  shortTermChangePercent?: number;
+  /** Current volatility as a percentage. */
+  volatilityPercent?: number;
+  /** Current volume relative to its average (1.0 = average). */
+  volumeRatio?: number;
+  /** Momentum direction from the live feed. */
+  momentum?: "up" | "down" | "flat";
+}
+
+/** Real account data — when provided, the final-risk agent sizes the
+ *  trade off the trader's actual capital instead of a placeholder. */
+export interface RealAccountData {
+  /** The trader's real account balance. */
+  accountBalance?: number;
+  /** Risk per trade as a percentage of the balance. */
+  riskPercent?: number;
+}
+
 interface PipelineInput {
   analysis: AnalysisResult;
   assetName: string;
@@ -52,6 +76,12 @@ interface PipelineInput {
   /** Optional real news payload from `trpc.news.forAsset`. When provided,
    *  the news agent uses it instead of generating synthetic inputs. */
   realNews?: RealNewsPayload | null;
+  /** Optional real market data. When provided, the market-context agent
+   *  uses it instead of placeholder numbers. */
+  realMarket?: RealMarketData | null;
+  /** Optional real account data. When provided, the final-risk agent
+   *  sizes the position from the trader's real capital. */
+  realAccount?: RealAccountData | null;
 }
 
 export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipelineResult {
@@ -178,25 +208,43 @@ function marketContextAgent(decisionOutput: Record<string, any>, input: Pipeline
   const momentumStrength = input.analysis.confluenceScore >= 80 ? "strong" : "moderate";
   const previousGate = decisionOutput.nextAgentPayload?.riskGate as RiskGate;
 
+  // ── Use real market data when provided; otherwise fall back to the
+  //    chart-derived placeholders so offline runs still work. ──
+  const rm = input.realMarket;
+  const hasRealMarket = !!rm && typeof rm.price === "number";
+
+  const shortTermChangePercent =
+    rm?.shortTermChangePercent ?? (input.analysis.signal === "BUY" ? 0.8 : -0.8);
+  const volumeRatio =
+    rm?.volumeRatio ?? (input.analysis.volume.trend === "increasing" ? 1.45 : 1.05);
+  const volatilityPercent = rm?.volatilityPercent ?? 1.1;
+  const lastPrice = rm?.price ?? input.marketPrice ?? input.analysis.entry;
+  const volatilityRisk: "low" | "medium" | "high" =
+    volatilityPercent >= 2.5 ? "high" : volatilityPercent >= 1.4 ? "medium" : "low";
+  const dataSource = hasRealMarket ? "live-market-feed" : "chart-derived";
+
   return {
     agent: "market-context-agent",
     generatedAt: new Date().toISOString(),
     sourceAgent: decisionOutput.agent,
     symbol: input.assetName,
+    dataSource,
     contextReadiness: {
       status: previousGate === "closed" ? "blocked" : "ready",
       confidence: momentumStrength === "strong" ? "high" : "medium",
       riskGate: previousGate,
-      reasons: ["Market momentum was added to the validated news context."],
+      reasons: [hasRealMarket
+        ? "Live market data was added to the validated news context."
+        : "Market momentum was added to the validated news context."],
     },
     marketMomentum: {
       direction: marketDirection,
       strength: momentumStrength,
       confidence: momentumStrength === "strong" ? "high" : "medium",
       priceChangePercent: 0,
-      shortTermChangePercent: input.analysis.signal === "BUY" ? 0.8 : -0.8,
-      volumeRatio: input.analysis.volume.trend === "increasing" ? 1.45 : 1.05,
-      volatilityRisk: "low",
+      shortTermChangePercent,
+      volumeRatio,
+      volatilityRisk,
     },
     alignment: {
       status: "aligned",
@@ -215,12 +263,12 @@ function marketContextAgent(decisionOutput: Record<string, any>, input: Pipeline
       verifiedNews: decisionOutput.nextAgentPayload?.verifiedInputs,
       marketData: {
         symbol: input.assetName,
-        lastPrice: input.marketPrice || input.analysis.entry,
-        previousClose: input.marketPrice || input.analysis.entry,
-        volume: 1_450_000,
-        averageVolume: 1_000_000,
-        shortTermChangePercent: input.analysis.signal === "BUY" ? 0.8 : -0.8,
-        volatilityPercent: 1.1,
+        dataSource,
+        lastPrice,
+        previousClose: lastPrice,
+        volumeRatio,
+        shortTermChangePercent,
+        volatilityPercent,
         timestamp: new Date().toISOString(),
       },
     },
@@ -313,7 +361,16 @@ function supervisorAgent(outputs: Record<string, any>) {
 function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput: Record<string, any>, input: PipelineInput) {
   const trade = chartTradeOutput.nextAgentPayload.trade;
   const risk = Math.abs(trade.entryPrice - trade.stopLoss);
-  const maxLossAmount = 100;
+
+  // ── Size the position from the trader's REAL account when provided;
+  //    otherwise fall back to a neutral default so offline runs work. ──
+  const ra = input.realAccount;
+  const hasRealAccount = !!ra && typeof ra.accountBalance === "number" && ra.accountBalance > 0;
+  const accountBalance = hasRealAccount ? ra!.accountBalance! : 10_000;
+  const riskPercent = ra?.riskPercent && ra.riskPercent > 0 ? ra.riskPercent : 1;
+  // Max loss = a fixed % of the (real) balance.
+  const maxLossAmount = Number(((accountBalance * riskPercent) / 100).toFixed(2));
+
   const positionSize = risk > 0 ? Number((maxLossAmount / risk).toFixed(4)) : 0;
   const sideMultiplier = trade.side === "long" ? 1 : -1;
   const takeProfits = [
@@ -343,8 +400,9 @@ function finalRiskAgent(chartTradeOutput: Record<string, any>, supervisorOutput:
     symbol: input.assetName,
     finalDecision: { action, confidence, riskGate: closed ? "closed" : restricted ? "restricted" : "open", reasons: notes },
     riskPlan: {
-      accountBalance: 10_000,
-      riskPercent: 1,
+      accountBalance,
+      accountSource: hasRealAccount ? "trader-dashboard" : "default",
+      riskPercent,
       maxLossAmount,
       perUnitRisk: risk,
       positionSize,
