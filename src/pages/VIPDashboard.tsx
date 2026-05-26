@@ -287,11 +287,10 @@ function VIPDashboardInner() {
    FULL VIP DASHBOARD — Mobile Responsive
    ═══════════════════════════════════════════ */
 
-type TabId = "analyzer" | "scalping" | "agents" | "bankZero" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
+type TabId = "analyzer" | "agents" | "bankZero" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
 
 const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "analyzer", label: "Analyzer", icon: Brain },
-  { id: "scalping", label: "Scalping", icon: Layers },
   { id: "agents", label: "AI Agents", icon: Bot },
   { id: "bankZero", label: "Bank Zero", icon: Building2 },
   { id: "tv", label: "Charts", icon: LineChart },
@@ -306,7 +305,6 @@ const tabs: { id: TabId; label: string; icon: any }[] = [
 
 const vipAr: Record<string, string> = {
   analyzer: "المحلل",
-  scalping: "السكالبينغ",
   agents: "الوكلاء",
   tv: "الشارتات",
   calculator: "حاسبة اللوت",
@@ -524,8 +522,7 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
       <main className="max-w-[1400px] mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-            {activeTab === "analyzer" && <AIAnalyzerTab />}
-            {activeTab === "scalping" && <ScalpingAnalyzerTab />}
+            {activeTab === "analyzer" && <ScalpingAnalyzerTab />}
             {activeTab === "agents" && <AIAgentsWorkflow />}
             {activeTab === "bankZero" && <BankZeroStrategyTab />}
             {activeTab === "tv" && <TradingViewLiveTab />}
