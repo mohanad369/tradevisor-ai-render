@@ -211,6 +211,171 @@ Return EXACTLY this JSON shape (no extra keys, no trailing commas):
  *   2. If it fails or no API key, fall back to deterministic mock so the app
  *      keeps working in dev / offline scenarios.
  */
+/**
+ * Multi-timeframe scalping analysis.
+ *
+ * Real scalpers read top-down: the higher frame sets the bias, the
+ * middle frame confirms structure, the lowest frame times the entry.
+ * This sends all three chart images to Claude in ONE request so it can
+ * reason across them together — the 15m for trend, the 5m for the
+ * setup, the 1m for the precise entry, stop, and targets.
+ *
+ * `frames` must be ordered highest -> lowest timeframe.
+ */
+export async function analyzeScalpingMultiFrame(
+  frames: Array<{ timeframe: string; base64: string }>,
+  assetName: string,
+): Promise<Record<string, unknown> | null> {
+  const asset = getAssetProfile(assetName);
+
+  if (!env.ANTHROPIC_API_KEY) {
+    console.warn("[anthropic] ANTHROPIC_API_KEY missing — multi-frame needs the AI");
+    return null;
+  }
+  if (!frames.length) return null;
+
+  const system = `You are an elite scalping analyst. You will receive ${frames.length} candlestick chart images of the SAME asset on DIFFERENT timeframes, ordered from highest to lowest.
+
+Analyze them TOP-DOWN like a professional scalper:
+- The HIGHEST timeframe sets the directional bias and trend.
+- The MIDDLE timeframe confirms market structure and the setup.
+- The LOWEST timeframe gives the precise entry, stop loss, and targets.
+
+The three timeframes MUST agree for a high-confidence signal. If the
+higher timeframe trend contradicts the lower timeframe setup, lower the
+confidence and say so in the reasons.
+
+Output STRICT JSON only — no prose, no markdown outside the JSON.
+
+Rules:
+- Read price levels directly from the chart axes.
+- "signal" must be "BUY" or "SELL" (never HOLD).
+- "confidence" is an integer 60-98. Only exceed 85 when ALL THREE
+  timeframes clearly align.
+- The entry, stop loss, and targets must come from the LOWEST timeframe
+  for a precise scalping execution.
+- Round prices to ${asset.decimals} decimals.
+- Stop loss on the opposite side of entry from the take-profits.
+- For BUY: TP1<TP2<TP3. For SELL: TP1>TP2>TP3 (distance from entry).
+- "timeframeBias" describes what EACH timeframe shows.
+- "reasons" cites what you actually see across the frames.`;
+
+  const user = `Analyze this ${assetName} scalping setup across all ${frames.length} timeframes (${frames.map(f => f.timeframe).join(", ")}).
+
+Return EXACTLY this JSON shape:
+{
+  "signal": "BUY" | "SELL",
+  "confidence": <int 60-98>,
+  "entry": <number>,
+  "stopLoss": <number>,
+  "takeProfit1": <number>,
+  "takeProfit2": <number>,
+  "takeProfit3": <number>,
+  "trend": "<overall trend from the highest timeframe>",
+  "marketStructure": "<structure from the middle timeframe>",
+  "timeframeBias": [
+    {"timeframe": "<tf>", "bias": "bullish"|"bearish"|"neutral", "note": "<short>"}
+  ],
+  "alignment": "<aligned|partial|conflicting>",
+  "reasons": ["<reason 1>", "<reason 2>", "<reason 3>", "<reason 4>"],
+  "candlePatterns": [{"name":"<pattern>","signal":"bullish"|"bearish","reliability":"High"|"Medium"}],
+  "confluenceScore": <int 60-98>
+}`;
+
+  // Build the message: each image preceded by a label so Claude knows
+  // which timeframe is which.
+  const content: any[] = [];
+  for (const f of frames) {
+    content.push({ type: "text", text: `-- Timeframe: ${f.timeframe} --` });
+    content.push({
+      type: "image",
+      source: { type: "base64", media_type: detectMediaType(f.base64), data: f.base64 },
+    });
+  }
+  content.push({ type: "text", text: user });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: DEFAULT_MODEL,
+        max_tokens: 2000,
+        system,
+        messages: [{ role: "user", content }],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error(`[anthropic] multi-frame API error ${res.status}: ${errText}`);
+      return null;
+    }
+
+    const data = (await res.json()) as any;
+    const text = data?.content?.[0]?.text || "";
+    const parsed = extractJson(text);
+    if (!parsed) {
+      console.error("[anthropic] multi-frame: couldn't parse JSON:", text.slice(0, 400));
+      return null;
+    }
+    if (parsed.signal !== "BUY" && parsed.signal !== "SELL") return null;
+    if (typeof parsed.entry !== "number" || typeof parsed.stopLoss !== "number") return null;
+
+    // Shape the result like analyzeChartWithAI so the UI/pipeline is unchanged.
+    const strategy = getStrategyProfile("Scalping");
+    const riskAmount = Math.abs(parsed.entry - parsed.stopLoss);
+    const rr = (tp: number) =>
+      riskAmount > 0 ? (Math.abs(tp - parsed.entry) / riskAmount).toFixed(1) : "1.5";
+    const riskPips = Number(riskAmount.toFixed(asset.decimals));
+
+    return {
+      signal: parsed.signal,
+      confidence: parsed.confidence,
+      entry: Number(parsed.entry.toFixed(asset.decimals)),
+      stopLoss: Number(parsed.stopLoss.toFixed(asset.decimals)),
+      takeProfit1: Number(parsed.takeProfit1.toFixed(asset.decimals)),
+      takeProfit2: Number(parsed.takeProfit2.toFixed(asset.decimals)),
+      takeProfit3: Number(parsed.takeProfit3.toFixed(asset.decimals)),
+      riskReward1: `1:${rr(parsed.takeProfit1)}`,
+      riskReward2: `1:${rr(parsed.takeProfit2)}`,
+      riskReward3: `1:${rr(parsed.takeProfit3)}`,
+      riskPips,
+      riskAmount: Number((riskPips * asset.pipVal).toFixed(2)),
+      strategyUsed: "Scalping (multi-timeframe)",
+      timeToHold: strategy.holdTime,
+      lotSize1000: riskPips > 0 ? (15 / (riskPips * asset.pipVal)).toFixed(2) : "0.01",
+      lotSize5000: riskPips > 0 ? (75 / (riskPips * asset.pipVal)).toFixed(2) : "0.05",
+      lotSize10000: riskPips > 0 ? (150 / (riskPips * asset.pipVal)).toFixed(2) : "0.10",
+      maxRiskPercent: 1.5,
+      reasons: Array.isArray(parsed.reasons) ? parsed.reasons : [],
+      trend: parsed.trend || "",
+      marketStructure: parsed.marketStructure || "",
+      timeframeBias: Array.isArray(parsed.timeframeBias) ? parsed.timeframeBias : [],
+      alignment: parsed.alignment || "partial",
+      candlePatterns: parsed.candlePatterns || [],
+      volume: { trend: "normal", signal: parsed.trend || "" },
+      keyLevel: `${parsed.signal === "BUY" ? "Support" : "Resistance"} at ${parsed.entry}`,
+      confluenceScore: parsed.confluenceScore ?? parsed.confidence,
+      poweredBy: "claude-multiframe",
+    };
+  } catch (err: any) {
+    if (err?.name === "AbortError") console.error("[anthropic] multi-frame timed out");
+    else console.error("[anthropic] multi-frame failed:", err?.message || err);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function analyzeChartWithAI(
   base64Image: string,
   assetName: string,
