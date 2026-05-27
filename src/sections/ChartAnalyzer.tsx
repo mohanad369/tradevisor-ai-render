@@ -12,6 +12,7 @@ import AnalysisResultPanel, { AnalysisOverlay } from "@/components/AnalysisOverl
 import LivePriceTicker from "@/components/LivePriceTicker";
 import CryptoPaymentModal from "@/components/CryptoPaymentModal";
 import GoldFlowAgent from "@/components/GoldFlowAgent";
+import BullBearDebatePanel from "@/components/BullBearDebatePanel";
 import ScalpingAnalyzerTab from "@/components/ScalpingAnalyzerTab";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
@@ -644,6 +645,27 @@ export default function ChartAnalyzer() {
 
             {/* Gold Flow Agent — XAU/USD only, independent from the main analysis flow. */}
             <GoldFlowAgent assetName={selectedAsset.name} />
+
+            {/* 9th agent — Bull vs Bear Debate. Renders only when there's a result. */}
+            {result && (
+              <BullBearDebatePanel
+                assetName={selectedAsset.name}
+                strategyName={selectedStrategy.name}
+                timeframe={selectedTimeframe}
+                analysis={{
+                  signal: result.signal,
+                  confidence: Number(result.confidence) || 0,
+                  entry: Number(result.entry) || 0,
+                  stopLoss: Number(result.stopLoss) || 0,
+                  takeProfit1: Number(result.takeProfit1) || 0,
+                  takeProfit2: Number(result.takeProfit2) || 0,
+                  takeProfit3: Number(result.takeProfit3) || 0,
+                  trend: (result as any).trend,
+                  marketStructure: (result as any).marketStructure,
+                  reasons: Array.isArray((result as any).reasons) ? (result as any).reasons : [],
+                }}
+              />
+            )}
 
             {/* Free Analysis Counter / Tier Status */}
             {isSubscriber ? (

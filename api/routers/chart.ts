@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createRouter, publicQuery } from "../middleware";
 import { validateBase64Image } from "../lib/security";
 import { analyzeChartWithAI, analyzeScalpingMultiFrame } from "../lib/anthropic";
+import { runBullBearDebate } from "../lib/debate";
 
 /** Strip a data-URI prefix if present. */
 function stripDataUri(b64: string): string {
@@ -85,5 +86,51 @@ export const chartRouter = createRouter({
         );
       }
       return result;
+    }),
+
+  /**
+   * Bull vs Bear debate — the 9th agent.
+   * Takes an existing analysis result and runs a structured debate
+   * between a bull and a bear, with a judge's verdict. Called by the
+   * client AFTER the initial analysis renders, so the user sees their
+   * signal fast and the debate streams in behind it.
+   */
+  debate: publicQuery
+    .input(
+      z.object({
+        assetName: z.string().min(1).max(50),
+        strategyName: z.string().min(1).max(50).default("Day Trading"),
+        timeframe: z.string().min(1).max(10).default("1H"),
+        analysis: z.object({
+          signal: z.enum(["BUY", "SELL"]),
+          confidence: z.number().min(0).max(100),
+          entry: z.number(),
+          stopLoss: z.number(),
+          takeProfit1: z.number(),
+          takeProfit2: z.number(),
+          takeProfit3: z.number(),
+          trend: z.string().max(200).optional(),
+          marketStructure: z.string().max(200).optional(),
+          reasons: z.array(z.string().max(400)).max(8).optional(),
+        }),
+        goldFlow: z.object({
+          signal: z.string().optional(),
+          confidence: z.number().optional(),
+          notes: z.array(z.string()).optional(),
+        }).optional().nullable(),
+        goldStrategy: z.object({
+          signal: z.string().optional(),
+          bias: z.string().optional(),
+        }).optional().nullable(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return await runBullBearDebate(input.analysis, {
+        assetName: input.assetName,
+        strategyName: input.strategyName,
+        timeframe: input.timeframe,
+        goldFlow: input.goldFlow,
+        goldStrategy: input.goldStrategy,
+      });
     }),
 });
