@@ -374,11 +374,27 @@ Return EXACTLY this JSON shape:
     // the risk gate, and the agent verdict all apply here too.
     try {
       const { runTradingAgentPipeline } = await import("../../src/lib/tradingAgents");
+
+      // For gold, also run the Weekly 4H Zones strategy so the 8th
+      // agent appears in the scalping result too. Called directly —
+      // this code already runs server-side.
+      let goldStrategy = null;
+      if (/xau|gold|ذهب/i.test(assetName)) {
+        try {
+          const { runGoldWeekly4hZones } = await import("./strategies/goldWeekly4h");
+          const { getStrategyWeights } = await import("./strategies/learning");
+          goldStrategy = await runGoldWeekly4hZones(getStrategyWeights("gold_weekly_4h"));
+        } catch (e) {
+          console.error("[anthropic] gold strategy for scalping failed:", (e as Error)?.message);
+        }
+      }
+
       baseResult.agents = runTradingAgentPipeline({
         analysis: baseResult as any,
         assetName,
         strategyName: "AI Scalping",
         timeframe: frames[frames.length - 1]?.timeframe || "1m",
+        goldStrategy,
       });
     } catch (err) {
       console.error("[anthropic] multi-frame agent pipeline failed:", (err as Error)?.message);

@@ -310,6 +310,18 @@ async function getRealNewsPayload(assetName: string): Promise<RealNewsPayload | 
   }
 }
 
+/** Fetch the Gold Weekly 4H Zones reading — only for gold assets. */
+async function getGoldStrategyPayload(assetName: string) {
+  if (!/xau|gold|ذهب/i.test(assetName || "")) return null;
+  try {
+    const res = await trpcClient.strategies.goldWeekly4h.query();
+    return res?.strategy_analysis?.weekly_4h_zones ?? null;
+  } catch (err) {
+    console.warn("[analyzer] gold strategy fetch failed:", err);
+    return null;
+  }
+}
+
 async function attachTradingAgents(
   result: AnalysisResult,
   assetName: string,
@@ -318,6 +330,8 @@ async function attachTradingAgents(
   marketPrice?: number,
 ) {
   const realNews = await getRealNewsPayload(assetName);
+  // For gold, also pull the Weekly 4H Zones strategy so the 8th agent runs.
+  const goldStrategy = await getGoldStrategyPayload(assetName);
   result.agents = runTradingAgentPipeline({
     analysis: result,
     assetName,
@@ -325,6 +339,7 @@ async function attachTradingAgents(
     timeframe,
     marketPrice,
     realNews,
+    goldStrategy,
   });
   return result;
 }

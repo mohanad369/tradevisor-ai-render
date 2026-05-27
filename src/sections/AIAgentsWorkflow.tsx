@@ -99,6 +99,18 @@ const agents = [
     color: "#f5c542",
     position: "lg:col-start-2 lg:row-start-2",
   },
+  {
+    id: "08",
+    name: { en: "Gold Strategy Agent", ar: "وكيل استراتيجية الذهب" },
+    role: {
+      en: "Runs the Gold Weekly 4H Zones strategy — sweep, rejection, MSS and retest.",
+      ar: "يطبّق استراتيجية مناطق الذهب الأسبوعية على فريم 4 ساعات: السحب والارتداد وتغيّر الهيكل وإعادة الاختبار.",
+    },
+    status: { en: "Gold strategy engine", ar: "محرّك استراتيجية الذهب" },
+    icon: Target,
+    color: "#e8b923",
+    position: "lg:col-start-1 lg:row-start-2",
+  },
 ];
 
 const featureStrip = [

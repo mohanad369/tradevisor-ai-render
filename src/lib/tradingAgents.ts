@@ -9,6 +9,8 @@ export interface TradingAgentPipelineResult {
   chartTrade: Record<string, unknown>;
   supervisor: Record<string, unknown>;
   finalRisk: Record<string, unknown>;
+  /** The 8th agent — only present when the analyzed asset is gold. */
+  goldStrategyAgent?: Record<string, unknown>;
   finalPlan: {
     action: string;
     confidence: string;
@@ -20,6 +22,22 @@ export interface TradingAgentPipelineResult {
     rewardRiskRatio: number;
     notes: string[];
   };
+}
+
+/** The result shape returned by the Gold Weekly 4H Zones strategy
+ *  module (api/lib/strategies/goldWeekly4h.ts). Passed in pre-fetched
+ *  because the strategy needs an async data call the pipeline can't do. */
+export interface GoldStrategyPayload {
+  strategy_name: string;
+  signal: "BUY" | "SELL" | "WAIT";
+  bias: "Bullish" | "Bearish" | "Neutral";
+  entry_zone: { low: number; high: number } | Record<string, never>;
+  stop_loss: number | null;
+  targets: number[];
+  confidence_score: number;
+  reasons: string[];
+  invalidation: string;
+  learning_notes: string[];
 }
 
 /** Shape of items returned by the news router (api/lib/news.ts). */
@@ -82,6 +100,10 @@ interface PipelineInput {
   /** Optional real account data. When provided, the final-risk agent
    *  sizes the position from the trader's real capital. */
   realAccount?: RealAccountData | null;
+  /** Optional pre-fetched Gold Weekly 4H Zones reading. Provided only
+   *  for gold; powers the 8th agent. Fetched outside the pipeline
+   *  because the strategy needs an async data call. */
+  goldStrategy?: GoldStrategyPayload | null;
 }
 
 export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipelineResult {
@@ -92,6 +114,11 @@ export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipel
   const supervisor = supervisorAgent({ news, decision, marketContext, chartTrade });
   const finalRisk = finalRiskAgent(chartTrade, supervisor, input);
 
+  // ── 8th agent: Gold Strategy Agent ──
+  // Only runs when the analyzed asset is gold AND a strategy reading was
+  // provided. For any other asset it stays absent — zero effect.
+  const goldStrategyAgent = goldStrategyAgentFn(input);
+
   return {
     news,
     decision,
@@ -99,7 +126,71 @@ export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipel
     chartTrade,
     supervisor,
     finalRisk,
+    ...(goldStrategyAgent ? { goldStrategyAgent } : {}),
     finalPlan: finalRisk.result as TradingAgentPipelineResult["finalPlan"],
+  };
+}
+
+/** True when the asset name refers to gold (XAU/USD). */
+function isGoldAsset(assetName: string): boolean {
+  return /xau|gold|ذهب/i.test(assetName || "");
+}
+
+/**
+ * 8th agent — Gold Strategy Agent.
+ *
+ * Surfaces the Gold Weekly 4H Zones strategy reading as a formal agent
+ * in the pipeline. Returns null for non-gold assets (so it simply does
+ * not appear), and a "standby" reading for gold if no strategy data was
+ * supplied. It never overrides the other agents — it adds a structured,
+ * higher-timeframe opinion alongside them.
+ */
+function goldStrategyAgentFn(input: PipelineInput): Record<string, unknown> | null {
+  if (!isGoldAsset(input.assetName)) return null;
+
+  const gs = input.goldStrategy;
+  if (!gs) {
+    return {
+      agent: "gold-strategy-agent",
+      generatedAt: new Date().toISOString(),
+      symbol: input.assetName,
+      status: "standby",
+      reasons: ["Gold strategy data was not available for this analysis."],
+    };
+  }
+
+  // Does the strategy agree with the chart analysis direction?
+  const chartSignal = input.analysis.signal; // BUY | SELL
+  const agreement =
+    gs.signal === "WAIT" ? "neutral"
+    : gs.signal === chartSignal ? "confirms"
+    : "conflicts";
+
+  const reasons = [
+    `Gold Weekly 4H Zones: ${gs.signal} (${gs.bias} bias).`,
+    ...gs.reasons.slice(0, 3),
+  ];
+  if (agreement === "confirms") {
+    reasons.push("Strategy agrees with the chart analysis direction.");
+  } else if (agreement === "conflicts") {
+    reasons.push("Strategy disagrees with the chart analysis — trade with caution.");
+  }
+
+  return {
+    agent: "gold-strategy-agent",
+    generatedAt: new Date().toISOString(),
+    symbol: input.assetName,
+    status: "active",
+    strategyName: gs.strategy_name,
+    signal: gs.signal,
+    bias: gs.bias,
+    entryZone: gs.entry_zone,
+    stopLoss: gs.stop_loss,
+    targets: gs.targets,
+    confidenceScore: gs.confidence_score,
+    agreementWithChart: agreement,
+    invalidation: gs.invalidation,
+    reasons,
   };
 }
 
