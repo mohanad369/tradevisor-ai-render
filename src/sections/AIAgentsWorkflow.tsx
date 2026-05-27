@@ -157,7 +157,17 @@ export default function AIAgentsWorkflow() {
         "The chart agent maps asset, entry, stop, and targets.",
         "The supervisor checks agent links and catches workflow errors.",
         "The risk agent produces the final executable trade plan.",
+        "The Gold Flow Agent reads live XAU/USD momentum, pressure, and key levels.",
+        "The Gold Strategy Agent checks Weekly 4H Zones before the final plan.",
       ];
+  const workflowSteps =
+    isArabic && steps.length === 6
+      ? [
+          ...steps,
+          "وكيل تدفق الذهب يقرأ زخم XAU/USD والضغط والمستويات الحية.",
+          "وكيل استراتيجية الذهب يفحص مناطق 4H الأسبوعية قبل الخطة النهائية.",
+        ]
+      : steps;
 
   return (
     <section id="ai-agents" className="relative overflow-hidden bg-[#03070d] py-20 sm:py-24">
@@ -221,7 +231,7 @@ export default function AIAgentsWorkflow() {
 
             <div className="relative space-y-4">
               <div className="absolute bottom-7 top-7 w-px bg-gradient-to-b from-[#38bdf8] via-[#eab308] to-[#fb7185] ltr:left-[22px] rtl:right-[22px]" />
-              {steps.map((step, index) => {
+              {workflowSteps.map((step, index) => {
                 const agent = agents[Math.min(index, agents.length - 1)];
                 const Icon = agent.icon;
                 return (

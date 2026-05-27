@@ -6,6 +6,7 @@ import {
   Layers, AlertTriangle, CheckCircle2, Zap,
 } from "lucide-react"
 import { trpc } from "@/lib/trpc"
+import { useLanguage } from "@/lib/language"
 
 /**
  * Multi-Timeframe Scalping Analyzer (VIP).
@@ -27,6 +28,33 @@ const ASSETS = [
   "BTC/USD", "ETH/USD",
 ]
 
+const AR_FRAME_LABELS: Record<string, { label: string; hint: string }> = {
+  "15m": { label: "15 دقيقة", hint: "الاتجاه والانحياز" },
+  "5m": { label: "5 دقائق", hint: "هيكل السوق" },
+  "1m": { label: "دقيقة واحدة", hint: "توقيت الدخول" },
+}
+
+function translateMarketText(value: string, isArabic: boolean) {
+  if (!isArabic || !value) return value
+  return value
+    .replace(/\bBUY\b/g, "شراء")
+    .replace(/\bSELL\b/g, "بيع")
+    .replace(/\bHOLD\b/g, "انتظار")
+    .replace(/\bbullish\b/gi, "صاعد")
+    .replace(/\bbearish\b/gi, "هابط")
+    .replace(/\bneutral\b/gi, "محايد")
+    .replace(/\baligned\b/gi, "متوافقة")
+    .replace(/\bmixed\b/gi, "مختلطة")
+    .replace(/\btrend\b/gi, "الاتجاه")
+    .replace(/\bstructure\b/gi, "الهيكل")
+    .replace(/\bentry\b/gi, "الدخول")
+    .replace(/\bstop loss\b/gi, "وقف الخسارة")
+    .replace(/\btarget\b/gi, "الهدف")
+    .replace(/\brisk\b/gi, "المخاطر")
+    .replace(/\bmomentum\b/gi, "الزخم")
+    .replace(/\bconfirmation\b/gi, "التأكيد")
+}
+
 type FrameImages = Record<string, string> // tf -> base64 data URI
 
 type ScalpingAnalyzerTabProps = {
@@ -45,6 +73,9 @@ function fileToDataUri(file: File): Promise<string> {
 }
 
 export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete, accessBadge }: ScalpingAnalyzerTabProps = {}) {
+  const { language } = useLanguage()
+  const isArabic = language === "ar"
+  const t = (en: string, ar: string) => (isArabic ? ar : en)
   const [asset, setAsset] = useState(ASSETS[0])
   const [images, setImages] = useState<FrameImages>({})
   const [error, setError] = useState("")
@@ -59,7 +90,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
       const dataUri = await fileToDataUri(file)
       setImages((prev) => ({ ...prev, [tf]: dataUri }))
     } catch {
-      setError("Could not read that image. Try another file.")
+      setError(t("Could not read that image. Try another file.", "تعذر قراءة الصورة. جرّب ملفا آخر."))
     }
   }
 
@@ -80,7 +111,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
       .map((s) => ({ timeframe: s.tf, imageBase64: images[s.tf] }))
 
     if (frames.length === 0) {
-      setError("Upload at least one chart to analyze.")
+      setError(t("Upload at least one chart to analyze.", "ارفع شارتا واحدا على الأقل للتحليل."))
       return
     }
 
@@ -99,7 +130,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
         /* non-blocking: quota/status will resync from the server */
       }
     } catch (err: any) {
-      setError(err?.message || "Analysis failed. Please try again.")
+      setError(err?.message || t("Analysis failed. Please try again.", "فشل التحليل. حاول مرة أخرى."))
     }
   }
 
@@ -109,11 +140,13 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
       <div>
         <h2 className="text-xl font-bold flex items-center gap-2">
           <Layers size={20} className="text-[#d4a843]" />
-          Multi-Timeframe Scalping Analyzer
+          {t("Multi-Timeframe Scalping Analyzer", "محلل السكالبينغ متعدد الفريمات")}
         </h2>
         <p className="text-xs text-[#666666] mt-1">
-          Upload the 15m, 5m, and 1m charts of the same asset. The AI reads
-          them top-down for a precise scalping plan. All 3 give the best accuracy.
+          {t(
+            "Upload the 15m, 5m, and 1m charts of the same asset. The AI reads them top-down for a precise scalping plan. All 3 give the best accuracy.",
+            "ارفع شارتات 15 دقيقة و5 دقائق ودقيقة واحدة لنفس الأصل. يقرأها الذكاء من الفريم الأكبر للأصغر لخطة سكالبينغ أدق."
+          )}
         </p>
       </div>
 
@@ -122,7 +155,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
       {/* Asset selector */}
       <div>
         <label className="text-[10px] uppercase tracking-wide text-[#666666] block mb-1.5">
-          Asset
+          {t("Asset", "الأصل")}
         </label>
         <select
           value={asset}
@@ -137,13 +170,14 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {FRAME_SLOTS.map((slot) => {
           const img = images[slot.tf]
+          const frameCopy = isArabic ? AR_FRAME_LABELS[slot.tf] : slot
           return (
             <div key={slot.tf}
               className="rounded-xl border border-[#1f1f1f] bg-[#0d0d0d] p-3">
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <div className="text-sm font-bold text-[#d4a843]">{slot.label}</div>
-                  <div className="text-[9px] text-[#666666]">{slot.hint}</div>
+                  <div className="text-sm font-bold text-[#d4a843]">{frameCopy.label}</div>
+                  <div className="text-[9px] text-[#666666]">{frameCopy.hint}</div>
                 </div>
                 {img && (
                   <button onClick={() => removeImage(slot.tf)}
@@ -153,12 +187,12 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
                 )}
               </div>
               {img ? (
-                <img src={img} alt={slot.label}
+                <img src={img} alt={frameCopy.label}
                   className="w-full h-28 object-cover rounded-lg border border-[#1f1f1f]" />
               ) : (
                 <label className="flex flex-col items-center justify-center h-28 rounded-lg border border-dashed border-[#2a2a2a] cursor-pointer hover:border-[#d4a843]/40 transition-colors">
                   <Upload size={18} className="text-[#666666]" />
-                  <span className="text-[9px] text-[#666666] mt-1">Upload chart</span>
+                  <span className="text-[9px] text-[#666666] mt-1">{t("Upload chart", "ارفع الشارت")}</span>
                   <input type="file" accept="image/*" className="hidden"
                     onChange={(e) => handleUpload(slot.tf, e.target.files?.[0])} />
                 </label>
@@ -182,7 +216,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
       >
         {analyze.isPending
           ? <><Loader2 size={16} className="animate-spin" /> Analyzing {uploadedCount} timeframe{uploadedCount !== 1 ? "s" : ""}…</>
-          : <><Zap size={16} /> Analyze Scalping Setup ({uploadedCount}/3)</>}
+          : <><Zap size={16} /> {t(`Analyze Scalping Setup (${uploadedCount}/3)`, `تحليل إعداد السكالبينغ (${uploadedCount}/3)`)}</>}
       </button>
 
       {/* Result */}
@@ -205,7 +239,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
             </div>
             <div className="text-right">
               <div className="text-xl font-black text-white">{result.confidence}%</div>
-              <div className="text-[9px] text-[#666666]">confidence</div>
+              <div className="text-[9px] text-[#666666]">{t("confidence", "الثقة")}</div>
             </div>
           </div>
 
@@ -216,7 +250,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
                 ? <CheckCircle2 size={13} className="text-[#22c55e]" />
                 : <AlertTriangle size={13} className="text-[#d4a843]" />}
               <span style={{ color: result.alignment === "aligned" ? "#22c55e" : "#d4a843" }}>
-                Timeframes: {result.alignment}
+                {t("Timeframes", "الفريمات")}: {translateMarketText(result.alignment, isArabic)}
               </span>
             </div>
           )}
@@ -229,9 +263,9 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
                   <div className="text-[9px] text-[#666666]">{b.timeframe}</div>
                   <div className="text-xs font-bold capitalize"
                     style={{ color: b.bias === "bullish" ? "#22c55e" : b.bias === "bearish" ? "#e11d48" : "#666666" }}>
-                    {b.bias}
+                    {translateMarketText(String(b.bias), isArabic)}
                   </div>
-                  {b.note && <div className="text-[9px] text-[#888] mt-0.5">{b.note}</div>}
+                  {b.note && <div className="text-[9px] text-[#888] mt-0.5">{translateMarketText(b.note, isArabic)}</div>}
                 </div>
               ))}
             </div>
@@ -239,8 +273,8 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
 
           {/* Trade levels */}
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <Level label="Entry" value={result.entry} color="#d4a843" />
-            <Level label="Stop Loss" value={result.stopLoss} color="#e11d48" />
+            <Level label={t("Entry", "الدخول")} value={result.entry} color="#d4a843" />
+            <Level label={t("Stop Loss", "وقف الخسارة")} value={result.stopLoss} color="#e11d48" />
             <Level label="TP1" value={result.takeProfit1} color="#22c55e" />
             <Level label="TP2" value={result.takeProfit2} color="#22c55e" />
             <Level label="TP3" value={result.takeProfit3} color="#22c55e" />
@@ -251,7 +285,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
           {Array.isArray(result.reasons) && result.reasons.length > 0 && (
             <div>
               <div className="text-[10px] uppercase tracking-wide text-[#666666] mb-1.5 flex items-center gap-1">
-                <Target size={11} /> Analysis
+                <Target size={11} /> {t("Analysis", "التحليل")}
               </div>
               <ul className="space-y-1">
                 {result.reasons.map((r: string, i: number) => (
@@ -267,7 +301,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
           {result.agents?.finalPlan && (
             <div className="rounded-lg border border-[#1f1f1f] bg-[#141414] p-3">
               <div className="text-[10px] uppercase tracking-wide text-[#666666] mb-2 flex items-center gap-1">
-                <CheckCircle2 size={11} /> AI Agents Review
+                <CheckCircle2 size={11} /> {t("AI Agents Review", "مراجعة وكلاء الذكاء")}
               </div>
               {(() => {
                 const fp = result.agents.finalPlan
@@ -278,12 +312,14 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
                   fp.action === "approve_plan" ? "#22c55e"
                   : fp.action === "reject" ? "#e11d48" : "#d4a843"
                 const actionLabel =
-                  fp.action === "approve_plan" ? "Approved"
-                  : fp.action === "reject" ? "Rejected" : "Caution"
+                  fp.action === "approve_plan" ? t("Approved", "مقبولة")
+                  : fp.action === "reject" ? t("Rejected", "مرفوضة") : t("Caution", "بحذر")
                 return (
                   <>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-[#a0a0a0]">6-agent verdict</span>
+                      <span className="text-xs text-[#a0a0a0]">
+                        {t(result.agents.goldStrategy ? "8-agent verdict" : "6-agent verdict", result.agents.goldStrategy ? "قرار 8 وكلاء" : "قرار 6 وكلاء")}
+                      </span>
                       <span className="text-xs font-bold px-2 py-0.5 rounded"
                         style={{ background: `${actionColor}1a`, color: actionColor }}>
                         {actionLabel}
@@ -295,8 +331,8 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
                         : <AlertTriangle size={12} className="text-[#d4a843]" />}
                       <span style={{ color: compliant ? "#22c55e" : "#d4a843" }}>
                         {compliant
-                          ? "Trade complies with the Scalping strategy rules."
-                          : "Strategy rule issues found:"}
+                          ? t("Trade complies with the Scalping strategy rules.", "الصفقة متوافقة مع قواعد استراتيجية السكالبينغ.")
+                          : t("Strategy rule issues found:", "توجد ملاحظات على قواعد الاستراتيجية:")}
                       </span>
                     </div>
                     {!compliant && violations.length > 0 && (

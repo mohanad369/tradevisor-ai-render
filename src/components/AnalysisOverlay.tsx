@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import type { AnalysisResult } from "@/lib/analyzer";
 import AgentAnalysisFlow from "@/components/AgentAnalysisFlow";
+import { useLanguage } from "@/lib/language";
 
 function getProviderLabel(result: AnalysisResult) {
   if (result.aiConsensus?.models?.length) return result.aiConsensus.models.join(" + ");
@@ -15,11 +16,38 @@ function getProviderLabel(result: AnalysisResult) {
   return "Tradevisor AI";
 }
 
+function translateAnalysisText(value: string, isArabic: boolean) {
+  if (!isArabic || !value) return value;
+  return value
+    .replace(/\bBUY\b/g, "شراء")
+    .replace(/\bSELL\b/g, "بيع")
+    .replace(/\bBullish\b/gi, "صاعد")
+    .replace(/\bBearish\b/gi, "هابط")
+    .replace(/\bNeutral\b/gi, "محايد")
+    .replace(/\bUptrend\b/gi, "اتجاه صاعد")
+    .replace(/\bDowntrend\b/gi, "اتجاه هابط")
+    .replace(/\bSupport\b/gi, "دعم")
+    .replace(/\bResistance\b/gi, "مقاومة")
+    .replace(/\bEntry\b/gi, "الدخول")
+    .replace(/\bStop Loss\b/gi, "وقف الخسارة")
+    .replace(/\bTarget\b/gi, "الهدف")
+    .replace(/\bRisk\b/gi, "المخاطر")
+    .replace(/\bMomentum\b/gi, "الزخم")
+    .replace(/\bTrend\b/gi, "الاتجاه")
+    .replace(/\bStructure\b/gi, "الهيكل")
+    .replace(/\bVolume\b/gi, "الحجم")
+    .replace(/\bConfirmation\b/gi, "التأكيد")
+    .replace(/\bWait\b/gi, "انتظار");
+}
+
 /* ═══════════════════════════════════════════════════════════
    AnalysisResultPanel — displays AI-generated analysis
    ═══════════════════════════════════════════════════════════ */
 
 export default function AnalysisResultPanel({ result, assetDecimals }: { result: AnalysisResult; assetDecimals: number }) {
+  const { language } = useLanguage();
+  const isArabic = language === "ar";
+  const t = (en: string, ar: string) => (isArabic ? ar : en);
   const isBuy = result.signal === "BUY";
   const formatPrice = (price: number) => price.toFixed(assetDecimals);
   const [chatOpen, setChatOpen] = useState(false);
@@ -36,7 +64,7 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className={`text-xl font-bold ${isBuy ? "text-[#22c55e]" : "text-[#e11d48]"}`}>{result.signal}</span>
+                <span className={`text-xl font-bold ${isBuy ? "text-[#22c55e]" : "text-[#e11d48]"}`}>{t(result.signal, result.signal === "BUY" ? "شراء" : "بيع")}</span>
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                   <span className={`relative inline-flex rounded-full h-2 w-2 ${isBuy ? "bg-[#22c55e]" : "bg-[#e11d48]"}`} />
@@ -47,14 +75,14 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
           </div>
           <div className="text-right">
             <div className="text-white text-lg font-bold">{result.confidence}%</div>
-            <div className="text-[#666666] text-[10px]">{providerLabel} Confidence</div>
+            <div className="text-[#666666] text-[10px]">{providerLabel} {t("Confidence", "الثقة")}</div>
           </div>
         </div>
       </div>
 
       <div className="p-5 space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar">
         {result.agents?.finalPlan?.setupQuality && (
-          <SetupQualityCard setupQuality={result.agents.finalPlan.setupQuality} />
+          <SetupQualityCard setupQuality={result.agents.finalPlan.setupQuality} isArabic={isArabic} />
         )}
 
         {result.agents?.finalPlan?.action && result.agents.finalPlan.action !== "approve_plan" && (
@@ -71,13 +99,16 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
               </div>
               <div>
                 <div className={`text-sm font-bold ${result.agents.finalPlan.action === "reject" ? "text-[#e11d48]" : "text-[#d4a843]"}`}>
-                  {result.agents.finalPlan.action === "reject" ? "No Trade Now" : "Wait or Reduce Size"}
+                  {result.agents.finalPlan.action === "reject" ? t("No Trade Now", "لا تدخل الآن") : t("Wait or Reduce Size", "انتظر أو خفف حجم الصفقة")}
                 </div>
                 <p className="text-[#a0a0a0] text-xs leading-relaxed mt-1">
-                  This entry is currently risky. The warning is based on chart structure, AI consensus, momentum, agent checks, and risk management.
+                  {t(
+                    "This entry is currently risky. The warning is based on chart structure, AI consensus, momentum, agent checks, and risk management.",
+                    "هذا الدخول خطر حاليا. التحذير مبني على هيكل الشارت، توافق الذكاء، الزخم، فحص الوكلاء، وإدارة المخاطر."
+                  )}
                 </p>
                 {result.agents.finalPlan.notes.slice(0, 2).map((note) => (
-                  <div key={note} className="text-[#666666] text-[11px] leading-relaxed mt-1">{note}</div>
+                  <div key={note} className="text-[#666666] text-[11px] leading-relaxed mt-1">{translateAnalysisText(note, isArabic)}</div>
                 ))}
               </div>
             </div>
@@ -95,19 +126,19 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
             <div className="flex items-center justify-between gap-3 mb-2">
               <div className="flex items-center gap-2">
                 <Bot size={13} className="text-[#d4a843]" />
-                <span className="text-white text-xs font-semibold uppercase tracking-wider">AI Consensus</span>
+                <span className="text-white text-xs font-semibold uppercase tracking-wider">{t("AI Consensus", "توافق الذكاء")}</span>
               </div>
               <span className={`text-[10px] font-bold uppercase ${
                 result.aiConsensus.status === "aligned" ? "text-[#22c55e]" : "text-[#d4a843]"
               }`}>
-                {result.aiConsensus.status.replaceAll("_", " ")}
+                {translateAnalysisText(result.aiConsensus.status.replaceAll("_", " "), isArabic)}
               </span>
             </div>
             <div className="text-[#a0a0a0] text-[11px] leading-relaxed">
               {result.aiConsensus.models.join(" + ")} • Primary: {result.aiConsensus.primaryModel}
             </div>
             {result.aiConsensus.notes.slice(0, 2).map((note) => (
-              <div key={note} className="text-[#666666] text-[11px] leading-relaxed mt-1">{note}</div>
+              <div key={note} className="text-[#666666] text-[11px] leading-relaxed mt-1">{translateAnalysisText(note, isArabic)}</div>
             ))}
           </div>
         )}
@@ -115,15 +146,15 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
         {/* Price Levels */}
         <div>
           <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Target size={13} className="text-[#d4a843]" /> AI-Detected Price Levels
+            <Target size={13} className="text-[#d4a843]" /> {t("AI-Detected Price Levels", "مستويات السعر المكتشفة")}
           </h4>
           <div className="space-y-2">
             <div className="flex items-center justify-between bg-[#141414] border border-[#d4a843]/30 rounded-xl p-3">
-              <div className="flex items-center gap-2"><Crosshair size={14} className="text-[#d4a843]" /><span className="text-[#a0a0a0] text-sm">Entry</span></div>
+              <div className="flex items-center gap-2"><Crosshair size={14} className="text-[#d4a843]" /><span className="text-[#a0a0a0] text-sm">{t("Entry", "الدخول")}</span></div>
               <span className="text-[#d4a843] font-bold text-sm">{formatPrice(result.entry)}</span>
             </div>
             <div className="flex items-center justify-between bg-[#141414] border border-[#e11d48]/30 rounded-xl p-3">
-              <div className="flex items-center gap-2"><Shield size={14} className="text-[#e11d48]" /><span className="text-[#a0a0a0] text-sm">Stop Loss</span></div>
+              <div className="flex items-center gap-2"><Shield size={14} className="text-[#e11d48]" /><span className="text-[#a0a0a0] text-sm">{t("Stop Loss", "وقف الخسارة")}</span></div>
               <div className="text-right">
                 <span className="text-[#e11d48] font-bold text-sm">{formatPrice(result.stopLoss)}</span>
                 <span className="text-[#666666] text-xs ml-2">(-{result.riskPips})</span>
@@ -144,12 +175,12 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
 
         {/* Risk Management */}
         <div className="border-t border-[#1f1f1f] pt-4">
-          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><Shield size={13} className="text-[#d4a843]" /> Risk Management</h4>
+          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><Shield size={13} className="text-[#d4a843]" /> {t("Risk Management", "إدارة المخاطر")}</h4>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: "Max Risk", value: `${result.maxRiskPercent}%`, color: "text-[#d4a843]" },
-              { label: "Risk Distance", value: `${result.riskPips}`, color: "text-white" },
-              { label: "Hold Time", value: result.timeToHold, color: "text-white" },
+              { label: t("Max Risk", "أقصى مخاطرة"), value: `${result.maxRiskPercent}%`, color: "text-[#d4a843]" },
+              { label: t("Risk Distance", "مسافة الخطر"), value: `${result.riskPips}`, color: "text-white" },
+              { label: t("Hold Time", "مدة الاحتفاظ"), value: translateAnalysisText(result.timeToHold, isArabic), color: "text-white" },
               { label: "Best R:R", value: result.riskReward3, color: "text-[#22c55e]" },
             ].map((item) => (
               <div key={item.label} className="bg-[#141414] rounded-xl p-3">
@@ -164,7 +195,7 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
 
         {/* Lot Size */}
         <div className="border-t border-[#1f1f1f] pt-4">
-          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><Layers size={13} className="text-[#d4a843]" /> Lot Size by Account</h4>
+          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><Layers size={13} className="text-[#d4a843]" /> {t("Lot Size by Account", "حجم اللوت حسب الحساب")}</h4>
           <div className="grid grid-cols-3 gap-2">
             {[
               { balance: "$1,000", lot: result.lotSize1000, risk: "$15" },
@@ -174,7 +205,7 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
               <div key={item.balance} className="bg-[#141414] rounded-xl p-3 text-center">
                 <div className="text-[#666666] text-[10px] mb-1">{item.balance}</div>
                 <div className="text-[#d4a843] font-bold text-sm">{item.lot}</div>
-                <div className="text-[#666666] text-[10px]">Risk {item.risk}</div>
+                <div className="text-[#666666] text-[10px]">{t("Risk", "المخاطرة")} {item.risk}</div>
               </div>
             ))}
           </div>
@@ -182,14 +213,14 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
 
         {/* Technicals */}
         <div className="border-t border-[#1f1f1f] pt-4">
-          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><BarChart3 size={13} className="text-[#d4a843]" /> Technical Analysis</h4>
+          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><BarChart3 size={13} className="text-[#d4a843]" /> {t("Technical Analysis", "التحليل الفني")}</h4>
           <div className="space-y-2">
             {[
-              { label: "Trend", value: result.trend },
-              { label: "Structure", value: result.marketStructure },
-              { label: "Key Level", value: result.keyLevel, color: "text-[#d4a843]" },
-              { label: "Confluence", value: `${result.confluenceScore}/100`, color: "text-[#22c55e]" },
-              { label: "Volume", value: result.volume.signal, color: "text-[#22c55e]" },
+              { label: t("Trend", "الاتجاه"), value: translateAnalysisText(result.trend, isArabic) },
+              { label: t("Structure", "الهيكل"), value: translateAnalysisText(result.marketStructure, isArabic) },
+              { label: t("Key Level", "المستوى المهم"), value: translateAnalysisText(result.keyLevel, isArabic), color: "text-[#d4a843]" },
+              { label: t("Confluence", "التوافق"), value: `${result.confluenceScore}/100`, color: "text-[#22c55e]" },
+              { label: t("Volume", "الحجم"), value: translateAnalysisText(result.volume.signal, isArabic), color: "text-[#22c55e]" },
             ].map((item) => (
               <div key={item.label} className="flex items-center justify-between bg-[#141414] rounded-xl px-3 py-2">
                 <span className="text-[#a0a0a0] text-xs">{item.label}</span>
@@ -201,24 +232,24 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
 
         {/* Candle Patterns */}
         <div className="border-t border-[#1f1f1f] pt-4">
-          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><Activity size={13} className="text-[#d4a843]" /> AI-Detected Patterns</h4>
+          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><Activity size={13} className="text-[#d4a843]" /> {t("AI-Detected Patterns", "النماذج التي اكتشفها الذكاء")}</h4>
           {result.candlePatterns.map((pattern, i) => (
             <div key={i} className="flex items-center gap-2 bg-[#141414] rounded-xl px-3 py-2 mb-1">
               <span className={pattern.signal === "bullish" ? "text-[#22c55e]" : "text-[#e11d48]"}>{pattern.signal === "bullish" ? "▲" : "▼"}</span>
-              <span className="text-white text-xs font-medium">{pattern.name}</span>
-              <span className="text-[#666666] text-xs ml-auto">Reliability: {pattern.reliability}</span>
+              <span className="text-white text-xs font-medium">{translateAnalysisText(pattern.name, isArabic)}</span>
+              <span className="text-[#666666] text-xs ml-auto">{t("Reliability", "الموثوقية")}: {pattern.reliability}</span>
             </div>
           ))}
         </div>
 
         {/* SR Levels */}
         <div className="border-t border-[#1f1f1f] pt-4">
-          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Support / Resistance</h4>
+          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">{t("Support / Resistance", "الدعم / المقاومة")}</h4>
           {result.srLevels.map((level, i) => (
             <div key={i} className="flex items-center justify-between bg-[#141414] rounded-xl px-3 py-2 mb-1">
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${level.type === "support" ? "bg-[#22c55e]" : level.type === "resistance" ? "bg-[#e11d48]" : "bg-[#d4a843]"}`} />
-                <span className="text-[#a0a0a0] text-xs capitalize">{level.type}</span>
+                <span className="text-[#a0a0a0] text-xs capitalize">{translateAnalysisText(level.type, isArabic)}</span>
               </div>
               <span className="text-white text-xs font-medium">{formatPrice(level.level)}</span>
             </div>
@@ -227,7 +258,7 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
 
         {/* Fibonacci */}
         <div className="border-t border-[#1f1f1f] pt-4">
-          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">AI Fibonacci Levels</h4>
+          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">{t("AI Fibonacci Levels", "مستويات فيبوناتشي بالذكاء")}</h4>
           <div className="flex gap-1">
             {result.fibonacci.map((fib) => (
               <div key={fib.level} className="flex-1 bg-[#141414] rounded-lg px-2 py-2 text-center">
@@ -240,12 +271,12 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
 
         {/* AI Reasons */}
         <div className="border-t border-[#1f1f1f] pt-4">
-          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Why This Signal?</h4>
+          <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">{t("Why This Signal?", "لماذا هذه الإشارة؟")}</h4>
           <ul className="space-y-2">
             {result.reasons.map((reason, i) => (
               <li key={i} className="flex items-start gap-2 text-xs">
                 <span className="text-[#d4a843] mt-0.5 flex-shrink-0">•</span>
-                <span className="text-[#a0a0a0] leading-relaxed">{reason}</span>
+                <span className="text-[#a0a0a0] leading-relaxed">{translateAnalysisText(reason, isArabic)}</span>
               </li>
             ))}
           </ul>
@@ -256,7 +287,7 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
       <button onClick={() => setChatOpen(!chatOpen)} className="absolute bottom-4 right-4 w-12 h-12 bg-[#d4a843] text-[#050505] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50">
         {chatOpen ? <X size={20} /> : <MessageCircle size={20} />}
       </button>
-      <AnimatePresence>{chatOpen && <SupportChat onClose={() => setChatOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{chatOpen && <SupportChat onClose={() => setChatOpen(false)} isArabic={isArabic} />}</AnimatePresence>
     </motion.div>
   );
 }
@@ -265,11 +296,12 @@ export default function AnalysisResultPanel({ result, assetDecimals }: { result:
    Support Chat (mini panel inside result card)
    ═══════════════════════════════════════════════════════════ */
 
-function SetupQualityCard({ setupQuality }: { setupQuality: NonNullable<AnalysisResult["agents"]>["finalPlan"]["setupQuality"] }) {
+function SetupQualityCard({ setupQuality, isArabic }: { setupQuality: NonNullable<AnalysisResult["agents"]>["finalPlan"]["setupQuality"]; isArabic: boolean }) {
   const isDanger = setupQuality.verdict === "danger";
   const isClean = setupQuality.verdict === "clean";
   const color = isDanger ? "#e11d48" : isClean ? "#22c55e" : "#d4a843";
-  const decision = isDanger ? "Danger Entry" : isClean ? "Clean Setup" : "Needs Confirmation";
+  const t = (en: string, ar: string) => (isArabic ? ar : en);
+  const decision = isDanger ? t("Danger Entry", "دخول خطر") : isClean ? t("Clean Setup", "إعداد نظيف") : t("Needs Confirmation", "يحتاج تأكيد");
 
   return (
     <div className="rounded-xl border border-[#1f1f1f] bg-[#111111] p-4">
@@ -279,35 +311,38 @@ function SetupQualityCard({ setupQuality }: { setupQuality: NonNullable<Analysis
             <BarChart3 size={17} style={{ color }} />
           </div>
           <div>
-            <div className="text-white text-sm font-bold">Setup Quality</div>
+            <div className="text-white text-sm font-bold">{t("Setup Quality", "جودة الإعداد")}</div>
             <div className="text-[#666666] text-[10px] uppercase tracking-wider">{decision}</div>
           </div>
         </div>
         <div className="text-right">
           <div className="text-lg font-black" style={{ color }}>{setupQuality.score}/100</div>
-          <div className="text-[#666666] text-[10px]">AI safety score</div>
+          <div className="text-[#666666] text-[10px]">{t("AI safety score", "درجة أمان الذكاء")}</div>
         </div>
       </div>
-      <p className="text-[#a0a0a0] text-xs leading-relaxed">{setupQuality.summary}</p>
+      <p className="text-[#a0a0a0] text-xs leading-relaxed">{translateAnalysisText(setupQuality.summary, isArabic)}</p>
       {(setupQuality.blockers.length > 0 || setupQuality.warnings.length > 0) && (
         <div className="mt-3 space-y-1">
           {[...setupQuality.blockers, ...setupQuality.warnings].slice(0, 3).map((item) => (
-            <div key={item} className="text-[#777777] text-[11px] leading-relaxed">- {item}</div>
+            <div key={item} className="text-[#777777] text-[11px] leading-relaxed">- {translateAnalysisText(item, isArabic)}</div>
           ))}
         </div>
       )}
       <div className="mt-3 rounded-lg bg-[#0a0a0a] border border-[#1f1f1f] p-2">
-        <div className="text-[#d4a843] text-[10px] font-bold uppercase tracking-wider mb-1">Before Entry</div>
+        <div className="text-[#d4a843] text-[10px] font-bold uppercase tracking-wider mb-1">{t("Before Entry", "قبل الدخول")}</div>
         {setupQuality.confirmationChecklist.slice(0, 2).map((item) => (
-          <div key={item} className="text-[#a0a0a0] text-[11px] leading-relaxed">- {item}</div>
+          <div key={item} className="text-[#a0a0a0] text-[11px] leading-relaxed">- {translateAnalysisText(item, isArabic)}</div>
         ))}
       </div>
     </div>
   );
 }
 
-function SupportChat({ onClose }: { onClose: () => void }) {
-  const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([{ role: "bot", text: "Ask me about this AI analysis!" }]);
+function SupportChat({ onClose, isArabic }: { onClose: () => void; isArabic: boolean }) {
+  const t = (en: string, ar: string) => (isArabic ? ar : en);
+  const [messages, setMessages] = useState<{ role: "bot" | "user"; text: string }[]>([
+    { role: "bot", text: t("Ask me about this AI analysis!", "اسألني عن هذا التحليل الذكي!") },
+  ]);
   const [input, setInput] = useState("");
 
   function handleSend() {
@@ -315,18 +350,18 @@ function SupportChat({ onClose }: { onClose: () => void }) {
     setMessages((m) => [...m, { role: "user" as const, text: input.trim() }]);
     setInput("");
     setTimeout(() => {
-      setMessages((m) => [...m, { role: "bot" as const, text: "I can explain Entry/SL/TP, risk management, and strategy selection." }]);
+      setMessages((m) => [...m, { role: "bot" as const, text: t("I can explain Entry/SL/TP, risk management, and strategy selection.", "أقدر أشرح لك الدخول والستوب والأهداف وإدارة المخاطر واختيار الاستراتيجية.") }]);
     }, 600);
   }
 
   return (
     <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }} className="absolute bottom-16 right-0 w-80 bg-[#0d0d0d] border border-[#1f1f1f] rounded-2xl shadow-2xl overflow-hidden z-50">
       <div className="bg-[#d4a843] text-[#050505] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2"><Bot size={18} /><span className="font-semibold text-sm">AI Support</span></div>
+        <div className="flex items-center gap-2"><Bot size={18} /><span className="font-semibold text-sm">{t("AI Support", "دعم الذكاء")}</span></div>
         <button onClick={onClose} className="hover:opacity-70"><X size={16} /></button>
       </div>
       <div className="h-72 overflow-y-auto p-3 space-y-3">{messages.map((msg, i) => (<div key={i} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}><div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === "bot" ? "bg-[#d4a843]/20" : "bg-[#1f1f1f]"}`}>{msg.role === "bot" ? <Bot size={14} className="text-[#d4a843]" /> : <User size={14} className="text-[#a0a0a0]" />}</div><div className={`text-xs p-2.5 rounded-xl max-w-[85%] whitespace-pre-line ${msg.role === "bot" ? "bg-[#141414] text-[#a0a0a0]" : "bg-[#d4a843] text-[#050505]"}`}>{msg.text}</div></div>))}</div>
-      <div className="p-3 border-t border-[#1f1f1f] flex gap-2"><input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder="Ask..." className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-xl px-3 py-2 text-xs text-white placeholder-[#666666] focus:outline-none focus:border-[#d4a843]" /><button onClick={handleSend} className="w-8 h-8 bg-[#d4a843] rounded-lg flex items-center justify-center text-[#050505] hover:bg-[#e8c76a] transition-colors"><Send size={14} /></button></div>
+      <div className="p-3 border-t border-[#1f1f1f] flex gap-2"><input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder={t("Ask...", "اسأل...")} className="flex-1 bg-[#141414] border border-[#1f1f1f] rounded-xl px-3 py-2 text-xs text-white placeholder-[#666666] focus:outline-none focus:border-[#d4a843]" /><button onClick={handleSend} className="w-8 h-8 bg-[#d4a843] rounded-lg flex items-center justify-center text-[#050505] hover:bg-[#e8c76a] transition-colors"><Send size={14} /></button></div>
     </motion.div>
   );
 }
