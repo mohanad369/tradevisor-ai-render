@@ -263,6 +263,55 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
             </div>
           )}
 
+          {/* Agent verdict — the 6-agent pipeline reviewed this trade */}
+          {result.agents?.finalPlan && (
+            <div className="rounded-lg border border-[#1f1f1f] bg-[#141414] p-3">
+              <div className="text-[10px] uppercase tracking-wide text-[#666666] mb-2 flex items-center gap-1">
+                <CheckCircle2 size={11} /> AI Agents Review
+              </div>
+              {(() => {
+                const fp = result.agents.finalPlan
+                const ct = result.agents.chartTrade
+                const compliant = ct?.strategyCompliance?.compliant !== false
+                const violations: string[] = ct?.strategyCompliance?.violations || []
+                const actionColor =
+                  fp.action === "approve_plan" ? "#22c55e"
+                  : fp.action === "reject" ? "#e11d48" : "#d4a843"
+                const actionLabel =
+                  fp.action === "approve_plan" ? "Approved"
+                  : fp.action === "reject" ? "Rejected" : "Caution"
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-[#a0a0a0]">6-agent verdict</span>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded"
+                        style={{ background: `${actionColor}1a`, color: actionColor }}>
+                        {actionLabel}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] mb-1">
+                      {compliant
+                        ? <CheckCircle2 size={12} className="text-[#22c55e]" />
+                        : <AlertTriangle size={12} className="text-[#d4a843]" />}
+                      <span style={{ color: compliant ? "#22c55e" : "#d4a843" }}>
+                        {compliant
+                          ? "Trade complies with the Scalping strategy rules."
+                          : "Strategy rule issues found:"}
+                      </span>
+                    </div>
+                    {!compliant && violations.length > 0 && (
+                      <ul className="space-y-0.5 ml-4">
+                        {violations.map((v, i) => (
+                          <li key={i} className="text-[10px] text-[#888]">• {v}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+          )}
+
           <p className="text-[10px] text-[#666666] pt-2 border-t border-[#1f1f1f]">
             AI-generated scalping plan from your charts. Not a guarantee —
             trading carries real risk. Always use proper risk management.

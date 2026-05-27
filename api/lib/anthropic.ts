@@ -337,7 +337,7 @@ Return EXACTLY this JSON shape:
       riskAmount > 0 ? (Math.abs(tp - parsed.entry) / riskAmount).toFixed(1) : "1.5";
     const riskPips = Number(riskAmount.toFixed(asset.decimals));
 
-    return {
+    const baseResult: Record<string, unknown> = {
       signal: parsed.signal,
       confidence: parsed.confidence,
       entry: Number(parsed.entry.toFixed(asset.decimals)),
@@ -367,6 +367,25 @@ Return EXACTLY this JSON shape:
       confluenceScore: parsed.confluenceScore ?? parsed.confidence,
       poweredBy: "claude-multiframe",
     };
+
+    // ── Run the 6-agent pipeline on this result ──
+    // The multi-frame scalping analysis now passes through the same
+    // agents as the normal analyzer, so the Scalping strategy rules,
+    // the risk gate, and the agent verdict all apply here too.
+    try {
+      const { runTradingAgentPipeline } = await import("../../src/lib/tradingAgents");
+      baseResult.agents = runTradingAgentPipeline({
+        analysis: baseResult as any,
+        assetName,
+        strategyName: "AI Scalping",
+        timeframe: frames[frames.length - 1]?.timeframe || "1m",
+      });
+    } catch (err) {
+      console.error("[anthropic] multi-frame agent pipeline failed:", (err as Error)?.message);
+      // Non-fatal — the analysis is still returned without the agent layer.
+    }
+
+    return baseResult;
   } catch (err: any) {
     if (err?.name === "AbortError") console.error("[anthropic] multi-frame timed out");
     else console.error("[anthropic] multi-frame failed:", err?.message || err);
