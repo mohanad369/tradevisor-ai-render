@@ -4,7 +4,7 @@ import {
   TrendingUp, TrendingDown, Wallet, Target, Brain, Activity,
   Plus, Trash2, Loader2, Crown, AlertTriangle, LayoutDashboard,
   CheckCircle2, XCircle, MinusCircle, Calculator, LineChart as LineChartIcon,
-  BookOpen, Gauge, Home, LogOut, Zap, ChevronRight, Cpu,
+  BookOpen, Gauge, Home, LogOut, Zap, ChevronRight, Cpu, History,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -33,10 +33,11 @@ function money(n: number, currency = "USD"): string {
   return `${sym}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-type NavId = "overview" | "journal" | "plan" | "calculator" | "memory";
+type NavId = "overview" | "archive" | "journal" | "plan" | "calculator" | "memory";
 
 const NAV_ITEMS: { id: NavId; label: string; icon: typeof Wallet; color: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, color: C.news },
+  { id: "archive", label: "24h Analysis Archive", icon: History, color: C.supervise },
   { id: "journal", label: "Trade Journal", icon: Activity, color: C.validate },
   { id: "plan", label: "Growth Plan", icon: LineChartIcon, color: C.momentum },
   { id: "calculator", label: "Lot Calculator", icon: Calculator, color: C.chart },
@@ -58,6 +59,10 @@ export default function TraderDashboard() {
   const deleteTrade = trpc.dashboard.deleteTrade.useMutation({ onSuccess: () => utils.dashboard.invalidate() });
   // The user's saved AI analyses — trades are logged FROM these.
   const myAnalyses = trpc.dashboard.myAnalyses.useQuery({ onlyUnlogged: true }, { retry: false });
+  const archive = trpc.dashboard.todayArchive.useQuery(
+    { limit: 40 },
+    { retry: false, enabled: isLoggedIn, refetchInterval: 60_000 },
+  );
 
   // ── Local state ──
   const [activeNav, setActiveNav] = useState<NavId>("overview");
@@ -141,6 +146,7 @@ export default function TraderDashboard() {
   };
 
   const analyses = myAnalyses.data?.loggedIn ? myAnalyses.data.analyses : [];
+  const archiveAnalyses = archive.data?.loggedIn && archive.data.isSubscriber ? archive.data.analyses : [];
 
   const firstName = (user.name?.trim() || user.email.split("@")[0]).split(" ")[0];
 
@@ -349,6 +355,105 @@ export default function TraderDashboard() {
             )}
 
             {/* ─── JOURNAL ─── */}
+            {!needsSetup && activeNav === "archive" && (
+              <div className={`rounded-2xl p-5 ${glass}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <SectionTitle icon={<History size={16} />} color={C.supervise} title="24h Analysis Archive" noMargin />
+                  <span className="text-[10px] px-2 py-1 rounded-full"
+                    style={{ background: `${C.supervise}18`, color: C.supervise, border: `1px solid ${C.supervise}35` }}>
+                    Auto-hides after 24 hours
+                  </span>
+                </div>
+
+                {archive.isLoading ? (
+                  <div className="flex items-center justify-center py-12" style={{ color: C.dim }}>
+                    <Loader2 size={18} className="animate-spin mr-2" /> Loading today's archive...
+                  </div>
+                ) : archive.data?.loggedIn && archive.data.isSubscriber ? (
+                  archiveAnalyses.length > 0 ? (
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                      {archiveAnalyses.map((a) => {
+                        const sig = (a.signal || "").toUpperCase();
+                        const sigCol = sig === "SELL" ? C.loss : sig === "BUY" ? C.validate : C.dim;
+                        const created = a.createdAt ? new Date(a.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--";
+                        const expiresMins = a.minutesUntilExpiry ?? 0;
+                        const expiresText = expiresMins >= 60
+                          ? `${Math.ceil(expiresMins / 60)}h left`
+                          : `${expiresMins}m left`;
+
+                        return (
+                          <div key={a.analysisId} className="rounded-xl border p-3 relative overflow-hidden"
+                            style={{ borderColor: `${sigCol}35`, background: "rgba(255,255,255,0.025)" }}>
+                            <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full opacity-10" style={{ background: sigCol }} />
+                            <div className="relative">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <Cpu size={14} style={{ color: C.news }} />
+                                    <span className="text-sm font-bold">{a.asset || "Chart Analysis"}</span>
+                                    <span className="text-[10px]" style={{ color: C.dim }}>{a.timeframe || ""}</span>
+                                  </div>
+                                  <div className="text-[10px] mt-0.5" style={{ color: C.dim }}>
+                                    {a.strategy || "AI strategy"} · {created} · {expiresText}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 text-[11px] font-black px-2 py-1 rounded-full"
+                                  style={{ background: `${sigCol}18`, color: sigCol }}>
+                                  {sig || "NEUTRAL"} {a.confidence ? `${a.confidence}%` : ""}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                                <MiniStat label="Entry" value={a.entry || "--"} accent={C.momentum} />
+                                <MiniStat label="Stop" value={a.stopLoss || "--"} accent={C.loss} />
+                                <MiniStat label="Target" value={a.takeProfit || "--"} accent={C.validate} />
+                                <MiniStat label="Status" value={a.outcome || "Open"} accent={a.outcome ? C.news : C.dim} />
+                              </div>
+
+                              {a.summary && (
+                                <p className="text-[11px] mt-3 line-clamp-2" style={{ color: C.dim }}>
+                                  {a.summary}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed p-8 text-center"
+                      style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+                      <History size={28} className="mx-auto mb-3" style={{ color: C.supervise }} />
+                      <h3 className="font-bold text-white">No analyses in the last 24 hours</h3>
+                      <p className="text-xs mt-1" style={{ color: C.dim }}>
+                        Run a chart analysis and it will appear here for today's trading session.
+                      </p>
+                      <button onClick={() => navigate("/")}
+                        className="mt-4 px-4 py-2 rounded-lg text-xs font-semibold text-[#020509]"
+                        style={{ background: C.momentum }}>
+                        Open Analyzer
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <div className="rounded-xl border border-dashed p-8 text-center"
+                    style={{ borderColor: `${C.momentum}33` }}>
+                    <Crown size={30} className="mx-auto mb-3" style={{ color: C.momentum }} />
+                    <h3 className="font-bold text-white">Subscriber archive only</h3>
+                    <p className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.dim }}>
+                      The 24-hour analysis archive is available for active VIP subscribers.
+                      It helps you review the trades you opened during the current day.
+                    </p>
+                    <button onClick={() => navigate("/#pricing")}
+                      className="mt-4 px-4 py-2 rounded-lg text-xs font-semibold text-[#020509]"
+                      style={{ background: C.momentum }}>
+                      View VIP Plans
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {!needsSetup && activeNav === "journal" && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 <div className={`rounded-2xl p-5 ${glass}`}>

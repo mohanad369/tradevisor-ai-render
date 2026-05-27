@@ -356,6 +356,62 @@ export const dashboardRouter = createRouter({
     }),
 
   // ─── Delete a logged trade (reverses its balance effect) ───
+  // Daily subscriber archive: shows analyses opened in the last 24 hours.
+  // We hide expired rows instead of deleting them here, keeping subscriber data safe.
+  todayArchive: publicQuery
+    .input(z.object({ limit: z.number().int().min(1).max(80).optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      const user = await resolveUser(ctx.req);
+      if (!user) return { loggedIn: false as const };
+
+      const dailyLimit = await dailyLimitForUser(user.email);
+      if (dailyLimit === 0) {
+        return {
+          loggedIn: true as const,
+          isSubscriber: false,
+          analyses: [],
+          windowHours: 24,
+        };
+      }
+
+      const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+      const rows = await db.select().from(aiAnalyses)
+        .where(eq(aiAnalyses.userId, user.userId))
+        .orderBy(desc(aiAnalyses.createdAt));
+
+      const analyses = rows
+        .filter((r) => new Date(r.createdAt ?? 0).getTime() >= cutoffMs)
+        .slice(0, input?.limit ?? 40)
+        .map((r) => {
+          const createdMs = new Date(r.createdAt ?? 0).getTime();
+          const expiresAt = new Date(createdMs + 24 * 60 * 60 * 1000);
+          return {
+            analysisId: r.analysisId,
+            asset: r.asset,
+            strategy: r.strategy,
+            timeframe: r.timeframe,
+            signal: r.signal,
+            confidence: r.confidence ?? 0,
+            entry: r.entry,
+            stopLoss: r.stopLoss,
+            takeProfit: r.takeProfit,
+            summary: r.summary,
+            outcome: r.outcome || "",
+            createdAt: r.createdAt,
+            expiresAt,
+            minutesUntilExpiry: Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 60000)),
+          };
+        });
+
+      return {
+        loggedIn: true as const,
+        isSubscriber: true,
+        windowHours: 24,
+        dailyLimit,
+        analyses,
+      };
+    }),
+
   deleteTrade: publicQuery
     .input(z.object({ tradeId: z.string() }))
     .mutation(async ({ input, ctx }) => {
