@@ -37,6 +37,7 @@ import AIAgentsWorkflow from "@/sections/AIAgentsWorkflow"
 import LanguageToggle from "@/components/LanguageToggle"
 import AgentAnalysisFlow from "@/components/AgentAnalysisFlow"
 import ScalpingAnalyzerTab from "@/components/ScalpingAnalyzerTab"
+import GoldStrategyTab from "@/components/GoldStrategyTab"
 import { useLanguage, type Language } from "@/lib/language"
 
 /* ═══════════════════════════════════════════
@@ -287,11 +288,12 @@ function VIPDashboardInner() {
    FULL VIP DASHBOARD — Mobile Responsive
    ═══════════════════════════════════════════ */
 
-type TabId = "analyzer" | "scalping" | "agents" | "bankZero" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
+type TabId = "analyzer" | "scalping" | "goldStrategy" | "agents" | "bankZero" | "tv" | "calculator" | "strategies" | "brokers" | "performance" | "account" | "goldai" | "education" | "partner"
 
 const tabs: { id: TabId; label: string; icon: any }[] = [
   { id: "analyzer", label: "Analyzer", icon: Brain },
   { id: "scalping", label: "Scalping", icon: Layers },
+  { id: "goldStrategy", label: "Gold Strategy", icon: Target },
   { id: "agents", label: "AI Agents", icon: Bot },
   { id: "bankZero", label: "Bank Zero", icon: Building2 },
   { id: "tv", label: "Charts", icon: LineChart },
@@ -307,6 +309,7 @@ const tabs: { id: TabId; label: string; icon: any }[] = [
 const vipAr: Record<string, string> = {
   analyzer: "المحلل",
   scalping: "السكالبينغ",
+  goldStrategy: "استراتيجية الذهب",
   agents: "الوكلاء",
   tv: "الشارتات",
   calculator: "حاسبة اللوت",
@@ -526,6 +529,7 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             {activeTab === "analyzer" && <AIAnalyzerTab />}
             {activeTab === "scalping" && <ScalpingAnalyzerTab />}
+            {activeTab === "goldStrategy" && <GoldStrategyTab />}
             {activeTab === "agents" && <AIAgentsWorkflow />}
             {activeTab === "bankZero" && <BankZeroStrategyTab />}
             {activeTab === "tv" && <TradingViewLiveTab />}
