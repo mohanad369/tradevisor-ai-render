@@ -40,13 +40,40 @@ export default function WelcomeBanner() {
   const ORBIT_RADIUS = 86; // px — distance of agents from the name center
 
   return (
-    <section className="relative overflow-hidden bg-[#03070d] px-4 pt-24 pb-10 sm:pt-28">
+    <section className="relative isolate overflow-hidden bg-[#03070d] px-4 pt-24 pb-10 sm:pt-28">
+      {/* Soft living agent-network artwork behind the welcome stage. */}
+      <motion.img
+        src="/assets/tradevisor-ai-agents-bg.jpg"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-[0.13] mix-blend-screen"
+        animate={{ scale: [1.02, 1.07, 1.02], opacity: [0.1, 0.16, 0.1] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-[#03070d]/55" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_44%,transparent_0%,rgba(3,7,13,0.18)_33%,rgba(3,7,13,0.92)_82%)]" />
+
       {/* Ambient color wash */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(24,200,255,0.16),transparent_42%),radial-gradient(circle_at_18%_70%,rgba(34,197,94,0.12),transparent_38%),radial-gradient(circle_at_84%_64%,rgba(212,168,67,0.12),transparent_40%)]" />
 
       <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
         {/* Orbit stage */}
         <div className="relative mb-5 flex h-[230px] w-[230px] items-center justify-center sm:h-[260px] sm:w-[260px]">
+          <motion.div
+            className="absolute h-[246px] w-[246px] rounded-full border border-[#18c8ff]/12 sm:h-[276px] sm:w-[276px]"
+            animate={{ rotate: 360, opacity: [0.25, 0.7, 0.25] }}
+            transition={{ rotate: { duration: 32, repeat: Infinity, ease: "linear" }, opacity: { duration: 4, repeat: Infinity } }}
+          >
+            {[0, 90, 180, 270].map((angle) => (
+              <motion.span
+                key={angle}
+                className="absolute left-1/2 top-1/2 h-2 w-2 rounded-full bg-[#18c8ff] shadow-[0_0_14px_rgba(24,200,255,0.9)]"
+                style={{ transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-122px)` }}
+                animate={{ scale: [0.7, 1.45, 0.7] }}
+                transition={{ duration: 2.2, repeat: Infinity, delay: angle / 360 }}
+              />
+            ))}
+          </motion.div>
 
           {/* Rotating ring of agents */}
           <motion.div
@@ -90,6 +117,11 @@ export default function WelcomeBanner() {
             className="absolute h-[176px] w-[176px] rounded-full border border-[#18c8ff]/15"
             animate={{ scale: [0.96, 1.04, 0.96], opacity: [0.35, 0.7, 0.35] }}
             transition={{ duration: 3.4, repeat: Infinity }}
+          />
+          <motion.div
+            className="absolute h-[194px] w-[194px] rounded-full border border-dashed border-[#22c55e]/15"
+            animate={{ rotate: -360, scale: [1, 1.04, 1] }}
+            transition={{ rotate: { duration: 26, repeat: Infinity, ease: "linear" }, scale: { duration: 3.8, repeat: Infinity } }}
           />
           <div className="absolute h-[210px] w-[210px] rounded-full border border-[#d4a843]/10" />
 
