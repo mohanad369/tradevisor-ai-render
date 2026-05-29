@@ -20,7 +20,6 @@ export default function Navbar() {
   const links = [
     { label: t("nav.aiAgents"), sectionId: "ai-agents" },
     { label: t("nav.analyzer"), sectionId: "analyzer" },
-    { label: t("nav.wins"), sectionId: "wins" },
     { label: t("nav.features"), sectionId: "features" },
     { label: t("nav.testimonials"), sectionId: "testimonials" },
     { label: t("nav.pricing"), sectionId: "pricing" },
