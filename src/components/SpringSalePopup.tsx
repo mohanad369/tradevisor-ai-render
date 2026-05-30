@@ -26,8 +26,8 @@ export default function SpringSalePopup() {
             <p className="text-[#a0a0a0] text-sm leading-relaxed mb-4">Join <span className="text-white font-semibold">700+ members</span> already profiting. Our members hit a combined <span className="text-[#d4a843] font-semibold">$5M in profits</span> this month.</p>
             <div className="mb-4"><CountdownTimer targetDate={targetDate} /></div>
             <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4 mb-4">
-              <div className="flex items-baseline gap-2 mb-1"><span className="text-[#666666] text-sm line-through">$78</span><span className="text-white text-2xl font-bold">$25</span></div>
-              <p className="text-[#22c55e] text-sm font-medium mb-3">Save 67% Today</p>
+              <div className="flex items-baseline gap-2 mb-1"><span className="text-[#666666] text-sm line-through">$78</span><span className="text-white text-2xl font-bold">$33</span></div>
+              <p className="text-[#22c55e] text-sm font-medium mb-3">2-Week VIP Access</p>
               <ul className="space-y-1.5">
                 {["Professional Trading Signals", "Real-time Market Analysis", "Expert Community Access"].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-xs"><Check size={12} className="text-[#22c55e]" /><span className="text-[#a0a0a0]">{item}</span></li>
@@ -41,7 +41,7 @@ export default function SpringSalePopup() {
           </motion.div>
         )}
       </AnimatePresence>
-      <CryptoPaymentModal isOpen={showPayment} onClose={() => setShowPayment(false)} planName="TradeVisor Monthly" amount="69" />
+      <CryptoPaymentModal isOpen={showPayment} onClose={() => setShowPayment(false)} planName="TradeVisor VIP 2 Weeks" amount="33" />
     </>
   );
 }

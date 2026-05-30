@@ -165,7 +165,7 @@ export default function ChartAnalyzer() {
   });
   const consumeTrial = trpc.trial.consume.useMutation();
 
-  // Subscriber daily quota (monthly 10 / yearly 20 / $25 trial 3 per day).
+  // Subscriber daily quota (monthly 10 / yearly 20 / $33 two-week access 5 per day).
   // Only meaningful for VIP subscribers; non-subscribers use the free tiers.
   const dailyQuota = trpc.dashboard.dailyQuota.useQuery(undefined, {
     retry: false,
@@ -300,7 +300,7 @@ export default function ChartAnalyzer() {
     const unlimited = hasDeveloperAccess || trialStage === "unlimited";
 
     // ─── Subscribers: enforce the per-day analysis quota ───
-    // Monthly 10/day, Yearly 20/day, $25 trial 3/day. Developers bypass.
+    // Monthly 10/day, Yearly 20/day, $33 two-week access 5/day. Developers bypass.
     if (!hasDeveloperAccess && isSubscriber) {
       try {
         const q = await dailyQuota.refetch();

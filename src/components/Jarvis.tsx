@@ -134,7 +134,7 @@ export default function Jarvis() {
       return "👋 Hi! Ask me about trading concepts, gold analysis, or VIP plans."
     }
     if (/vip|اشتراك|اشترك|سعر|price|cost|abonn/.test(q)) {
-      return "TradeVisor VIP plans:\n• Monthly: $69\n• 3 Months: $249\n• Yearly: $669 (best value)\n• $25 / 3-day trial\n\nPayment: USDT TRC20. Open the VIP page to subscribe."
+      return "TradeVisor VIP plans:\n• Two weeks: $33 (5 AI analyses per day)\n• Monthly: $69\n• 3 Months: $249\n• Yearly: $669 (best value)\n\nPayment: USDT TRC20. Open the VIP page to subscribe."
     }
     if (/gold|ذهب|xau|or\b/.test(q)) {
       return "For XAU/USD (gold): watch the London & New York sessions, use 15m for entries and 1H for trend. The VIP Gold tools and the Gold Flow Agent give live analysis."

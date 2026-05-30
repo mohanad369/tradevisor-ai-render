@@ -27,7 +27,7 @@ TRADEVISOR VIP PLANS:
 - Monthly: $69
 - 3 Months: $249
 - Yearly: $669 (best value)
-- $25 / 3-day trial plan also available
+- $33 / two-week VIP plan also available with 5 AI analyses per day
 - Payment: USDT TRC20
 
 VIP DASHBOARD FEATURES: AI chart analyzer, daily AI signals, live charts,

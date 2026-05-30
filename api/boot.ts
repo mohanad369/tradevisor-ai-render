@@ -462,12 +462,24 @@ async function grantVipAccess(email: string, months: number, plan: string) {
   return { success: true, email, code: availableCode.code, expires: endDate, reused: false };
 }
 
-function planToCodeType(planName: string): "monthly" | "yearly" {
-  return planName.toLowerCase().includes("month") ? "monthly" : "yearly";
+function isTwoWeekPlan(planName: string, amount = ""): boolean {
+  const plan = planName.toLowerCase();
+  const numericAmount = Number.parseFloat(amount.replace(/[^\d.]/g, ""));
+  return plan.includes("2-week") || plan.includes("2 week") ||
+    plan.includes("14-day") || plan.includes("14 day") ||
+    numericAmount === 33;
+}
+
+function planToCodeType(planName: string, amount = ""): "monthly" | "yearly" {
+  const plan = planName.toLowerCase();
+  const numericAmount = Number.parseFloat(amount.replace(/[^\d.]/g, ""));
+  return plan.includes("year") || plan.includes("annual") || numericAmount === 669
+    ? "yearly"
+    : "monthly";
 }
 
 async function activateHostedPayment(payment: typeof vipPayments.$inferSelect) {
-  const codeType = planToCodeType(payment.planName);
+  const codeType = planToCodeType(payment.planName, payment.amount);
   const [availableCode] = await db.select().from(vipCodes)
     .where(and(eq(vipCodes.used, false), eq(vipCodes.codeType, codeType)))
     .limit(1);
@@ -478,7 +490,11 @@ async function activateHostedPayment(payment: typeof vipPayments.$inferSelect) {
 
   const now = new Date();
   const expiresAt = new Date(now);
-  expiresAt.setMonth(now.getMonth() + (codeType === "yearly" ? 12 : 1));
+  if (isTwoWeekPlan(payment.planName, payment.amount)) {
+    expiresAt.setDate(expiresAt.getDate() + 14);
+  } else {
+    expiresAt.setMonth(now.getMonth() + (codeType === "yearly" ? 12 : 1));
+  }
 
   await db.update(vipCodes)
     .set({ used: true, assignedTo: payment.email })

@@ -14,6 +14,7 @@ interface Props {
 }
 
 export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, yearlyAmount = "669" }: Props) {
+  const isTwoWeekAccess = Number.parseFloat(amount) === 33
   const [step, setStep] = useState<"select" | "wallet" | "upload" | "pending" | "success" | "error">("select")
   const [selectedAmount, setSelectedAmount] = useState(amount)
   const [selectedPlan, setSelectedPlan] = useState(planName)
@@ -168,45 +169,65 @@ export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, 
                   <p className="text-xs text-[#666666]">Choose your plan</p>
                 </div>
 
-                {/* Monthly Plan */}
-                <button onClick={() => { setSelectedAmount(amount); setSelectedPlan(planName + " Monthly"); setStep("wallet") }}
-                  className="w-full bg-[#141414] border border-[#d4a843]/30 rounded-xl p-4 hover:border-[#d4a843]/60 transition-all text-left mb-3 group">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Monthly</p>
-                      <p className="text-[10px] text-[#666666]">Cancel anytime</p>
+                {isTwoWeekAccess ? (
+                  <button onClick={() => { setSelectedAmount(amount); setSelectedPlan(planName); setStep("wallet") }}
+                    className="w-full bg-gradient-to-r from-[#d4a843]/10 to-[#d4a843]/5 border border-[#d4a843]/40 rounded-xl p-4 hover:border-[#d4a843]/70 transition-all text-left mb-3 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 bg-[#22c55e] text-[#050505] text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">5 ANALYSES / DAY</div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Two-Week VIP Access</p>
+                        <p className="text-[10px] text-[#666666]">14 days of VIP tools and AI analysis</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-[#d4a843]">${amount}<span className="text-xs text-[#666666] font-normal">/14 days</span></p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-black text-[#d4a843]">${amount}<span className="text-xs text-[#666666] font-normal">/mo</span></p>
-                    </div>
-                  </div>
-                </button>
+                  </button>
+                ) : (
+                  <>
+                    {/* Monthly Plan */}
+                    <button onClick={() => { setSelectedAmount(amount); setSelectedPlan(planName + " Monthly"); setStep("wallet") }}
+                      className="w-full bg-[#141414] border border-[#d4a843]/30 rounded-xl p-4 hover:border-[#d4a843]/60 transition-all text-left mb-3 group">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Monthly</p>
+                          <p className="text-[10px] text-[#666666]">Cancel anytime</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-[#d4a843]">${amount}<span className="text-xs text-[#666666] font-normal">/mo</span></p>
+                        </div>
+                      </div>
+                    </button>
 
-                {/* Yearly Plan */}
-                <button onClick={() => { setSelectedAmount(yearlyAmount); setSelectedPlan(planName + " Yearly"); setStep("wallet") }}
-                  className="w-full bg-gradient-to-r from-[#d4a843]/10 to-[#d4a843]/5 border border-[#d4a843]/40 rounded-xl p-4 hover:border-[#d4a843]/70 transition-all text-left mb-3 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 bg-[#22c55e] text-[#050505] text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">BEST VALUE</div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Yearly</p>
-                      <p className="text-[10px] text-[#666666]">Save big - Best value</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-black text-[#d4a843]">${yearlyAmount}<span className="text-xs text-[#666666] font-normal">/yr</span></p>
-                    </div>
-                  </div>
-                </button>
+                    {/* Yearly Plan */}
+                    <button onClick={() => { setSelectedAmount(yearlyAmount); setSelectedPlan(planName + " Yearly"); setStep("wallet") }}
+                      className="w-full bg-gradient-to-r from-[#d4a843]/10 to-[#d4a843]/5 border border-[#d4a843]/40 rounded-xl p-4 hover:border-[#d4a843]/70 transition-all text-left mb-3 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 bg-[#22c55e] text-[#050505] text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">BEST VALUE</div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Yearly</p>
+                          <p className="text-[10px] text-[#666666]">Save big - Best value</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-[#d4a843]">${yearlyAmount}<span className="text-xs text-[#666666] font-normal">/yr</span></p>
+                        </div>
+                      </div>
+                    </button>
+                  </>
+                )}
 
-                <button onClick={() => { setSelectedAmount(amount); setSelectedPlan(planName); setStep("wallet") }}
-                  className="w-full flex items-center gap-3 bg-[#141414] border border-[#f2a900]/30 rounded-xl p-4 hover:border-[#f2a900]/60 transition-all text-left mt-2">
-                  <div className="w-10 h-10 bg-[#f2a900]/10 rounded-lg flex items-center justify-center">
-                    <Bitcoin size={18} className="text-[#f2a900]" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-white">Secure Crypto Checkout</p>
-                    <p className="text-[10px] text-[#666666]">Pay through hosted payment page</p>
-                  </div>
-                </button>
+                {!isTwoWeekAccess && (
+                  <button onClick={() => { setSelectedAmount(amount); setSelectedPlan(planName); setStep("wallet") }}
+                    className="w-full flex items-center gap-3 bg-[#141414] border border-[#f2a900]/30 rounded-xl p-4 hover:border-[#f2a900]/60 transition-all text-left mt-2">
+                    <div className="w-10 h-10 bg-[#f2a900]/10 rounded-lg flex items-center justify-center">
+                      <Bitcoin size={18} className="text-[#f2a900]" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-white">Secure Crypto Checkout</p>
+                      <p className="text-[10px] text-[#666666]">Pay through hosted payment page</p>
+                    </div>
+                  </button>
+                )}
                 <div className="flex items-center gap-1.5 justify-center mt-4">
                   <Shield size={10} className="text-[#22c55e]" />
                   <span className="text-[9px] text-[#666666]">Secure hosted checkout - Wallet hidden</span>

@@ -13,17 +13,17 @@ export interface PricingPlan {
 
 export const pricingPlans: PricingPlan[] = [
   {
-    name: { en: "TradeVisor VIP 3 Days", ar: "تريدفايزر VIP 3 أيام" },
+    name: { en: "TradeVisor VIP 2 Weeks", ar: "تريدفايزر VIP أسبوعين" },
     originalPrice: "$49",
-    salePrice: "$25",
-    discount: "TEST ACCESS",
-    period: { en: "3-day VIP access for payment testing", ar: "دخول VIP لمدة 3 أيام لتجربة الدفع" },
+    salePrice: "$33",
+    discount: "2-WEEK ACCESS",
+    period: { en: "2-week VIP subscription", ar: "اشتراك VIP لمدة أسبوعين" },
     features: [
-      { en: "Full VIP dashboard access for 3 days", ar: "دخول كامل للوحة VIP لمدة 3 أيام" },
+      { en: "Full VIP dashboard access for 2 weeks", ar: "دخول كامل للوحة VIP لمدة أسبوعين" },
       { en: "AI chart analyzer and agent workflow", ar: "محلل الشارت ووكلاء الذكاء الاصطناعي" },
-      { en: "Crypto payment flow test", ar: "اختبار مسار الدفع بالكريبتو" },
+      { en: "5 AI analyses per day", ar: "5 تحليلات بالذكاء الاصطناعي يومياً" },
     ],
-    cta: { en: "Test VIP Payment", ar: "اختبار دفع VIP" },
+    cta: { en: "Get 2-Week Access", ar: "احصل على اشتراك أسبوعين" },
   },
   {
     name: { en: "TradeVisor Monthly", ar: "تريدفايزر شهري" },

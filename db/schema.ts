@@ -215,7 +215,7 @@ export const agentMemory = sqliteTable("agent_memory", {
 
 // ─── Daily Analysis Quota (subscribers) ───
 // Per-user, per-day counter for the subscriber analysis limit
-// (monthly 10/day, yearly 20/day, $25 trial 3/day).
+// (monthly 10/day, yearly 20/day, $33 two-week access 5/day).
 export const dailyAnalysisUsage = sqliteTable("daily_analysis_usage", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   usageKey: text("usage_key").notNull().unique(),     // "<userId>:<YYYY-MM-DD>"

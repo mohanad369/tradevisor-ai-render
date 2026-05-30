@@ -11,9 +11,31 @@ function generateUUID(): string {
   return `sub_${randomBytes(18).toString("base64url")}`;
 }
 
-/** "Monthly" → "monthly"; "VIP Yearly" → "yearly"; everything else defaults to yearly */
-function planToCodeType(planName: string): "monthly" | "yearly" {
-  return planName.toLowerCase().includes("month") ? "monthly" : "yearly";
+function isTwoWeekPlan(planName: string, amount = ""): boolean {
+  const plan = planName.toLowerCase();
+  const numericAmount = Number.parseFloat(amount.replace(/[^\d.]/g, ""));
+  return plan.includes("2-week") || plan.includes("2 week") ||
+    plan.includes("14-day") || plan.includes("14 day") ||
+    numericAmount === 33;
+}
+
+/** Yearly plans use the yearly pool. Monthly and shorter plans use the monthly pool. */
+function planToCodeType(planName: string, amount = ""): "monthly" | "yearly" {
+  const plan = planName.toLowerCase();
+  const numericAmount = Number.parseFloat(amount.replace(/[^\d.]/g, ""));
+  return plan.includes("year") || plan.includes("annual") || numericAmount === 669
+    ? "yearly"
+    : "monthly";
+}
+
+function calculatePlanEndDate(planName: string, amount = "", from = new Date()): Date {
+  const endDate = new Date(from);
+  if (isTwoWeekPlan(planName, amount)) {
+    endDate.setDate(endDate.getDate() + 14);
+    return endDate;
+  }
+  endDate.setMonth(endDate.getMonth() + (planToCodeType(planName, amount) === "yearly" ? 12 : 1));
+  return endDate;
 }
 
 export const vipRouter = createRouter({
@@ -148,7 +170,7 @@ export const vipRouter = createRouter({
       if (!payment) return { success: false, error: "Payment not found" };
       if (payment.status !== "PENDING") return { success: false, error: "Already processed" };
 
-      const codeType = planToCodeType(payment.planName);
+      const codeType = planToCodeType(payment.planName, payment.amount);
 
       // Pick an unused code FROM THE CORRECT POOL
       const [availableCode] = await db.select().from(vipCodes)
@@ -164,9 +186,7 @@ export const vipRouter = createRouter({
         .where(eq(vipCodes.id, availableCode.id));
 
       const now = new Date();
-      const isYearly = codeType === "yearly";
-      const endDate = new Date();
-      endDate.setMonth(now.getMonth() + (isYearly ? 12 : 1));
+      const endDate = calculatePlanEndDate(payment.planName, payment.amount, now);
 
       await db.update(vipPayments)
         .set({ status: "APPROVED", approvedAt: now, assignedCode: availableCode.code })
@@ -243,10 +263,9 @@ export const vipRouter = createRouter({
         .where(eq(vipSubscribers.subscriberId, input.subscriberId));
       if (!sub) return { success: false };
 
-      const isYearly = sub.plan.toLowerCase().includes("year");
       const currentEnd = sub.endDate ? new Date(sub.endDate) : new Date();
-      const newEnd = currentEnd > new Date() ? currentEnd : new Date();
-      newEnd.setMonth(newEnd.getMonth() + (isYearly ? 12 : 1));
+      const renewalStart = currentEnd > new Date() ? currentEnd : new Date();
+      const newEnd = calculatePlanEndDate(sub.plan, sub.amount, renewalStart);
 
       await db.update(vipSubscribers)
         .set({ status: "ACTIVE", endDate: newEnd })
