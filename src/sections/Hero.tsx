@@ -325,9 +325,20 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
   const isLive = Boolean(marketData.updatedAt)
   const assets = marketData.assets
   const signals = marketData.signals
-  const leadAsset = assets[0]
+  const [selectedPair, setSelectedPair] = useState(assets[0]?.pair ?? "")
+  const leadAsset = assets.find((asset) => asset.pair === selectedPair) ?? assets[0]
   const [activePanel, setActivePanel] = useState("overview")
-  const marketStatus = getMarketTheme(assets, isArabic, isLive)
+  const selectedPhase: MarketPhase = leadAsset.change > 0.08
+    ? "bullish"
+    : leadAsset.change < -0.08
+      ? "bearish"
+      : "consolidation"
+  const marketStatus = createMarketTheme(selectedPhase, isArabic, isLive)
+
+  const selectAsset = (pair: string) => {
+    setSelectedPair(pair)
+    setActivePanel("markets")
+  }
 
   const activatePanel = (id: string) => {
     setActivePanel(id)
@@ -421,7 +432,7 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
                     <p className="mt-1 text-[10px] font-bold uppercase text-[#a6b2ab]">{marketStatus.note}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] uppercase text-[#7b8981]">XAU/USD</p>
+                    <p className="text-[9px] uppercase text-[#7b8981]">{leadAsset.pair}</p>
                     <p className="font-mono text-xl font-black text-[#d4a843] sm:text-2xl">{isLive ? formatAssetPrice(leadAsset.price) : "Connecting"}</p>
                   </div>
                 </div>
@@ -447,7 +458,16 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
                 <span className="flex items-center gap-1 text-[9px] font-black uppercase" style={{ color: marketStatus.color }}><Radio size={11} /> Live API</span>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {assets.map((asset, index) => <AssetMiniTile key={asset.pair} asset={asset} index={index} isLive={isLive} />)}
+                {assets.map((asset, index) => (
+                  <AssetMiniTile
+                    key={asset.pair}
+                    asset={asset}
+                    index={index}
+                    isLive={isLive}
+                    isSelected={asset.pair === leadAsset.pair}
+                    onSelect={() => selectAsset(asset.pair)}
+                  />
+                ))}
               </div>
             </div>
           </main>
@@ -488,11 +508,16 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
             transition={{ duration: 32, repeat: Infinity, ease: "linear" }}
           >
             {[...assets, ...assets].map((asset, index) => (
-              <span key={`${asset.pair}-${index}`} className="flex items-center gap-2">
+              <button
+                key={`${asset.pair}-${index}`}
+                type="button"
+                onClick={() => selectAsset(asset.pair)}
+                className="flex items-center gap-2 transition-opacity hover:opacity-75"
+              >
                 <b className="text-white">{asset.pair}</b>
                 <b className="font-mono text-[#d4a843]">{isLive ? formatAssetPrice(asset.price) : "Connecting"}</b>
                 <b className={asset.dir === "up" ? "text-[#22c55e]" : "text-[#e11d48]"}>{asset.change > 0 ? "+" : ""}{asset.change}%</b>
-              </span>
+              </button>
             ))}
           </motion.div>
         </div>
@@ -1216,15 +1241,31 @@ function AssetPriceRow({ asset, index, isLive }: { asset: typeof ASSETS[number];
   )
 }
 
-function AssetMiniTile({ asset, index, isLive }: { asset: typeof ASSETS[number]; index: number; isLive: boolean }) {
+function AssetMiniTile({
+  asset,
+  index,
+  isLive,
+  isSelected = false,
+  onSelect,
+}: {
+  asset: typeof ASSETS[number]
+  index: number
+  isLive: boolean
+  isSelected?: boolean
+  onSelect?: () => void
+}) {
   const isUp = asset.dir === "up"
   const color = isUp ? "#22c55e" : "#e11d48"
   return (
-    <motion.div
+    <motion.button
+      type="button"
+      aria-pressed={isSelected}
+      onClick={onSelect}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 1 + index * 0.06 }}
-      className="group rounded-2xl border border-[#1f1f1f] bg-[#050806]/75 p-3 transition-all hover:border-[#d4a843]/30"
+      className="group rounded-2xl border bg-[#050806]/75 p-3 text-left transition-all hover:border-[#d4a843]/55 hover:bg-[#d4a843]/5"
+      style={isSelected ? { borderColor: color, boxShadow: `0 0 20px ${color}24` } : { borderColor: "#1f1f1f" }}
     >
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-[10px] font-black text-white">{asset.pair}</span>
@@ -1238,7 +1279,7 @@ function AssetMiniTile({ asset, index, isLive }: { asset: typeof ASSETS[number];
         {isLive ? formatAssetPrice(asset.price) : "Connecting"}
       </motion.p>
       <MiniSparkline dir={asset.dir} />
-    </motion.div>
+    </motion.button>
   )
 }
 
