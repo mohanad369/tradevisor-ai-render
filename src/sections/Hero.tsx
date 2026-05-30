@@ -417,10 +417,12 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
 
           <main className="min-w-0 p-3 sm:p-4">
             <div className="mb-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-              <div id="market-overview" className="rounded-2xl border bg-black/35 p-4 transition-colors duration-700" style={{ borderColor: marketStatus.border }}>
-                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#8e9c94]">{isArabic ? "نظرة عامة على السوق" : "Market outlook"}</p>
-                <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
-                  <div>
+              <div id="market-overview" className="relative overflow-hidden rounded-2xl border bg-black/35 p-4 transition-colors duration-700" style={{ borderColor: marketStatus.border }}>
+                <MarketPhaseMascot theme={marketStatus} isArabic={isArabic} />
+                <div className="relative z-10 pr-16 sm:pr-28">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#8e9c94]">{isArabic ? "نظرة عامة على السوق" : "Market outlook"}</p>
+                  <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+                    <div>
                     <motion.h2
                       animate={{ opacity: [0.72, 1, 0.72] }}
                       transition={{ duration: 2.4, repeat: Infinity }}
@@ -430,10 +432,11 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
                       {marketStatus.headline}
                     </motion.h2>
                     <p className="mt-1 text-[10px] font-bold uppercase text-[#a6b2ab]">{marketStatus.note}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] uppercase text-[#7b8981]">{leadAsset.pair}</p>
-                    <p className="font-mono text-xl font-black text-[#d4a843] sm:text-2xl">{isLive ? formatAssetPrice(leadAsset.price) : "Connecting"}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] uppercase text-[#7b8981]">{leadAsset.pair}</p>
+                      <p className="font-mono text-xl font-black text-[#d4a843] sm:text-2xl">{isLive ? formatAssetPrice(leadAsset.price) : "Connecting"}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -523,6 +526,41 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
         </div>
       </motion.div>
     </div>
+  )
+}
+
+function MarketPhaseMascot({ theme, isArabic }: { theme: MarketTheme; isArabic: boolean }) {
+  const isBullish = theme.phase === "bullish"
+  const isBearish = theme.phase === "bearish"
+  const symbol = isBullish ? "\u{1F402}" : isBearish ? "\u{1F43B}" : "\u25C8"
+  const label = isBullish
+    ? (isArabic ? "ثور السوق" : "Market bull")
+    : isBearish
+      ? (isArabic ? "دب السوق" : "Market bear")
+      : (isArabic ? "مرحلة التجميع" : "Accumulation")
+
+  return (
+    <motion.div
+      key={theme.phase}
+      role="img"
+      aria-label={label}
+      initial={{ opacity: 0, scale: 0.72, x: 16 }}
+      animate={{
+        opacity: [0.72, 1, 0.72],
+        scale: [0.96, 1.08, 0.96],
+        y: [0, -5, 0],
+      }}
+      transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+      className="pointer-events-none absolute right-3 top-1/2 flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full border text-4xl sm:right-5 sm:h-24 sm:w-24 sm:text-6xl"
+      style={{
+        borderColor: theme.border,
+        backgroundColor: theme.soft,
+        boxShadow: `0 0 38px ${theme.glow}, inset 0 0 30px ${theme.glow}`,
+        color: theme.color,
+      }}
+    >
+      <span className="drop-shadow-[0_0_14px_currentColor]">{symbol}</span>
+    </motion.div>
   )
 }
 
