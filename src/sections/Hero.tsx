@@ -550,7 +550,7 @@ function MarketPhaseMascot({ theme, isArabic }: { theme: MarketTheme; isArabic: 
         y: [0, -5, 0],
       }}
       transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
-      className="pointer-events-none absolute right-3 top-1/2 flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full border text-4xl sm:right-5 sm:h-24 sm:w-24 sm:text-6xl"
+      className="pointer-events-none absolute right-3 top-1/2 flex h-16 w-24 -translate-y-1/2 items-center justify-center overflow-hidden rounded-2xl border sm:right-5 sm:h-24 sm:w-36"
       style={{
         borderColor: theme.border,
         backgroundColor: theme.soft,
@@ -564,10 +564,12 @@ function MarketPhaseMascot({ theme, isArabic }: { theme: MarketTheme; isArabic: 
 
 function FacetedMarketAnimal({ phase, color }: { phase: MarketPhase; color: string }) {
   const gradientId = `market-mascot-${phase}`
+  const clipId = `market-mascot-clip-${phase}`
+  const shineId = `market-mascot-shine-${phase}`
 
   if (phase === "consolidation") {
     return (
-      <svg viewBox="0 0 100 100" aria-hidden="true" className="h-[72%] w-[72%] drop-shadow-[0_0_14px_currentColor]" style={{ color }}>
+      <svg viewBox="0 0 100 100" aria-hidden="true" className="h-[76%] w-[76%] drop-shadow-[0_0_18px_currentColor]" style={{ color }}>
         <defs>
           <linearGradient id={gradientId} x1="12%" y1="8%" x2="88%" y2="92%">
             <stop offset="0%" stopColor="#f0d7ff" />
@@ -587,62 +589,71 @@ function FacetedMarketAnimal({ phase, color }: { phase: MarketPhase; color: stri
 
   if (phase === "bullish") {
     return (
-      <svg viewBox="0 0 180 120" aria-hidden="true" className="h-[82%] w-[88%] drop-shadow-[0_0_14px_currentColor]" style={{ color }}>
+      <svg viewBox="0 0 220 130" aria-hidden="true" className="h-[92%] w-[94%] drop-shadow-[0_0_18px_currentColor]" style={{ color }}>
         <defs>
-          <linearGradient id={gradientId} x1="4%" y1="8%" x2="94%" y2="92%">
-            <stop offset="0%" stopColor="#d9fff0" />
-            <stop offset="42%" stopColor={color} />
+          <linearGradient id={gradientId} x1="6%" y1="10%" x2="92%" y2="88%">
+            <stop offset="0%" stopColor="#ecfff6" />
+            <stop offset="38%" stopColor={color} />
             <stop offset="100%" stopColor="#064e3b" />
           </linearGradient>
+          <linearGradient id={shineId} x1="12%" y1="16%" x2="86%" y2="76%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity=".9" />
+            <stop offset="48%" stopColor="#6ee7b7" stopOpacity=".4" />
+            <stop offset="100%" stopColor="#064e3b" stopOpacity=".12" />
+          </linearGradient>
+          <clipPath id={clipId}>
+            <path d="M23 61 42 40l51-15 51 8 20 18 16-2 19 13-6 20-28 7-22-3-12 28h-15l-3-32-39 3-15 29H43l6-38-18-5-18 8 5-17Z" />
+          </clipPath>
         </defs>
-        <g fill={`url(#${gradientId})`} stroke="#bbf7d0" strokeWidth="1.5" strokeLinejoin="round">
-          <polygon points="31,38 99,25 137,42 128,76 62,79 34,64" />
-          <polygon points="125,42 151,36 167,48 158,67 131,65" />
-          <polygon points="146,38 153,20 159,10 160,35" />
-          <polygon points="157,40 172,25 177,18 168,48" />
-          <polygon points="39,43 18,32 8,21 14,44 34,56" />
-          <polygon points="43,68 62,73 57,108 46,108" />
-          <polygon points="90,74 107,73 103,109 92,109" />
-          <polygon points="123,68 138,65 143,103 132,103" />
+        <path d="M23 61 42 40l51-15 51 8 20 18 16-2 19 13-6 20-28 7-22-3-12 28h-15l-3-32-39 3-15 29H43l6-38-18-5-18 8 5-17Z" fill={`url(#${gradientId})`} stroke="#bbf7d0" strokeWidth="2" strokeLinejoin="round" />
+        <g clipPath={`url(#${clipId})`} stroke="#d1fae5" strokeOpacity=".35" strokeWidth="1">
+          <polygon points="15,62 45,35 59,83" fill="#d1fae5" opacity=".5" />
+          <polygon points="45,35 96,21 82,82 59,83" fill="#34d399" opacity=".48" />
+          <polygon points="96,21 146,31 112,80 82,82" fill="#a7f3d0" opacity=".42" />
+          <polygon points="146,31 171,54 144,88 112,80" fill="#059669" opacity=".72" />
+          <polygon points="171,54 210,62 191,87 144,88" fill="#6ee7b7" opacity=".55" />
+          <polygon points="59,83 82,82 61,123 39,119" fill="#10b981" opacity=".68" />
+          <polygon points="112,80 144,88 132,121 111,119" fill="#047857" opacity=".84" />
         </g>
-        <g fill="#d9fff0" opacity=".36">
-          <polygon points="31,38 70,34 62,79 34,64" />
-          <polygon points="70,34 99,25 103,71 62,79" />
-          <polygon points="99,25 137,42 103,71" />
-          <polygon points="137,42 128,76 103,71" />
-          <polygon points="151,36 167,48 145,52" />
-        </g>
-        <circle cx="158" cy="49" r="2.6" fill="#eafff2" />
+        <path d="m165 52 7-21 8-12 1 30m4 4 16-18 9-6-11 33" fill="none" stroke="#ecfff6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M35 49 17 36 8 21l4 30" fill="none" stroke="#bbf7d0" strokeWidth="3" strokeLinecap="round" />
+        <circle cx="190" cy="64" r="3.2" fill="#ffffff" />
+        <path d="M43 39 96 25l50 8" fill="none" stroke={`url(#${shineId})`} strokeWidth="3" opacity=".78" />
       </svg>
     )
   }
 
   return (
-    <svg viewBox="0 0 180 120" aria-hidden="true" className="h-[82%] w-[88%] drop-shadow-[0_0_14px_currentColor]" style={{ color }}>
+    <svg viewBox="0 0 220 130" aria-hidden="true" className="h-[92%] w-[94%] drop-shadow-[0_0_18px_currentColor]" style={{ color }}>
       <defs>
-        <linearGradient id={gradientId} x1="4%" y1="8%" x2="94%" y2="92%">
-          <stop offset="0%" stopColor="#ffe4e6" />
-          <stop offset="42%" stopColor={color} />
+        <linearGradient id={gradientId} x1="6%" y1="8%" x2="92%" y2="90%">
+          <stop offset="0%" stopColor="#fff1f2" />
+          <stop offset="38%" stopColor={color} />
           <stop offset="100%" stopColor="#7f1d1d" />
         </linearGradient>
+        <linearGradient id={shineId} x1="12%" y1="14%" x2="88%" y2="78%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity=".9" />
+          <stop offset="48%" stopColor="#fda4af" stopOpacity=".45" />
+          <stop offset="100%" stopColor="#7f1d1d" stopOpacity=".12" />
+        </linearGradient>
+        <clipPath id={clipId}>
+          <path d="M18 57 43 33l48-12 47 7 25 18 21-1 22 16-5 22-32 8-23-5-15 30h-15l-2-34-42 3-11 31H44l5-39-20-7-20 8 7-18Z" />
+        </clipPath>
       </defs>
-      <g fill={`url(#${gradientId})`} stroke="#fecdd3" strokeWidth="1.5" strokeLinejoin="round">
-        <polygon points="34,43 63,25 111,28 139,48 132,78 87,83 48,75 27,59" />
-        <polygon points="126,43 151,42 169,56 159,72 134,71" />
-        <polygon points="132,42 136,25 148,34 151,44" />
-        <polygon points="153,44 159,30 169,42 166,55" />
-        <polygon points="43,70 62,75 58,108 45,108" />
-        <polygon points="85,78 104,79 102,109 89,109" />
-        <polygon points="122,71 139,68 146,104 133,104" />
-        <polygon points="34,45 18,36 9,42 26,57" />
+      <path d="M18 57 43 33l48-12 47 7 25 18 21-1 22 16-5 22-32 8-23-5-15 30h-15l-2-34-42 3-11 31H44l5-39-20-7-20 8 7-18Z" fill={`url(#${gradientId})`} stroke="#fecdd3" strokeWidth="2" strokeLinejoin="round" />
+      <g clipPath={`url(#${clipId})`} stroke="#ffe4e6" strokeOpacity=".36" strokeWidth="1">
+        <polygon points="16,58 44,31 58,82" fill="#fff1f2" opacity=".5" />
+        <polygon points="44,31 92,19 82,81 58,82" fill="#fb7185" opacity=".5" />
+        <polygon points="92,19 140,27 111,79 82,81" fill="#fecdd3" opacity=".42" />
+        <polygon points="140,27 167,48 146,88 111,79" fill="#e11d48" opacity=".68" />
+        <polygon points="167,48 214,60 200,84 146,88" fill="#fb7185" opacity=".55" />
+        <polygon points="58,82 82,81 62,121 41,120" fill="#f43f5e" opacity=".66" />
+        <polygon points="111,79 146,88 132,122 111,120" fill="#be123c" opacity=".84" />
       </g>
-      <g fill="#ffe4e6" opacity=".34">
-        <polygon points="34,43 63,25 71,75 48,75" />
-        <polygon points="63,25 111,28 96,79 71,75" />
-        <polygon points="111,28 139,48 132,78 96,79" />
-        <polygon points="151,42 169,56 145,58" />
-      </g>
-      <circle cx="159" cy="56" r="2.6" fill="#fff1f2" />
+      <path d="m166 48 4-17 12 10m3 6 7-16 11 16" fill="none" stroke="#fff1f2" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M38 40 19 31 8 39l10 18" fill="none" stroke="#fecdd3" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="196" cy="64" r="3.2" fill="#ffffff" />
+      <path d="M44 32 92 20l48 8" fill="none" stroke={`url(#${shineId})`} strokeWidth="3" opacity=".78" />
     </svg>
   )
 }
