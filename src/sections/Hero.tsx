@@ -532,7 +532,6 @@ function LiveMarketCommandWindow({ marketData }: { marketData: ReturnType<typeof
 function MarketPhaseMascot({ theme, isArabic }: { theme: MarketTheme; isArabic: boolean }) {
   const isBullish = theme.phase === "bullish"
   const isBearish = theme.phase === "bearish"
-  const symbol = isBullish ? "\u{1F402}" : isBearish ? "\u{1F43B}" : "\u25C8"
   const label = isBullish
     ? (isArabic ? "ثور السوق" : "Market bull")
     : isBearish
@@ -556,11 +555,95 @@ function MarketPhaseMascot({ theme, isArabic }: { theme: MarketTheme; isArabic: 
         borderColor: theme.border,
         backgroundColor: theme.soft,
         boxShadow: `0 0 38px ${theme.glow}, inset 0 0 30px ${theme.glow}`,
-        color: theme.color,
       }}
     >
-      <span className="drop-shadow-[0_0_14px_currentColor]">{symbol}</span>
+      <FacetedMarketAnimal phase={theme.phase} color={theme.color} />
     </motion.div>
+  )
+}
+
+function FacetedMarketAnimal({ phase, color }: { phase: MarketPhase; color: string }) {
+  const gradientId = `market-mascot-${phase}`
+
+  if (phase === "consolidation") {
+    return (
+      <svg viewBox="0 0 100 100" aria-hidden="true" className="h-[72%] w-[72%] drop-shadow-[0_0_14px_currentColor]" style={{ color }}>
+        <defs>
+          <linearGradient id={gradientId} x1="12%" y1="8%" x2="88%" y2="92%">
+            <stop offset="0%" stopColor="#f0d7ff" />
+            <stop offset="46%" stopColor={color} />
+            <stop offset="100%" stopColor="#391262" />
+          </linearGradient>
+        </defs>
+        <polygon points="50,6 88,32 77,78 50,94 23,78 12,32" fill={`url(#${gradientId})`} stroke="#e7c6ff" strokeWidth="2" />
+        <polygon points="50,6 50,50 12,32" fill="#c084fc" opacity=".65" />
+        <polygon points="50,6 88,32 50,50" fill="#f0d7ff" opacity=".48" />
+        <polygon points="12,32 50,50 23,78" fill="#7c3aed" opacity=".68" />
+        <polygon points="88,32 77,78 50,50" fill="#4c1d95" opacity=".82" />
+        <polygon points="23,78 50,50 50,94" fill="#a855f7" opacity=".62" />
+      </svg>
+    )
+  }
+
+  if (phase === "bullish") {
+    return (
+      <svg viewBox="0 0 180 120" aria-hidden="true" className="h-[82%] w-[88%] drop-shadow-[0_0_14px_currentColor]" style={{ color }}>
+        <defs>
+          <linearGradient id={gradientId} x1="4%" y1="8%" x2="94%" y2="92%">
+            <stop offset="0%" stopColor="#d9fff0" />
+            <stop offset="42%" stopColor={color} />
+            <stop offset="100%" stopColor="#064e3b" />
+          </linearGradient>
+        </defs>
+        <g fill={`url(#${gradientId})`} stroke="#bbf7d0" strokeWidth="1.5" strokeLinejoin="round">
+          <polygon points="31,38 99,25 137,42 128,76 62,79 34,64" />
+          <polygon points="125,42 151,36 167,48 158,67 131,65" />
+          <polygon points="146,38 153,20 159,10 160,35" />
+          <polygon points="157,40 172,25 177,18 168,48" />
+          <polygon points="39,43 18,32 8,21 14,44 34,56" />
+          <polygon points="43,68 62,73 57,108 46,108" />
+          <polygon points="90,74 107,73 103,109 92,109" />
+          <polygon points="123,68 138,65 143,103 132,103" />
+        </g>
+        <g fill="#d9fff0" opacity=".36">
+          <polygon points="31,38 70,34 62,79 34,64" />
+          <polygon points="70,34 99,25 103,71 62,79" />
+          <polygon points="99,25 137,42 103,71" />
+          <polygon points="137,42 128,76 103,71" />
+          <polygon points="151,36 167,48 145,52" />
+        </g>
+        <circle cx="158" cy="49" r="2.6" fill="#eafff2" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 180 120" aria-hidden="true" className="h-[82%] w-[88%] drop-shadow-[0_0_14px_currentColor]" style={{ color }}>
+      <defs>
+        <linearGradient id={gradientId} x1="4%" y1="8%" x2="94%" y2="92%">
+          <stop offset="0%" stopColor="#ffe4e6" />
+          <stop offset="42%" stopColor={color} />
+          <stop offset="100%" stopColor="#7f1d1d" />
+        </linearGradient>
+      </defs>
+      <g fill={`url(#${gradientId})`} stroke="#fecdd3" strokeWidth="1.5" strokeLinejoin="round">
+        <polygon points="34,43 63,25 111,28 139,48 132,78 87,83 48,75 27,59" />
+        <polygon points="126,43 151,42 169,56 159,72 134,71" />
+        <polygon points="132,42 136,25 148,34 151,44" />
+        <polygon points="153,44 159,30 169,42 166,55" />
+        <polygon points="43,70 62,75 58,108 45,108" />
+        <polygon points="85,78 104,79 102,109 89,109" />
+        <polygon points="122,71 139,68 146,104 133,104" />
+        <polygon points="34,45 18,36 9,42 26,57" />
+      </g>
+      <g fill="#ffe4e6" opacity=".34">
+        <polygon points="34,43 63,25 71,75 48,75" />
+        <polygon points="63,25 111,28 96,79 71,75" />
+        <polygon points="111,28 139,48 132,78 96,79" />
+        <polygon points="151,42 169,56 145,58" />
+      </g>
+      <circle cx="159" cy="56" r="2.6" fill="#fff1f2" />
+    </svg>
   )
 }
 
