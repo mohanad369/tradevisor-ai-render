@@ -11,6 +11,8 @@ export interface TradingAgentPipelineResult {
   finalRisk: Record<string, unknown>;
   /** The 8th agent — only present when the analyzed asset is gold. */
   goldStrategyAgent?: Record<string, unknown>;
+  /** The 10th agent — only present when the analyzed asset is gold. */
+  fractalAgent?: Record<string, unknown>;
   finalPlan: {
     action: string;
     confidence: string;
@@ -38,6 +40,42 @@ export interface GoldStrategyPayload {
   reasons: string[];
   invalidation: string;
   learning_notes: string[];
+}
+
+/** Reading from the Fractal Pattern Agent (10th agent).
+ *  Pre-fetched outside the pipeline because it needs an async data call. */
+export interface FractalPayload {
+  ok: boolean;
+  reason?: string;
+  byTimeframe: Array<{
+    timeframe: string;
+    candlesAnalyzed: number;
+    analogs: Array<{
+      endedAt: string;
+      ageDays: number;
+      distance: number;
+      forwardMovePercent: number;
+      forwardDirection: "up" | "down" | "flat";
+    }>;
+    upProbability: number;
+    avgForwardMove: number;
+    consistency: number;
+    lean: "bullish" | "bearish" | "mixed";
+  }>;
+  combined: {
+    lean: "bullish" | "bearish" | "mixed";
+    bullishScore: number;
+    bearishScore: number;
+    confidence: number;
+    expectedMovePercent: number;
+  };
+  seasonality: {
+    currentHourUTC: number;
+    sampleSize: number;
+    upRate: number;
+    avgHourlyMove: number;
+  };
+  reasons: string[];
 }
 
 /** Shape of items returned by the news router (api/lib/news.ts). */
@@ -104,6 +142,9 @@ interface PipelineInput {
    *  for gold; powers the 8th agent. Fetched outside the pipeline
    *  because the strategy needs an async data call. */
   goldStrategy?: GoldStrategyPayload | null;
+  /** Optional pre-fetched Fractal Pattern reading. Powers the 10th agent.
+   *  Gold-only; for other assets the agent stays absent. */
+  fractalReading?: FractalPayload | null;
 }
 
 export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipelineResult {
@@ -119,6 +160,10 @@ export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipel
   // provided. For any other asset it stays absent — zero effect.
   const goldStrategyAgent = goldStrategyAgentFn(input);
 
+  // ── 10th agent: Fractal Pattern Agent ──
+  // Also gold-only. Returns null for non-gold so it stays absent.
+  const fractalAgent = fractalPatternAgentFn(input);
+
   return {
     news,
     decision,
@@ -127,6 +172,7 @@ export function runTradingAgentPipeline(input: PipelineInput): TradingAgentPipel
     supervisor,
     finalRisk,
     ...(goldStrategyAgent ? { goldStrategyAgent } : {}),
+    ...(fractalAgent ? { fractalAgent } : {}),
     finalPlan: finalRisk.result as TradingAgentPipelineResult["finalPlan"],
   };
 }
@@ -190,6 +236,68 @@ function goldStrategyAgentFn(input: PipelineInput): Record<string, unknown> | nu
     confidenceScore: gs.confidence_score,
     agreementWithChart: agreement,
     invalidation: gs.invalidation,
+    reasons,
+  };
+}
+
+/**
+ * 10th agent — Fractal Pattern Agent.
+ *
+ * Surfaces the multi-timeframe analog pattern reading from
+ * api/lib/fractalPattern.ts. Gold-only; returns null for other assets
+ * so it simply doesn't appear. It NEVER overrides the other agents —
+ * it adds an independent, history-based perspective.
+ */
+function fractalPatternAgentFn(input: PipelineInput): Record<string, unknown> | null {
+  if (!isGoldAsset(input.assetName)) return null;
+
+  const fr = input.fractalReading;
+  if (!fr || !fr.ok) {
+    return {
+      agent: "fractal-pattern-agent",
+      generatedAt: new Date().toISOString(),
+      symbol: input.assetName,
+      status: "standby",
+      reasons: [fr?.reason || "Fractal pattern data was not available for this analysis."],
+    };
+  }
+
+  // Does the fractal lean agree with the chart analysis direction?
+  const chartSignal = input.analysis.signal; // BUY | SELL
+  const fractalDirection =
+    fr.combined.lean === "bullish" ? "BUY"
+    : fr.combined.lean === "bearish" ? "SELL"
+    : "MIXED";
+  const agreement =
+    fractalDirection === "MIXED" ? "neutral"
+    : fractalDirection === chartSignal ? "confirms"
+    : "conflicts";
+
+  const reasons = [
+    `Fractal lean: ${fr.combined.lean} (bull ${fr.combined.bullishScore}% / bear ${fr.combined.bearishScore}%, confidence ${fr.combined.confidence}%).`,
+    ...fr.reasons.slice(0, 4),
+  ];
+  if (agreement === "confirms") {
+    reasons.push("Historical analog patterns agree with the chart analysis.");
+  } else if (agreement === "conflicts") {
+    reasons.push("Historical analog patterns disagree with the chart — trade with caution.");
+  }
+
+  return {
+    agent: "fractal-pattern-agent",
+    generatedAt: new Date().toISOString(),
+    symbol: input.assetName,
+    status: "active",
+    timeframes: fr.byTimeframe.map((t) => ({
+      timeframe: t.timeframe,
+      upProbability: t.upProbability,
+      avgForwardMove: t.avgForwardMove,
+      lean: t.lean,
+      topAnalogs: t.analogs.slice(0, 3),
+    })),
+    combined: fr.combined,
+    seasonality: fr.seasonality,
+    agreementWithChart: agreement,
     reasons,
   };
 }

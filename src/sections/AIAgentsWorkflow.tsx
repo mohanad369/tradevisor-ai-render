@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Crosshair,
   Gauge,
+  GitFork,
   Network,
   Newspaper,
   Radar,
@@ -124,6 +125,18 @@ const agents = [
     color: "#a78bfa",
     position: "lg:col-start-3 lg:row-start-2",
   },
+  {
+    id: "10",
+    name: { en: "Fractal Pattern Agent", ar: "وكيل الأنماط الفركتلية" },
+    role: {
+      en: "Scans 180 days of gold history across 4 timeframes (1H, 4H, 1D, 1W) for analog patterns that match today's setup, and reports what happened after them.",
+      ar: "يفحص 180 يوماً من تاريخ الذهب عبر 4 فريمات (ساعة، 4 ساعات، يومي، أسبوعي) ليجد أنماطاً تاريخية مشابهة للوضع الحالي، ويقرأ ما حدث بعدها.",
+    },
+    status: { en: "Multi-timeframe analog finder", ar: "باحث الأنماط متعدد الفريمات" },
+    icon: GitFork,
+    color: "#06b6d4",
+    position: "lg:col-span-3 lg:row-start-4",
+  },
 ];
 
 const featureStrip = [
@@ -209,7 +222,7 @@ export default function AIAgentsWorkflow() {
               <AIHub />
             </div>
 
-            <div className="relative z-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[1fr_auto_1fr]">
+            <div className="relative z-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[1fr_auto_1fr_auto]">
               {coreAgents.map((agent, index) => (
                 <AgentCard key={agent.id} agent={agent} index={index} language={language} />
               ))}

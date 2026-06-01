@@ -10,6 +10,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { goldFlowRouter } from "./routers/goldFlow";
 import { jarvisRouter } from "./routers/jarvis";
 import { strategiesRouter } from "./routers/strategies";
+import { fractalRouter } from "./routers/fractal";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true })),
@@ -24,6 +25,7 @@ export const appRouter = createRouter({
   goldFlow: goldFlowRouter,
   jarvis: jarvisRouter,
   strategies: strategiesRouter,
+  fractal: fractalRouter,
 });
 
 export type AppRouter = typeof appRouter;

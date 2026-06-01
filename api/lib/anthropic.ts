@@ -379,6 +379,7 @@ Return EXACTLY this JSON shape:
       // agent appears in the scalping result too. Called directly —
       // this code already runs server-side.
       let goldStrategy = null;
+      let fractalReading = null;
       if (/xau|gold|ذهب/i.test(assetName)) {
         try {
           const { runGoldWeekly4hZones } = await import("./strategies/goldWeekly4h");
@@ -386,6 +387,13 @@ Return EXACTLY this JSON shape:
           goldStrategy = await runGoldWeekly4hZones(getStrategyWeights("gold_weekly_4h"));
         } catch (e) {
           console.error("[anthropic] gold strategy for scalping failed:", (e as Error)?.message);
+        }
+        // 10th agent — pre-fetch the multi-timeframe fractal pattern reading.
+        try {
+          const { getFractalReading } = await import("./fractalPattern");
+          fractalReading = await getFractalReading();
+        } catch (e) {
+          console.error("[anthropic] fractal reading for scalping failed:", (e as Error)?.message);
         }
       }
 
@@ -395,6 +403,7 @@ Return EXACTLY this JSON shape:
         strategyName: "AI Scalping",
         timeframe: frames[frames.length - 1]?.timeframe || "1m",
         goldStrategy,
+        fractalReading,
       });
     } catch (err) {
       console.error("[anthropic] multi-frame agent pipeline failed:", (err as Error)?.message);

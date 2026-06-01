@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { trpc } from "@/lib/trpc"
 import BullBearDebatePanel from "@/components/BullBearDebatePanel"
+import FractalPatternPanel from "@/components/FractalPatternPanel"
 
 /**
  * Multi-Timeframe Scalping Analyzer (VIP).
@@ -318,6 +319,11 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
             trading carries real risk. Always use proper risk management.
           </p>
         </motion.div>
+      )}
+
+      {/* 10th agent — Fractal Pattern (gold only). */}
+      {result && (result as any).agents?.fractalAgent && (
+        <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
       )}
 
       {/* 9th agent — Bull vs Bear Debate */}

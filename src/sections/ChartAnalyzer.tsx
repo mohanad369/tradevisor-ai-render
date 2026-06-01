@@ -13,6 +13,7 @@ import LivePriceTicker from "@/components/LivePriceTicker";
 import CryptoPaymentModal from "@/components/CryptoPaymentModal";
 import GoldFlowAgent from "@/components/GoldFlowAgent";
 import BullBearDebatePanel from "@/components/BullBearDebatePanel";
+import FractalPatternPanel from "@/components/FractalPatternPanel";
 import ScalpingAnalyzerTab from "@/components/ScalpingAnalyzerTab";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
@@ -645,6 +646,11 @@ export default function ChartAnalyzer() {
 
             {/* Gold Flow Agent — XAU/USD only, independent from the main analysis flow. */}
             <GoldFlowAgent assetName={selectedAsset.name} />
+
+            {/* 10th agent — Fractal Pattern. Reads agent output from result.agents.fractalAgent. */}
+            {result && (result as any).agents?.fractalAgent && (
+              <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
+            )}
 
             {/* 9th agent — Bull vs Bear Debate. Renders only when there's a result. */}
             {result && (

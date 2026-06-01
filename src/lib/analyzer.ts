@@ -322,6 +322,17 @@ async function getGoldStrategyPayload(assetName: string) {
   }
 }
 
+/** Fetch the multi-timeframe Fractal Pattern reading — gold only. */
+async function getFractalPayload(assetName: string) {
+  if (!/xau|gold|ذهب/i.test(assetName || "")) return null;
+  try {
+    return await trpcClient.fractal.forGold.query();
+  } catch (err) {
+    console.warn("[analyzer] fractal fetch failed:", err);
+    return null;
+  }
+}
+
 async function attachTradingAgents(
   result: AnalysisResult,
   assetName: string,
@@ -329,9 +340,12 @@ async function attachTradingAgents(
   timeframe: string,
   marketPrice?: number,
 ) {
-  const realNews = await getRealNewsPayload(assetName);
-  // For gold, also pull the Weekly 4H Zones strategy so the 8th agent runs.
-  const goldStrategy = await getGoldStrategyPayload(assetName);
+  // Fetch gold-specific data in parallel — both are heavy network calls.
+  const [realNews, goldStrategy, fractalReading] = await Promise.all([
+    getRealNewsPayload(assetName),
+    getGoldStrategyPayload(assetName),
+    getFractalPayload(assetName),
+  ]);
   result.agents = runTradingAgentPipeline({
     analysis: result,
     assetName,
@@ -340,6 +354,7 @@ async function attachTradingAgents(
     marketPrice,
     realNews,
     goldStrategy,
+    fractalReading,
   });
   return result;
 }
