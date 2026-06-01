@@ -48,8 +48,10 @@ type Zone = { low: number; high: number; mid: number };
 
 // Cache 4H readings briefly — 4H candles only change every 4 hours, and
 // the strategy is read often by the UI.
+// 30-minute cache — 4H bars only finalize every 4 hours, so anything
+// shorter is wasted Twelve Data quota for no fresher data.
 let cache: { result: StrategyModuleResult; at: number } | null = null;
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 30 * 60 * 1000;
 
 function n(v: string | number | undefined): number {
   const x = typeof v === "number" ? v : Number(v);

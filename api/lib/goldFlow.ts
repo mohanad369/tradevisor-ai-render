@@ -52,10 +52,11 @@ type TwelveTimeSeries = {
   code?: number;
 };
 
-// Short cache — the agent is read often by the UI; gold candles only
-// change every minute anyway.
+// Cache — the agent is read often by the UI. 5-minute candles update
+// at most every 5 minutes, so a 2-minute cache is a safe upper bound
+// that still keeps the reading fresh from the user's perspective.
 let cache: { reading: GoldFlowReading; at: number } | null = null;
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 120_000;
 
 function num(v: string | undefined, fallback = 0): number {
   const n = v ? Number(v) : NaN;
