@@ -275,21 +275,34 @@ export default function ChartAnalyzer() {
     let cancelled = false;
     setRealPrice(undefined);
 
-    if (selectedAsset.name === "XAU/USD (Gold)") {
-      getCachedPrice("XAU", 30000)
-        .then((p) => { if (!cancelled) setRealPrice(p.price); })
-        .catch(() => {
-          fetchMarketQuote("XAU/USD")
-            .then((quote) => { if (!cancelled) setRealPrice(quote?.price); })
-            .catch(() => { if (!cancelled) setRealPrice(undefined); });
-        });
-    } else {
-      fetchMarketQuote(getAssetMarketPair(selectedAsset))
-        .then((quote) => { if (!cancelled) setRealPrice(quote?.price); })
-        .catch(() => { if (!cancelled) setRealPrice(undefined); });
-    }
+    // Fetch the live price now AND every 60 seconds while the user is on
+    // this asset, so the analyzer doesn't reuse a stale quote captured
+    // when the page first loaded. (Previously this ran only on mount /
+    // asset change, which meant a user analyzing for 30 minutes was
+    // hitting the AI with a 30-minute-old price.)
+    const fetchPrice = () => {
+      if (selectedAsset.name === "XAU/USD (Gold)") {
+        getCachedPrice("XAU", 30000)
+          .then((p) => { if (!cancelled) setRealPrice(p.price); })
+          .catch(() => {
+            fetchMarketQuote("XAU/USD")
+              .then((quote) => { if (!cancelled && quote?.price) setRealPrice(quote.price); })
+              .catch(() => { /* keep last good price */ });
+          });
+      } else {
+        fetchMarketQuote(getAssetMarketPair(selectedAsset))
+          .then((quote) => { if (!cancelled && quote?.price) setRealPrice(quote.price); })
+          .catch(() => { /* keep last good price */ });
+      }
+    };
 
-    return () => { cancelled = true; };
+    fetchPrice();
+    const intervalId = setInterval(fetchPrice, 60_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, [selectedAsset.name]);
 
   const handleAnalyze = async () => {
@@ -346,28 +359,33 @@ export default function ChartAnalyzer() {
     setResult(null);
     setIsAnalyzing(true);
     try {
-      // Priority: 1) Manual price input, 2) API price, 3) Asset base price
+      // Priority: 1) Manual price input, 2) Fresh live price, 3) Cached price, 4) Asset base.
       let priceBase: number | undefined;
 
-      // Check if user entered a manual price
+      // (1) Manual override always wins — the user typed it on purpose.
       const manual = parseFloat(manualPrice);
       if (!isNaN(manual) && manual > 0) {
         priceBase = manual;
-      } else if (realPrice && realPrice > 0) {
-        priceBase = realPrice;
-      }
-
-      // Try to get a fresh real price for any supported asset before analysis.
-      if (!priceBase) {
+      } else {
+        // (2) Even if we have a cached `realPrice`, try to fetch a FRESH one
+        // right before the AI call. The cached value may be 30+ minutes old
+        // if the user has been on this page a while. If the fresh fetch
+        // fails, we fall back to the cached value (no regression).
         try {
           const quote = await fetchMarketQuote(getAssetMarketPair(selectedAsset));
-          if (quote?.price) {
+          if (quote?.price && quote.price > 0) {
             priceBase = quote.price;
             setRealPrice(quote.price);
           }
-        } catch { /* analysis can still use chart structure without a live price */ }
+        } catch { /* fall through to cached / fallback below */ }
+
+        // (3) If the fresh fetch didn't return anything, use the cached price.
+        if (!priceBase && realPrice && realPrice > 0) {
+          priceBase = realPrice;
+        }
       }
 
+      // (4) Last resort for gold — try the dedicated metals endpoint.
       if (selectedAsset.name === "XAU/USD (Gold)" && !priceBase) {
         try {
           const metals = await getMetalsPrices();
