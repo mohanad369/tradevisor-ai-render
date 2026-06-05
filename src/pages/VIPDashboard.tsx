@@ -751,23 +751,51 @@ function AIAnalyzerTab({ beforeAnalyze, onAnalysisComplete, accessBadge }: VIPAn
 
   const assetDecimals = getDefaultDecimals(selectedAsset)
 
+  const fetchLatestPrice = async (asset: Asset): Promise<number | undefined> => {
+    if (asset.name === "XAU/USD (Gold)") {
+      try {
+        const quote = await fetchMarketQuote("XAU/USD")
+        if (quote?.price && quote.price > 0) return quote.price
+      } catch { /* try metals fallback */ }
+
+      try {
+        const metals = await getMetalsPrices()
+        if (metals.USDXAU && metals.USDXAU > 0) return metals.USDXAU
+      } catch { /* try cached fallback */ }
+
+      try {
+        const cached = await getCachedPrice("XAU", 30000)
+        if (cached.price && cached.price > 0) return cached.price
+      } catch { /* no live price available */ }
+
+      return undefined
+    }
+
+    try {
+      const quote = await fetchMarketQuote(getAssetMarketPair(asset))
+      if (quote?.price && quote.price > 0) return quote.price
+    } catch { /* no live price available */ }
+
+    return undefined
+  }
+
   useEffect(() => {
     let cancelled = false
-    setRealPrice(undefined)
-    if (selectedAsset.name === "XAU/USD (Gold)") {
-      getCachedPrice("XAU", 30000)
-        .then(p => { if (!cancelled) setRealPrice(p.price) })
-        .catch(() => {
-          fetchMarketQuote("XAU/USD")
-            .then(quote => { if (!cancelled) setRealPrice(quote?.price) })
-            .catch(() => { if (!cancelled) setRealPrice(undefined) })
-        })
-    } else {
-      fetchMarketQuote(getAssetMarketPair(selectedAsset))
-        .then(quote => { if (!cancelled) setRealPrice(quote?.price) })
-        .catch(() => { if (!cancelled) setRealPrice(undefined) })
+    let timer: ReturnType<typeof setInterval> | undefined
+
+    const refreshPrice = async () => {
+      const fresh = await fetchLatestPrice(selectedAsset)
+      if (!cancelled) setRealPrice(fresh)
     }
-    return () => { cancelled = true }
+
+    setRealPrice(undefined)
+    refreshPrice()
+    timer = setInterval(refreshPrice, 60000)
+
+    return () => {
+      cancelled = true
+      if (timer) clearInterval(timer)
+    }
   }, [selectedAsset.name])
 
   const handleAnalyze = async () => {
@@ -781,31 +809,18 @@ function AIAnalyzerTab({ beforeAnalyze, onAnalysisComplete, accessBadge }: VIPAn
     try {
       let priceBase: number | undefined
       const manual = parseFloat(manualPrice)
-      if (!isNaN(manual) && manual > 0) priceBase = manual
-      else if (realPrice && realPrice > 0) priceBase = realPrice
-
-      if (!priceBase) {
+      if (!isNaN(manual) && manual > 0) {
+        priceBase = manual
+      } else {
         try {
-          const quote = await fetchMarketQuote(getAssetMarketPair(selectedAsset))
-          if (quote?.price) {
-            priceBase = quote.price
-            setRealPrice(quote.price)
+          const freshPrice = await fetchLatestPrice(selectedAsset)
+          if (freshPrice && freshPrice > 0) {
+            priceBase = freshPrice
+            setRealPrice(freshPrice)
           }
         } catch { /* analysis can still use chart structure without a live price */ }
-      }
 
-      if (selectedAsset.name === "XAU/USD (Gold)" && !priceBase) {
-        try {
-          const metals = await getMetalsPrices()
-          priceBase = metals.USDXAU
-          setRealPrice(metals.USDXAU)
-        } catch {
-          try {
-            const fresh = await getCachedPrice("XAU", 30000)
-            priceBase = fresh.price
-            setRealPrice(fresh.price)
-          } catch { /* fallback */ }
-        }
+        if (!priceBase && realPrice && realPrice > 0) priceBase = realPrice
       }
 
       const data = await analyzeChartClientSide(uploadedImage, selectedAsset.name, selectedStrategy.name, selectedTimeframe, priceBase)
