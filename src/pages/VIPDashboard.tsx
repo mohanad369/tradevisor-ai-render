@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, type ReactNode } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Lock, Key, AlertTriangle, Crown, ArrowRight, LogOut,
@@ -395,6 +395,91 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
     localStorage.getItem("tradevisor_dev_mode") === "true" &&
     localStorage.getItem("tradevisor_current_user_email") === "developer@tradevisor.ai" &&
     Boolean(localStorage.getItem("tradevisor_session_token"))
+  const dailyQuota = trpc.dashboard.dailyQuota.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: 30000,
+  })
+  const consumeDaily = trpc.dashboard.consumeDaily.useMutation()
+
+  const quotaSnapshot = dailyQuota.data
+  const hasSubscriberQuota = Boolean(quotaSnapshot?.loggedIn && quotaSnapshot.isSubscriber)
+  const quotaRemaining = hasSubscriberQuota ? quotaSnapshot.remaining : 0
+  const quotaLimit = hasSubscriberQuota ? quotaSnapshot.limit : 0
+
+  const quotaBadge = (
+    <div className="mb-4 rounded-xl border border-[#1f1f1f] bg-[#0d0d0d] px-3 py-2.5 sm:px-4 sm:py-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-xs font-semibold text-[#d4a843]">
+          <Shield size={14} />
+          <span>
+            {isDeveloperMode
+              ? language === "ar" ? "تحليلات غير محدودة للمطور" : "Developer unlimited analyses"
+              : dailyQuota.isLoading
+                ? language === "ar" ? "جاري مزامنة رصيد التحليلات..." : "Syncing analysis quota..."
+                : hasSubscriberQuota
+                  ? language === "ar"
+                    ? `باقي ${quotaRemaining} من ${quotaLimit} تحليلات اليوم`
+                    : `${quotaRemaining} of ${quotaLimit} analyses left today`
+                  : language === "ar" ? "يتم التحقق من اشتراك VIP" : "Checking VIP quota"}
+          </span>
+        </div>
+        {!isDeveloperMode && hasSubscriberQuota && (
+          <span className="text-[10px] text-[#777777]">
+            {language === "ar" ? "نفس الرصيد يعمل في التحليل العادي والسكالبينغ" : "Shared across normal and scalping analysis"}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+
+  const ensureVipAnalysisAccess = async () => {
+    if (isDeveloperMode) return true
+    try {
+      const latest = await dailyQuota.refetch()
+      const quota = latest.data
+      if (!quota?.loggedIn || !quota.isSubscriber) {
+        toast.addToast(
+          language === "ar" ? "لم يتم العثور على اشتراك VIP فعال لهذا الحساب." : "No active VIP subscription was found for this account.",
+          "error"
+        )
+        return false
+      }
+      if (quota.remaining <= 0) {
+        toast.addToast(
+          language === "ar" ? "خلصت تحليلاتك اليومية. جرّب مرة ثانية بعد تجدد الرصيد." : "Your daily analyses are finished. Try again after the quota resets.",
+          "warning"
+        )
+        return false
+      }
+      return true
+    } catch {
+      toast.addToast(
+        language === "ar" ? "تعذر التحقق من رصيد التحليلات الآن." : "Could not verify your analysis quota right now.",
+        "error"
+      )
+      return false
+    }
+  }
+
+  const recordVipAnalysis = async () => {
+    if (isDeveloperMode) return
+    try {
+      const consumed = await consumeDaily.mutateAsync({})
+      await dailyQuota.refetch()
+      if (!consumed.allowed) {
+        toast.addToast(
+          language === "ar" ? "تم التحليل، لكن رصيدك اليومي انتهى الآن." : "Analysis completed, but your daily quota is now finished.",
+          "warning"
+        )
+      }
+    } catch {
+      toast.addToast(
+        language === "ar" ? "تم التحليل، لكن لم نتمكن من مزامنة عداد التحليلات." : "Analysis completed, but quota sync failed.",
+        "warning"
+      )
+    }
+  }
 
   const logoutMutation = trpc.vip.logout.useMutation({
     onSuccess: () => { /* silently kill session */ },
@@ -527,8 +612,8 @@ function VIPDashboardFull({ email, code, initialSubscriber }: { email: string; c
       <main className="max-w-[1400px] mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-            {activeTab === "analyzer" && <AIAnalyzerTab />}
-            {activeTab === "scalping" && <ScalpingAnalyzerTab />}
+            {activeTab === "analyzer" && <AIAnalyzerTab beforeAnalyze={ensureVipAnalysisAccess} onAnalysisComplete={recordVipAnalysis} accessBadge={quotaBadge} />}
+            {activeTab === "scalping" && <ScalpingAnalyzerTab beforeAnalyze={ensureVipAnalysisAccess} onAnalysisComplete={recordVipAnalysis} accessBadge={quotaBadge} />}
             {activeTab === "goldStrategy" && <GoldStrategyTab />}
             {activeTab === "agents" && <AIAgentsWorkflow />}
             {activeTab === "bankZero" && <BankZeroStrategyTab />}
@@ -574,6 +659,12 @@ interface SavedTrade {
   confidence: number
   result: "win" | "loss" | null
   timestamp: string
+}
+
+type VIPAnalysisQuotaProps = {
+  beforeAnalyze?: () => Promise<boolean> | boolean
+  onAnalysisComplete?: (result: AnalysisResult, assetName: string) => void | Promise<void>
+  accessBadge?: ReactNode
 }
 
 function saveTrade(trade: SavedTrade) {
@@ -644,7 +735,7 @@ function BankZeroStrategyTab() {
   )
 }
 
-function AIAnalyzerTab() {
+function AIAnalyzerTab({ beforeAnalyze, onAnalysisComplete, accessBadge }: VIPAnalysisQuotaProps = {}) {
   const toast = useToast()
   const { language } = useLanguage()
   const vt = (text: string) => vipText(language, text)
@@ -681,6 +772,10 @@ function AIAnalyzerTab() {
 
   const handleAnalyze = async () => {
     if (!uploadedImage) return
+    if (beforeAnalyze) {
+      const allowed = await beforeAnalyze()
+      if (!allowed) return
+    }
     setResult(null)
     setIsAnalyzing(true)
     try {
@@ -716,6 +811,7 @@ function AIAnalyzerTab() {
       const data = await analyzeChartClientSide(uploadedImage, selectedAsset.name, selectedStrategy.name, selectedTimeframe, priceBase)
       setResult(data)
       toast.addToast(`${data.signal} signal detected! ${data.confidence}% confidence.`, "success")
+      await onAnalysisComplete?.(data, selectedAsset.name)
     } catch (error: any) {
       toast.addToast(`Analysis failed: ${error.message || "Error"}`, "error")
     } finally {
@@ -749,6 +845,7 @@ function AIAnalyzerTab() {
         <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 mb-1"><Brain size={16} className="text-[#d4a843] sm:hidden" /><Brain size={18} className="text-[#d4a843] hidden sm:block" /> {vt("AI Chart Analyzer")}</h2>
         <p className="text-[11px] sm:text-xs text-[#666666]">{vt("Upload any chart. AI detects Entry, SL, and TP automatically.")}</p>
       </div>
+      {accessBadge}
 
       {/* Controls */}
       <div className="relative z-40 overflow-visible bg-[#0d0d0d] border border-[#1f1f1f] rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6">
@@ -2003,5 +2100,3 @@ function VIP2GoldChartAITab() {
     </div>
   )
 }
-
-
