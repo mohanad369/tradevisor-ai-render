@@ -23,7 +23,7 @@ function isTwoWeekPlan(planName: string, amount = ""): boolean {
 function planToCodeType(planName: string, amount = ""): "monthly" | "yearly" {
   const plan = planName.toLowerCase();
   const numericAmount = Number.parseFloat(amount.replace(/[^\d.]/g, ""));
-  return plan.includes("year") || plan.includes("annual") || numericAmount === 669
+  return plan.includes("year") || plan.includes("annual") || numericAmount === 1000 || numericAmount === 669
     ? "yearly"
     : "monthly";
 }

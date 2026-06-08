@@ -13,7 +13,7 @@ interface Props {
   yearlyAmount?: string
 }
 
-export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, yearlyAmount = "669" }: Props) {
+export default function CryptoPaymentModal({ isOpen, onClose, planName, amount, yearlyAmount = "1000" }: Props) {
   const isTwoWeekAccess = Number.parseFloat(amount) === 33
   const [step, setStep] = useState<"select" | "wallet" | "upload" | "pending" | "success" | "error">("select")
   const [selectedAmount, setSelectedAmount] = useState(amount)

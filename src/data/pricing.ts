@@ -27,10 +27,10 @@ export const pricingPlans: PricingPlan[] = [
   },
   {
     name: { en: "TradeVisor Monthly", ar: "تريدفايزر شهري" },
-    originalPrice: "$99",
-    salePrice: "$69",
-    discount: "30% OFF",
-    period: { en: "Monthly subscription - Cancel anytime", ar: "اشتراك شهري - إلغاء في أي وقت" },
+    originalPrice: "$100",
+    salePrice: "$100",
+    discount: "MONTHLY ACCESS",
+    period: { en: "Monthly subscription - 5 analyses per day", ar: "اشتراك شهري - 5 تحليلات يومياً" },
     features: [
       { en: "AI-powered BUY & SELL signals", ar: "إشارات شراء وبيع بالذكاء الاصطناعي" },
       { en: "Advanced AI-powered market analysis", ar: "تحليل سوق متقدم بالذكاء الاصطناعي" },
@@ -45,10 +45,10 @@ export const pricingPlans: PricingPlan[] = [
   },
   {
     name: { en: "TradeVisor Yearly", ar: "تريدفايزر سنوي" },
-    originalPrice: "$1,200",
-    salePrice: "$669",
-    discount: "44% OFF",
-    period: { en: "Yearly subscription - Save $531", ar: "اشتراك سنوي - وفر $531" },
+    originalPrice: "$1,000",
+    salePrice: "$1,000",
+    discount: "YEARLY ACCESS",
+    period: { en: "Yearly subscription - 5 analyses per day", ar: "اشتراك سنوي - 5 تحليلات يومياً" },
     features: [
       { en: "AI-powered BUY & SELL signals", ar: "إشارات شراء وبيع بالذكاء الاصطناعي" },
       { en: "Advanced AI-powered market analysis", ar: "تحليل سوق متقدم بالذكاء الاصطناعي" },

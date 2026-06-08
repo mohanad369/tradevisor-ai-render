@@ -86,7 +86,7 @@ export default function PartnerTab() {
       invitedEmail,
       invitedName: invitedName || undefined,
       txId,
-      amount: "$69",
+      amount: "$100",
       status: "PENDING",
       submittedAt: new Date().toISOString(),
       rewardGranted: false,
@@ -111,7 +111,7 @@ export default function PartnerTab() {
     formData.append("invited_email", invitedEmail)
     formData.append("invited_name", invitedName || "")
     formData.append("txid", txId)
-    formData.append("amount", "$69")
+    formData.append("amount", "$100")
     formData.append("date", new Date().toLocaleString())
     formData.append("action", "REVIEW and APPROVE this referral — grant 1 free month to referrer")
 

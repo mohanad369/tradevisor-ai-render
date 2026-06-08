@@ -277,7 +277,7 @@ function VIPDashboardInner() {
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
           planName="TradeVisor VIP Monthly"
-          amount="69"
+          amount="100"
         />
       </motion.div>
     </div>

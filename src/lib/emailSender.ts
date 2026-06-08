@@ -126,7 +126,7 @@ export async function notifyAdminOfPayment(orderId: string, email: string, plan:
   const isYearly = plan.toLowerCase().includes('year') || plan.toLowerCase().includes('annual')
   const isMonthly = !isYearly
   const planType = isYearly ? 'YEARLY' : 'MONTHLY'
-  const planPrice = isYearly ? '$669' : '$69'
+  const planPrice = isYearly ? '$1000' : '$100'
   const planDuration = isYearly ? '12 months' : '1 month'
 
   const subject = `NEW VIP ${planType} PAYMENT - ${orderId}`

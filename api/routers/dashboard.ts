@@ -593,7 +593,7 @@ export const dashboardRouter = createRouter({
   }),
 
   // ─── Subscriber daily analysis quota ───
-  // Monthly plan → 10/day, Yearly → 20/day, $33 two-week access → 5/day.
+  // Monthly and yearly plans → 5/day, $33 two-week access → 5/day.
   dailyQuota: publicQuery.query(async ({ ctx }) => {
     const user = await resolveUser(ctx.req);
     if (!user) return { loggedIn: false as const };
@@ -657,10 +657,10 @@ export const dashboardRouter = createRouter({
 
 /**
  * Resolve a user's daily analysis limit from their active VIP plan.
- *   - yearly plan  → 20/day
+ *   - yearly plan  → 5/day
  *   - $33 / two-week access → 5/day
  *   - legacy $25 / 3-day trial → 3/day
- *   - monthly plan → 10/day
+ *   - monthly plan → 5/day
  *   - no active VIP → 0 (handled by the free-trial system instead)
  *
  * Keyword matching keeps this robust no matter how the plan is labelled.
@@ -685,9 +685,9 @@ async function dailyLimitForUser(email: string): Promise<number> {
     return 3;
   }
   // Yearly
-  if (plan.includes("year") || plan.includes("annual")) return 20;
+  if (plan.includes("year") || plan.includes("annual")) return 5;
   // Default: monthly
-  return 10;
+  return 5;
 }
 
 async function readDailyUsage(userId: string, day: string): Promise<number> {
