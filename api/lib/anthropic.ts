@@ -111,6 +111,8 @@ async function callClaudeVision(
   const mediaType = detectMediaType(base64Image);
   const asset = getAssetProfile(assetName);
 
+  const isGoldScalp = /xau|gold|ذهب/i.test(assetName) && /scalp/i.test(strategyName);
+
   const system = `You are a professional trading chart analyst. You will receive a candlestick chart image and must produce a complete trading plan as STRICT JSON only — no prose, no markdown, no explanation outside the JSON.
 
 Rules:
@@ -122,7 +124,12 @@ Rules:
 - TP1 < TP2 < TP3 for BUY; TP1 > TP2 > TP3 for SELL (in absolute distance from entry).
 - "reasons" is an array of 3-5 short bullet strings citing what you actually see on the chart.
 - "candlePatterns" lists 1-2 patterns you actually identify, with reliability "High" or "Medium".
-- "confluenceScore" is an integer 60-98.`;
+- "confluenceScore" is an integer 60-98.${isGoldScalp ? `
+- ⚠️ MINIMUM STOP FOR GOLD SCALPING: Gold moves fast — a tight $3-$5 stop
+  gets hit by normal noise before reaching the target. The stop loss MUST
+  be at least 10.00 USD away from the entry. If structure only justifies
+  a tighter stop, lower confidence below 70 and still use the 10-USD
+  minimum, or note the trade is too risky in reasons.` : ""}`;
 
   const user = `Analyze this ${assetName} chart on the ${timeframe} timeframe using a ${strategyName} approach.
 
@@ -257,6 +264,14 @@ Rules:
 - Round prices to ${asset.decimals} decimals.
 - Stop loss on the opposite side of entry from the take-profits.
 - For BUY: TP1<TP2<TP3. For SELL: TP1>TP2>TP3 (distance from entry).
+- ⚠️ MINIMUM STOP DISTANCE — CRITICAL FOR ${assetName}:
+  Gold (XAU/USD) moves fast. A tight stop ($3-$5) almost always gets
+  stopped out by normal noise BEFORE price reaches the target. For
+  ${assetName} on any scalping timeframe, the stop loss MUST be at
+  least 10.00 USD away from the entry — never less. If the structure
+  you see only justifies a tighter stop, lower the confidence below
+  70 and still use a 10-USD minimum stop, OR choose not to take the
+  trade (note this in reasons).
 - "timeframeBias" describes what EACH timeframe shows.
 - "reasons" cites what you actually see across the frames.`;
 
@@ -329,6 +344,44 @@ Return EXACTLY this JSON shape:
     }
     if (parsed.signal !== "BUY" && parsed.signal !== "SELL") return null;
     if (typeof parsed.entry !== "number" || typeof parsed.stopLoss !== "number") return null;
+
+    // ── MINIMUM STOP DISTANCE SAFEGUARD ──
+    // Gold (XAU/USD) moves too fast for tight scalping stops. Despite the
+    // prompt instructing Claude to use at least $10, AI sometimes still
+    // returns $3-$5 stops that get hit by normal noise. This hard floor
+    // guarantees the stop is at least the minimum, and proportionally
+    // widens the take-profits so the R:R ratios Claude produced remain
+    // intact (a 1:2 trade stays 1:2, just at larger absolute distances).
+    const isGold = /xau|gold|ذهب/i.test(assetName);
+    const minStopDistance = isGold ? 10.0 : 0;
+
+    if (minStopDistance > 0) {
+      const aiRisk = Math.abs(parsed.entry - parsed.stopLoss);
+      if (aiRisk > 0 && aiRisk < minStopDistance) {
+        const scale = minStopDistance / aiRisk;
+        const isBuy = parsed.signal === "BUY";
+
+        // Widen the stop to the minimum, on the correct side of entry.
+        const oldStop = parsed.stopLoss;
+        parsed.stopLoss = isBuy
+          ? parsed.entry - minStopDistance
+          : parsed.entry + minStopDistance;
+
+        // Scale each take-profit so the R:R ratios stay the same.
+        for (const k of ["takeProfit1", "takeProfit2", "takeProfit3"] as const) {
+          if (typeof parsed[k] === "number") {
+            const reward = parsed[k] - parsed.entry; // signed
+            parsed[k] = parsed.entry + reward * scale;
+          }
+        }
+
+        console.warn(
+          `[anthropic] multi-frame: AI gave a $${aiRisk.toFixed(2)} stop on ${assetName} ` +
+          `(too tight). Widened to $${minStopDistance.toFixed(2)} minimum and scaled TPs ` +
+          `to preserve R:R. Old stop: ${oldStop}, new: ${parsed.stopLoss.toFixed(2)}.`,
+        );
+      }
+    }
 
     // Shape the result like analyzeChartWithAI so the UI/pipeline is unchanged.
     const strategy = getStrategyProfile("Scalping");
@@ -433,6 +486,32 @@ export async function analyzeChartWithAI(
   const real = await callClaudeVision(base64Image, assetName, strategyName, timeframe);
 
   if (real) {
+    // ── MINIMUM STOP DISTANCE SAFEGUARD (same rule as multi-frame) ──
+    // For gold scalping, AI sometimes returns a $3-$5 stop that gets
+    // hit by normal noise. Enforce a hard floor of $10 and scale the
+    // TPs proportionally so R:R ratios stay intact.
+    const isGoldScalp = /xau|gold|ذهب/i.test(assetName) && /scalp/i.test(strategyName);
+    if (isGoldScalp) {
+      const aiRisk = Math.abs(real.entry - real.stopLoss);
+      const MIN = 10.0;
+      if (aiRisk > 0 && aiRisk < MIN) {
+        const scale = MIN / aiRisk;
+        const isBuy = real.signal === "BUY";
+        const oldStop = real.stopLoss;
+        real.stopLoss = isBuy ? real.entry - MIN : real.entry + MIN;
+        for (const k of ["takeProfit1", "takeProfit2", "takeProfit3"] as const) {
+          if (typeof (real as any)[k] === "number") {
+            const reward = (real as any)[k] - real.entry;
+            (real as any)[k] = real.entry + reward * scale;
+          }
+        }
+        console.warn(
+          `[anthropic] single-frame: AI gave a $${aiRisk.toFixed(2)} stop on gold scalp ` +
+          `(too tight). Widened to $${MIN.toFixed(2)} and scaled TPs. Old: ${oldStop}, new: ${real.stopLoss.toFixed(2)}.`,
+        );
+      }
+    }
+
     const riskAmount = Math.abs(real.entry - real.stopLoss);
     const rr1 = riskAmount > 0 ? (Math.abs(real.takeProfit1 - real.entry) / riskAmount).toFixed(1) : "1.5";
     const rr2 = riskAmount > 0 ? (Math.abs(real.takeProfit2 - real.entry) / riskAmount).toFixed(1) : "2.5";
