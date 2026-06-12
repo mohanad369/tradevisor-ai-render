@@ -17,10 +17,11 @@ import Privacy from './pages/Privacy.tsx'
 import CandlePredictor from './pages/CandlePredictor.tsx'
 import VIPDashboard from './pages/VIPDashboard.tsx'
 import Account from './pages/Account.tsx'
+import ForgotPassword from './pages/ForgotPassword.tsx'
 import TraderDashboard from './pages/TraderDashboard.tsx'
 import VisitTracker from './components/VisitTracker.tsx'
 
-const cleanPathRoutes = new Set(['/admin', '/developer', '/login', '/privacy', '/candles', '/vip', '/account', '/dashboard'])
+const cleanPathRoutes = new Set(['/admin', '/developer', '/login', '/privacy', '/candles', '/vip', '/account', '/forgot-password', '/dashboard'])
 const currentPath = window.location.pathname.replace(/\/$/, '') || '/'
 
 if (cleanPathRoutes.has(currentPath) && !window.location.hash) {
@@ -36,6 +37,7 @@ const router = createHashRouter([
   { path: '/candles', element: <CandlePredictor /> },
   { path: '/vip', element: <VIPDashboard /> },
   { path: '/account', element: <Account /> },
+  { path: '/forgot-password', element: <ForgotPassword /> },
   { path: '/dashboard', element: <TraderDashboard /> },
 ])
 

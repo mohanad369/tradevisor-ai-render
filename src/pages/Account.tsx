@@ -431,6 +431,18 @@ export default function Account() {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {/* "Forgot password?" link — only shown in login mode. */}
+              {mode === "login" && (
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/forgot-password")}
+                    className="text-xs text-[#d4a843] hover:text-[#e8c76a] transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
             </div>
 
             {error && (

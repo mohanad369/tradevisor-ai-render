@@ -138,6 +138,60 @@ export async function sendOtpEmail(to: string, code: string): Promise<EmailResul
   return { sent: true };
 }
 
+/**
+ * Send a password-reset OTP email. Same structure as sendOtpEmail but
+ * with copy that makes the purpose explicit so users don't confuse it
+ * with a signup verification email.
+ */
+export async function sendPasswordResetEmail(to: string, code: string): Promise<EmailResult> {
+  if (!isSmtpConfigured()) {
+    console.warn("[Email] SMTP is not configured; password-reset email was skipped");
+    return { sent: false, reason: "SMTP is not configured" };
+  }
+
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure = (process.env.SMTP_SECURE || "").toLowerCase() === "true" || port === 465;
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM,
+    to,
+    subject: "Reset your TradeVisor password",
+    text: [
+      "We received a request to reset your TradeVisor password.",
+      "",
+      `Your reset code is: ${code}`,
+      "",
+      "This code expires in 10 minutes.",
+      "If you didn't request a password reset, you can safely ignore this email — your password will stay the same.",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;background:#080808;color:#f7f7f7;padding:24px">
+        <div style="max-width:520px;margin:auto;border:1px solid #2d2412;border-radius:12px;padding:24px;background:#101010">
+          <h1 style="margin:0 0 12px;color:#e5b93d">TradeVisor</h1>
+          <p style="margin:0 0 18px;color:#d8d8d8">We received a request to reset your password. Use the code below to set a new one.</p>
+          <div style="font-size:32px;letter-spacing:8px;font-weight:700;background:#171717;border:1px solid #3a2e12;border-radius:10px;padding:18px;text-align:center;color:#f5c542">
+            ${escapeHtml(code)}
+          </div>
+          <p style="margin:18px 0 0;color:#9a9a9a;font-size:13px">This code expires in 10 minutes.</p>
+          <p style="margin:6px 0 0;color:#9a9a9a;font-size:13px">If you didn't request this, ignore the email — your password won't change.</p>
+        </div>
+      </div>
+    `,
+  });
+
+  return { sent: true };
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")

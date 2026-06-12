@@ -264,3 +264,16 @@ export const aiAnalyses = sqliteTable("ai_analyses", {
   outcome: text("outcome").default(""),             // "" | "WIN" | "LOSS" | "BE"
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+// ─── Password resets (forgot-password flow) ───
+// One row per pending reset request. Inserted by auth.forgotPassword,
+// consumed by auth.resetPasswordWithOtp. OTP is stored hashed, never
+// in plain text. A short attempts counter blocks brute force.
+export const passwordResets = sqliteTable("password_resets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  email: text("email").notNull().unique(),
+  otpHash: text("otp_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});

@@ -2,10 +2,10 @@ import { z } from "zod";
 import { and, eq, desc, sql } from "drizzle-orm";
 import { randomBytes, randomInt, createHash } from "node:crypto";
 import { db } from "../../db/db";
-import { users, userSessions, vipSubscribers, visitStats, pendingSignups } from "../../db/schema";
+import { users, userSessions, vipSubscribers, visitStats, pendingSignups, passwordResets } from "../../db/schema";
 import { createRouter, publicQuery, adminQuery } from "../middleware";
 import { hashPassword, verifyPassword, isAcceptablePassword } from "../lib/password";
-import { sendOtpEmail, isSmtpConfigured } from "../lib/email";
+import { sendOtpEmail, sendPasswordResetEmail, isSmtpConfigured } from "../lib/email";
 
 const SESSION_DAYS = 30;
 const OTP_TTL_MINUTES = 10;
@@ -371,6 +371,127 @@ export const authRouter = createRouter({
         .where(eq(userSessions.sessionToken, resolved.session.sessionToken));
 
       return { success: true };
+    }),
+
+  // ─── Forgot password — step 1: send OTP to email ───
+  // Generates a 6-digit code, stores its hash in password_resets, and
+  // emails the plain code to the user. For privacy, the response is the
+  // SAME whether or not the email is registered — this prevents an
+  // attacker from probing which emails have accounts.
+  forgotPassword: publicQuery
+    .input(z.object({
+      email: z.string().email().max(120),
+    }))
+    .mutation(async ({ input }) => {
+      const email = input.email.trim().toLowerCase();
+
+      // Always return the same response, even if the account doesn't
+      // exist. This is privacy by design.
+      const genericResponse = {
+        success: true as const,
+        message: "If an account exists for this email, a reset code has been sent.",
+      };
+
+      try {
+        const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+        if (!user) {
+          // Don't reveal that the email isn't registered.
+          return genericResponse;
+        }
+
+        if (!isSmtpConfigured()) {
+          console.warn("[Auth] forgotPassword: SMTP is not configured");
+          return genericResponse;
+        }
+
+        const otp = generateOtp();
+        const otpHash = sha(otp);
+        const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+
+        // Upsert: any previous pending reset for this email gets replaced.
+        const existing = await db.select().from(passwordResets).where(eq(passwordResets.email, email)).limit(1);
+        if (existing.length > 0) {
+          await db.update(passwordResets)
+            .set({ otpHash, attempts: 0, expiresAt })
+            .where(eq(passwordResets.email, email));
+        } else {
+          await db.insert(passwordResets).values({
+            email,
+            otpHash,
+            attempts: 0,
+            expiresAt,
+          });
+        }
+
+        await sendPasswordResetEmail(email, otp).catch((err) => {
+          console.error("[Auth] forgotPassword: email send failed:", err?.message);
+        });
+
+        return genericResponse;
+      } catch (err) {
+        console.error("[Auth] forgotPassword failed:", (err as Error)?.message);
+        // Still return the generic response so attackers learn nothing.
+        return genericResponse;
+      }
+    }),
+
+  // ─── Forgot password — step 2: verify OTP + set new password ───
+  resetPasswordWithOtp: publicQuery
+    .input(z.object({
+      email: z.string().email().max(120),
+      otp: z.string().min(4).max(10),
+      newPassword: z.string().min(1).max(200),
+    }))
+    .mutation(async ({ input }) => {
+      const email = input.email.trim().toLowerCase();
+
+      const policy = isAcceptablePassword(input.newPassword);
+      if (!policy.ok) return { success: false as const, error: policy.reason };
+
+      const [reset] = await db.select().from(passwordResets).where(eq(passwordResets.email, email)).limit(1);
+      if (!reset) {
+        return { success: false as const, error: "No active reset request. Please request a new code." };
+      }
+
+      if (reset.expiresAt.getTime() < Date.now()) {
+        await db.delete(passwordResets).where(eq(passwordResets.email, email));
+        return { success: false as const, error: "Reset code expired. Please request a new one." };
+      }
+
+      if (reset.attempts >= OTP_MAX_ATTEMPTS) {
+        await db.delete(passwordResets).where(eq(passwordResets.email, email));
+        return { success: false as const, error: "Too many attempts. Please request a new code." };
+      }
+
+      if (sha(input.otp.trim()) !== reset.otpHash) {
+        await db.update(passwordResets)
+          .set({ attempts: reset.attempts + 1 })
+          .where(eq(passwordResets.email, email));
+        return { success: false as const, error: "Incorrect code. Please try again." };
+      }
+
+      // Code verified. Update the password and clear the reset row.
+      const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      if (!user) {
+        // Should not happen — the account existed when the OTP was sent —
+        // but handle it defensively.
+        await db.delete(passwordResets).where(eq(passwordResets.email, email));
+        return { success: false as const, error: "Account not found." };
+      }
+
+      await db.update(users)
+        .set({ passwordHash: hashPassword(input.newPassword) })
+        .where(eq(users.userId, user.userId));
+
+      // Invalidate ALL existing sessions for safety — the user must log in
+      // again with the new password on every device.
+      await db.update(userSessions)
+        .set({ active: false })
+        .where(eq(userSessions.userId, user.userId));
+
+      await db.delete(passwordResets).where(eq(passwordResets.email, email));
+
+      return { success: true as const };
     }),
 
   // ─── Update display name (must be logged in) ───
