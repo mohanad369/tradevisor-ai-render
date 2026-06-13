@@ -6,6 +6,7 @@ import { users, userSessions, vipSubscribers, visitStats, pendingSignups, passwo
 import { createRouter, publicQuery, adminQuery } from "../middleware";
 import { hashPassword, verifyPassword, isAcceptablePassword } from "../lib/password";
 import { sendOtpEmail, sendPasswordResetEmail, isSmtpConfigured } from "../lib/email";
+import { notifySignupStarted, notifyAccountConfirmed } from "../lib/telegram";
 
 const SESSION_DAYS = 30;
 const OTP_TTL_MINUTES = 10;
@@ -144,6 +145,10 @@ export const authRouter = createRouter({
         return { success: false, error: "Could not send the verification email. Check the address and try again." };
       }
 
+      // Notify the owner via Telegram (silent no-op if not configured).
+      // Fire-and-forget — must never block or fail the signup response.
+      void notifySignupStarted({ email, name: input.name, phone: input.phone });
+
       return { success: true, otpSent: true, email };
     }),
 
@@ -230,6 +235,11 @@ export const authRouter = createRouter({
       await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.userId, userId));
 
       const [created] = await db.select().from(users).where(eq(users.userId, userId));
+
+      // Notify the owner that the account is now fully confirmed.
+      // The stored phone is hashed for privacy, so only email + name go out.
+      void notifyAccountConfirmed({ email, name: pending.name || "" });
+
       return { success: true, sessionToken, user: publicUser(created) };
     }),
 

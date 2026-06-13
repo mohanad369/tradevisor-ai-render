@@ -16,6 +16,7 @@ import {
 } from "./lib/security";
 import { env } from "./lib/env";
 import { sendVipCodeEmail } from "./lib/email";
+import { notifySubscriptionPaid } from "./lib/telegram";
 import { fetchServerMarketQuotes } from "./lib/market";
 import { isPaidNowPaymentsStatus, verifyNowPaymentsIpn } from "./lib/nowpayments";
 import { replenishPool, seedVIPCodes } from "../db/seed";
@@ -384,6 +385,17 @@ app.post("/api/payments/nowpayments/ipn", async (c) => {
     plan: payment.planName,
     orderId: payment.orderId,
     expiresAt: activated.expiresAt,
+  });
+
+  // Notify the owner via Telegram (silent no-op if not configured).
+  // Fire-and-forget — the IPN response must not block on Telegram.
+  void notifySubscriptionPaid({
+    email: activated.email,
+    plan: payment.planName,
+    amount: payment.amount,
+    currency: "USD",
+    paymentMethod: "NOWPayments (crypto)",
+    orderId: payment.orderId,
   });
 
   return c.json({
