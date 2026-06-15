@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "../middleware";
 import { validateBase64Image } from "../lib/security";
 import { analyzeChartWithAI, analyzeScalpingMultiFrame } from "../lib/anthropic";
 import { runBullBearDebate } from "../lib/debate";
+import { buildExecutionPlan } from "../lib/executionPlan";
 
 /** Strip a data-URI prefix if present. */
 function stripDataUri(b64: string): string {
@@ -132,5 +133,44 @@ export const chartRouter = createRouter({
         goldFlow: input.goldFlow,
         goldStrategy: input.goldStrategy,
       });
+    }),
+
+  /**
+   * Execution Plan — the 11th agent.
+   * Takes the analysis + agent panel + debate result and returns a
+   * concrete order plan (Buy/Sell Limit or Market) with plain-language
+   * instructions in the user's language. Consensus-gated: if agents
+   * don't agree strongly enough, returns a WAIT plan with no entry.
+   */
+  executionPlan: publicQuery
+    .input(
+      z.object({
+        language: z.enum(["en", "ar"]).default("en"),
+        assetName: z.string().min(1).max(50),
+        strategyName: z.string().min(1).max(50),
+        timeframe: z.string().min(1).max(10),
+        currentPrice: z.number().optional(),
+        analysis: z.object({
+          signal: z.enum(["BUY", "SELL"]),
+          confidence: z.number().min(0).max(100),
+          entry: z.number(),
+          stopLoss: z.number(),
+          takeProfit1: z.number(),
+          takeProfit2: z.number(),
+          takeProfit3: z.number(),
+          trend: z.string().max(200).optional(),
+          marketStructure: z.string().max(200).optional(),
+          reasons: z.array(z.string().max(400)).max(8).optional(),
+        }),
+        agents: z.any().optional().nullable(),
+        debate: z.object({
+          verdict: z.enum(["bull_wins", "bear_wins", "draw"]),
+          confidence: z.number().min(0).max(100),
+          recommendation: z.string().max(400).optional(),
+        }).optional().nullable(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return await buildExecutionPlan(input);
     }),
 });

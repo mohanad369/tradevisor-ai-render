@@ -4,6 +4,7 @@ import {
   Bot,
   BrainCircuit,
   CheckCircle2,
+  ClipboardList,
   Crosshair,
   Gauge,
   GitFork,
@@ -137,6 +138,18 @@ const agents = [
     color: "#06b6d4",
     position: "lg:col-span-3 lg:row-start-4",
   },
+  {
+    id: "11",
+    name: { en: "Execution Plan Agent", ar: "وكيل خطة التنفيذ" },
+    role: {
+      en: "Reads every other agent's reading and the debate verdict, then builds a concrete order plan — Buy Limit, Sell Limit, or Market — with re-test instructions and a cancel condition. Says WAIT when agents don't agree.",
+      ar: "يقرأ نتائج كل الوكلاء الآخرين وحكم المناظرة، ثم يبني خطة دخول واضحة — أمر شراء معلّق أو بيع معلّق أو سوقي — مع تعليمات إعادة الاختبار وشرط الإلغاء. يقول انتظر حين لا تتفق الوكلاء.",
+    },
+    status: { en: "Concrete trade plan builder", ar: "بانٍ لخطة التنفيذ" },
+    icon: ClipboardList,
+    color: "#d4a843",
+    position: "lg:col-span-3 lg:row-start-5",
+  },
 ];
 
 const featureStrip = [
@@ -222,7 +235,7 @@ export default function AIAgentsWorkflow() {
               <AIHub />
             </div>
 
-            <div className="relative z-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[1fr_auto_1fr_auto]">
+            <div className="relative z-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[1fr_auto_1fr_auto_auto]">
               {coreAgents.map((agent, index) => (
                 <AgentCard key={agent.id} agent={agent} index={index} language={language} />
               ))}

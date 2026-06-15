@@ -35,10 +35,13 @@ interface Props {
   }
   goldFlow?: { signal?: string; confidence?: number; notes?: string[] } | null
   goldStrategy?: { signal?: string; bias?: string } | null
+  /** Optional — called once when the debate completes, so parents can pass
+   *  the result into a follow-up panel (e.g. the Execution Plan agent). */
+  onResult?: (verdict: "bull_wins" | "bear_wins" | "draw", confidence: number, recommendation: string) => void
 }
 
 export default function BullBearDebatePanel({
-  assetName, strategyName, timeframe, analysis, goldFlow, goldStrategy,
+  assetName, strategyName, timeframe, analysis, goldFlow, goldStrategy, onResult,
 }: Props) {
   const debate = trpc.chart.debate.useMutation()
   const [hasRun, setHasRun] = useState(false)
@@ -54,6 +57,14 @@ export default function BullBearDebatePanel({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysis.entry, analysis.signal])
+
+  // Notify the parent once we have a successful debate result.
+  useEffect(() => {
+    if (onResult && debate.data && debate.data.ok) {
+      onResult(debate.data.verdict, debate.data.confidence, debate.data.recommendation || "")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debate.data?.ok, debate.data?.verdict])
 
   const result = debate.data
   const loading = debate.isPending || (!debate.isError && !result)

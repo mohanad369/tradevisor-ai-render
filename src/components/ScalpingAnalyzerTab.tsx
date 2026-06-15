@@ -8,6 +8,7 @@ import {
 import { trpc } from "@/lib/trpc"
 import BullBearDebatePanel from "@/components/BullBearDebatePanel"
 import FractalPatternPanel from "@/components/FractalPatternPanel"
+import ExecutionPlanPanel from "@/components/ExecutionPlanPanel"
 
 /**
  * Multi-Timeframe Scalping Analyzer (VIP).
@@ -51,6 +52,11 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
   const [images, setImages] = useState<FrameImages>({})
   const [error, setError] = useState("")
   const [result, setResult] = useState<any>(null)
+  const [debateResult, setDebateResult] = useState<{
+    verdict: "bull_wins" | "bear_wins" | "draw"
+    confidence: number
+    recommendation: string
+  } | null>(null)
 
   const analyze = trpc.chart.analyzeScalping.useMutation()
 
@@ -93,6 +99,7 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
       }
 
       setResult(null)
+      setDebateResult(null)
       const res = await analyze.mutateAsync({ assetName: asset, frames })
       setResult(res)
       try {
@@ -321,6 +328,30 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
         </motion.div>
       )}
 
+      {/* 11th agent — Execution Plan. Above the rest because it's the most
+          actionable piece. Uses the debate verdict once it lands. */}
+      {result && (
+        <ExecutionPlanPanel
+          assetName={asset}
+          strategyName="AI Scalping"
+          timeframe="1m"
+          analysis={{
+            signal: result.signal,
+            confidence: Number(result.confidence) || 0,
+            entry: Number(result.entry) || 0,
+            stopLoss: Number(result.stopLoss) || 0,
+            takeProfit1: Number(result.takeProfit1) || 0,
+            takeProfit2: Number(result.takeProfit2) || 0,
+            takeProfit3: Number(result.takeProfit3) || 0,
+            trend: result.trend,
+            marketStructure: result.marketStructure,
+            reasons: Array.isArray(result.reasons) ? result.reasons : [],
+          }}
+          agents={(result as any).agents}
+          debate={debateResult}
+        />
+      )}
+
       {/* 10th agent — Fractal Pattern (gold only). */}
       {result && (result as any).agents?.fractalAgent && (
         <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
@@ -344,6 +375,9 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
             marketStructure: result.marketStructure,
             reasons: Array.isArray(result.reasons) ? result.reasons : [],
           }}
+          onResult={(verdict, confidence, recommendation) =>
+            setDebateResult({ verdict, confidence, recommendation })
+          }
         />
       )}
     </div>

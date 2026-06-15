@@ -14,6 +14,7 @@ import CryptoPaymentModal from "@/components/CryptoPaymentModal";
 import GoldFlowAgent from "@/components/GoldFlowAgent";
 import BullBearDebatePanel from "@/components/BullBearDebatePanel";
 import FractalPatternPanel from "@/components/FractalPatternPanel";
+import ExecutionPlanPanel from "@/components/ExecutionPlanPanel";
 import ScalpingAnalyzerTab from "@/components/ScalpingAnalyzerTab";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
@@ -138,6 +139,13 @@ export default function ChartAnalyzer() {
   const [selectedAsset, setSelectedAsset] = useState<Asset>(assets[4]);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy>(strategies[1]);
   const [selectedTimeframe, setSelectedTimeframe] = useState("1H");
+  // Debate result shared with the Execution Plan panel so the plan
+  // can factor in the debate verdict. Reset each time a new result arrives.
+  const [debateResult, setDebateResult] = useState<{
+    verdict: "bull_wins" | "bear_wins" | "draw"
+    confidence: number
+    recommendation: string
+  } | null>(null);
   const [showAssetDropdown, setShowAssetDropdown] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -357,6 +365,7 @@ export default function ChartAnalyzer() {
     }
 
     setResult(null);
+    setDebateResult(null);
     setIsAnalyzing(true);
     try {
       // Priority: 1) Manual price input, 2) Fresh live price, 3) Cached price, 4) Asset base.
@@ -665,6 +674,32 @@ export default function ChartAnalyzer() {
             {/* Gold Flow Agent — XAU/USD only, independent from the main analysis flow. */}
             <GoldFlowAgent assetName={selectedAsset.name} />
 
+            {/* 11th agent — Execution Plan. Renders ABOVE the other panels because
+                it's the most actionable piece (what to do, where, when). It reads
+                the analysis + agent pipeline output + debate verdict (once it lands). */}
+            {result && (
+              <ExecutionPlanPanel
+                assetName={selectedAsset.name}
+                strategyName={selectedStrategy.name}
+                timeframe={selectedTimeframe}
+                currentPrice={realPrice}
+                analysis={{
+                  signal: result.signal,
+                  confidence: Number(result.confidence) || 0,
+                  entry: Number(result.entry) || 0,
+                  stopLoss: Number(result.stopLoss) || 0,
+                  takeProfit1: Number(result.takeProfit1) || 0,
+                  takeProfit2: Number(result.takeProfit2) || 0,
+                  takeProfit3: Number(result.takeProfit3) || 0,
+                  trend: (result as any).trend,
+                  marketStructure: (result as any).marketStructure,
+                  reasons: Array.isArray((result as any).reasons) ? (result as any).reasons : [],
+                }}
+                agents={(result as any).agents}
+                debate={debateResult}
+              />
+            )}
+
             {/* 10th agent — Fractal Pattern. Reads agent output from result.agents.fractalAgent. */}
             {result && (result as any).agents?.fractalAgent && (
               <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
@@ -688,6 +723,9 @@ export default function ChartAnalyzer() {
                   marketStructure: (result as any).marketStructure,
                   reasons: Array.isArray((result as any).reasons) ? (result as any).reasons : [],
                 }}
+                onResult={(verdict, confidence, recommendation) =>
+                  setDebateResult({ verdict, confidence, recommendation })
+                }
               />
             )}
 

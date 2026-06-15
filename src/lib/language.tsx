@@ -111,6 +111,26 @@ const dictionary: Dictionary = {
   "social.powered": { en: "AI-Powered Trading", ar: "تداول مدعوم بالذكاء الاصطناعي" },
   "social.privacy": { en: "Privacy", ar: "الخصوصية" },
   "social.terms": { en: "Terms", ar: "الشروط" },
+
+  // ── Execution Plan agent (11th) ──
+  "exec.title": { en: "Execution Plan", ar: "خطة التنفيذ" },
+  "exec.subtitle": { en: "11th agent · concrete order plan from the analysis + agents + debate", ar: "الوكيل الحادي عشر · خطة دخول واضحة من التحليل والوكلاء والمناظرة" },
+  "exec.loading": { en: "Building your execution plan…", ar: "جاري بناء خطة التنفيذ…" },
+  "exec.consensus": { en: "Agent consensus", ar: "إجماع الوكلاء" },
+  "exec.agentsAgree": { en: "agents agree", ar: "وكلاء متفقين" },
+  "exec.orderType": { en: "Order type", ar: "نوع الأمر" },
+  "exec.entry": { en: "Entry", ar: "الدخول" },
+  "exec.stopLoss": { en: "Stop loss", ar: "وقف الخسارة" },
+  "exec.targets": { en: "Targets", ar: "الأهداف" },
+  "exec.instructions": { en: "Instructions", ar: "التعليمات" },
+  "exec.cancelIf": { en: "Cancel order if", ar: "ألغِ الأمر إذا" },
+  "exec.waitTitle": { en: "Wait — don't enter", ar: "انتظر — لا تدخل" },
+  "exec.errorTitle": { en: "Plan unavailable", ar: "الخطة غير متاحة" },
+  "exec.buyLimit": { en: "Buy Limit", ar: "أمر شراء معلّق" },
+  "exec.sellLimit": { en: "Sell Limit", ar: "أمر بيع معلّق" },
+  "exec.buyMarket": { en: "Buy at Market", ar: "شراء سوقي" },
+  "exec.sellMarket": { en: "Sell at Market", ar: "بيع سوقي" },
+  "exec.disclaimer": { en: "AI-generated execution plan — not financial advice. Trading carries real risk.", ar: "خطة تنفيذ مولّدة بالذكاء الاصطناعي — ليست نصيحة مالية. التداول ينطوي على مخاطر حقيقية." },
 };
 
 type LanguageContextValue = {
