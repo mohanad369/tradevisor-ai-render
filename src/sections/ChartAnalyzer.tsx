@@ -9,6 +9,7 @@ import { getAssetMarketPair, formatAssetPrice } from "@/lib/assetMarket";
 import { fetchMarketQuote } from "@/lib/marketPrices";
 import ChartUpload from "@/components/ChartUpload";
 import AnalysisResultPanel, { AnalysisOverlay } from "@/components/AnalysisOverlay";
+import AnalysisFullscreenOverlay from "@/components/AnalysisFullscreenOverlay";
 import LivePriceTicker from "@/components/LivePriceTicker";
 import CryptoPaymentModal from "@/components/CryptoPaymentModal";
 import GoldFlowAgent from "@/components/GoldFlowAgent";
@@ -134,7 +135,7 @@ function AnalyzerFeatureStrip() {
 
 export default function ChartAnalyzer() {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<Asset>(assets[4]);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy>(strategies[1]);
@@ -148,6 +149,8 @@ export default function ChartAnalyzer() {
   } | null>(null);
   const [showAssetDropdown, setShowAssetDropdown] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [showFullscreen, setShowFullscreen] = useState(false);
+  const [execPlanData, setExecPlanData] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [realPrice, setRealPrice] = useState<number | undefined>(undefined);
   const [manualPrice, setManualPrice] = useState<string>("");
@@ -818,7 +821,28 @@ export default function ChartAnalyzer() {
           <div className="lg:col-span-2">
             <AnimatePresence mode="wait">
               {result ? (
-                <AnalysisResultPanel key="result" result={result} assetDecimals={assetDecimals} />
+                <div className="relative">
+                  <AnalysisResultPanel key="result" result={result} assetDecimals={assetDecimals} />
+                  {/* ── Open Full Analysis Overlay button ── */}
+                  <motion.button
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    onClick={() => setShowFullscreen(true)}
+                    className="mt-3 w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm transition-all hover:opacity-90 hover:scale-[1.01]"
+                    style={{
+                      background: "linear-gradient(135deg, #d4a843 0%, #f2c94c 50%, #22c55e 100%)",
+                      color: "#050505",
+                      boxShadow: "0 0 28px rgba(212,168,67,0.22)",
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                      <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                    {language === "ar" ? "عرض التحليل الكامل" : "View Full Analysis"}
+                  </motion.button>
+                </div>
               ) : (
                 <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative overflow-hidden rounded-[28px] border border-[#d4a843]/20 bg-[#070b10]/90 p-6 h-full flex flex-col items-center justify-center text-center shadow-[0_0_90px_rgba(212,168,67,0.07)]" style={{ minHeight: 480 }}>
                   <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_34%,rgba(212,168,67,0.13),transparent_34%),radial-gradient(circle_at_78%_72%,rgba(24,200,255,0.10),transparent_28%)]" />
@@ -852,6 +876,20 @@ export default function ChartAnalyzer() {
           </>
         )}
       </div>
+
+      {/* Full-screen Analysis Overlay */}
+      {showFullscreen && result && (
+        <AnalysisFullscreenOverlay
+          result={result}
+          assetDecimals={assetDecimals}
+          assetName={selectedAsset.name}
+          execPlan={execPlanData}
+          fractalReading={(result as any).agents?.fractalAgent}
+          debateResult={debateResult}
+          onClose={() => setShowFullscreen(false)}
+          onReanalyze={canAnalyze ? () => { setShowFullscreen(false); handleAnalyze(); } : undefined}
+        />
+      )}
 
       {/* Payment Modal after limit reached */}
       <CryptoPaymentModal
