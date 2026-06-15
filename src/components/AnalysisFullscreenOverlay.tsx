@@ -146,9 +146,16 @@ function OrderCard({
                 </span>
               )}
             </div>
-            <span className="text-[11px]" style={{ color: "#666" }}>
-              {result.strategyUsed} • {result.confidence}% {tr(isArabic, "confidence", "ثقة")}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span className="text-[11px]" style={{ color: "#666" }}>
+                {result.strategyUsed} • {result.confidence}% {tr(isArabic, "confidence", "ثقة")}
+              </span>
+              {execPlan?.advisory && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "0.5px solid rgba(245,158,11,0.35)" }}>
+                  {tr(isArabic, "⚠ Low consensus — advisory", "⚠ توافق منخفض — إرشادي")}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         {/* Setup quality badge */}
@@ -296,6 +303,7 @@ interface Props {
   result: AnalysisResult
   assetDecimals: number
   assetName?: string
+  uploadedImage?: string | null
   execPlan?: any         // ExecutionPlanPanel data (pass from parent)
   fractalReading?: any   // FractalPatternPanel reading
   debateResult?: { verdict: string; confidence: number; recommendation?: string } | null
@@ -305,7 +313,7 @@ interface Props {
 
 export default function AnalysisFullscreenOverlay({
   result, assetDecimals, assetName = "XAUUSD",
-  execPlan, fractalReading, debateResult,
+  uploadedImage, execPlan, fractalReading, debateResult,
   onClose, onReanalyze,
 }: Props) {
   const { language } = useLanguage()
@@ -399,22 +407,25 @@ export default function AnalysisFullscreenOverlay({
               className="flex flex-col"
               style={{ width: "55%", borderRight: "0.5px solid #1e2028" }}
             >
-              {/* Chart placeholder — in production replace with TradingView widget */}
-              <div className="flex-1 relative bg-[#07080c] flex items-center justify-center overflow-hidden">
-                <div
-                  className="absolute inset-0 opacity-20"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(rgba(212,168,67,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(212,168,67,0.05) 1px, transparent 1px)",
-                    backgroundSize: "48px 48px",
-                  }}
-                />
-                <div className="relative text-center pointer-events-none">
-                  <BarChart3 size={32} color="#2a2d35" className="mx-auto mb-2" />
-                  <p className="text-xs" style={{ color: "#333" }}>
-                    {t("TradingView chart appears here", "يظهر الشارت هنا")}
-                  </p>
-                </div>
+              {/* Chart area */}
+              <div className="flex-1 relative bg-[#07080c] overflow-hidden" style={{ minHeight: 0 }}>
+                {uploadedImage ? (
+                  <img
+                    src={uploadedImage}
+                    alt="chart"
+                    className="w-full h-full object-contain"
+                    style={{ display: "block" }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center pointer-events-none">
+                      <BarChart3 size={32} color="#2a2d35" className="mx-auto mb-2" />
+                      <p className="text-xs" style={{ color: "#333" }}>
+                        {t("Upload a chart to see it here", "ارفع شارت ليظهر هنا")}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Overlay lines — Entry / SL / TPs */}
                 <div className="absolute inset-0 pointer-events-none">

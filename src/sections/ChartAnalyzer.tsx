@@ -883,6 +883,7 @@ export default function ChartAnalyzer() {
           result={result}
           assetDecimals={assetDecimals}
           assetName={selectedAsset.name}
+          uploadedImage={uploadedImage}
           execPlan={execPlanData}
           fractalReading={(result as any).agents?.fractalAgent}
           debateResult={debateResult}

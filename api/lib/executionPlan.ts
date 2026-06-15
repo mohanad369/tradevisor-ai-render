@@ -36,7 +36,7 @@ import { env } from "./env";
 const API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = process.env.EXECUTION_PLAN_MODEL || "claude-sonnet-4-5";
 const TIMEOUT_MS = 30_000;
-const CONSENSUS_THRESHOLD = 65; // percent — below this, WAIT
+const CONSENSUS_THRESHOLD = 50; // percent — below this, WAIT
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -103,6 +103,7 @@ export interface ExecutionPlanResult {
     /** Whether the consensus gate passed. */
     passedGate: boolean;
   };
+  advisory?: boolean;
   /** Plan details — only meaningful when orderType !== "WAIT". */
   plan?: {
     entry: number;
@@ -222,7 +223,7 @@ function computeConsensus(input: ExecutionPlanInput): ExecutionPlanResult["conse
   // where many agents lean the same way for weak reasons but the bear
   // case is genuinely stronger.
   let debateVeto = false;
-  if (input.debate && input.debate.confidence >= 60) {
+  if (input.debate && input.debate.confidence >= 75) {
     if (signal === "BUY" && input.debate.verdict === "bear_wins") debateVeto = true;
     if (signal === "SELL" && input.debate.verdict === "bull_wins") debateVeto = true;
   }
@@ -350,15 +351,7 @@ function buildWaitReason(input: ExecutionPlanInput, consensus: ExecutionPlanResu
 export async function buildExecutionPlan(input: ExecutionPlanInput): Promise<ExecutionPlanResult> {
   const consensus = computeConsensus(input);
 
-  // Gate failed → return WAIT immediately, skip the LLM (saves cost + time).
-  if (!consensus.passedGate) {
-    return {
-      ok: true,
-      orderType: "WAIT",
-      consensus,
-      waitReason: buildWaitReason(input, consensus),
-    };
-  }
+  const isAdvisory = !consensus.passedGate;
 
   if (!env.ANTHROPIC_API_KEY) {
     return {
@@ -454,6 +447,7 @@ export async function buildExecutionPlan(input: ExecutionPlanInput): Promise<Exe
       ok: true,
       orderType: ot as OrderType,
       consensus,
+      advisory: isAdvisory,
       plan: {
         entry,
         stopLoss: stop,
