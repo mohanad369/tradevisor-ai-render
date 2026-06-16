@@ -131,6 +131,9 @@ const dictionary: Dictionary = {
   "exec.buyMarket": { en: "Buy at Market", ar: "شراء سوقي" },
   "exec.sellMarket": { en: "Sell at Market", ar: "بيع سوقي" },
   "exec.disclaimer": { en: "AI-generated execution plan — not financial advice. Trading carries real risk.", ar: "خطة تنفيذ مولّدة بالذكاء الاصطناعي — ليست نصيحة مالية. التداول ينطوي على مخاطر حقيقية." },
+  "exec.smcZone": { en: "Structural entry zone", ar: "منطقة دخول هيكلية" },
+  "exec.zone": { en: "Zone", ar: "المنطقة" },
+  "exec.liquiditySweep": { en: "Liquidity sweep", ar: "سحب سيولة" },
 };
 
 type LanguageContextValue = {

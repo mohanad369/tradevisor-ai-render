@@ -32,6 +32,8 @@
  */
 
 import { env } from "./env";
+import { getGoldSmcAnalysis } from "./smc/dataFetcher";
+import type { SmcAnalysis, SmcEntryZone } from "./smc/analyzer";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = process.env.EXECUTION_PLAN_MODEL || "claude-sonnet-4-5";
@@ -112,6 +114,24 @@ export interface ExecutionPlanResult {
     instructions: string;        // 2-4 sentence plain-language plan
     cancelCondition: string;     // when to cancel the pending order
     confidenceLabel: string;     // e.g. "Strong setup" / "Moderate setup"
+  };
+  /**
+   * When the entry zone came from SMC structure (gold only, currently),
+   * this carries the zone the plan was built around so the UI can show
+   * "Buy Limit at Bullish OB + bullish FVG + SSL below" instead of just
+   * a number.
+   */
+  smcZone?: {
+    side: "long" | "short";
+    top: number;
+    bottom: number;
+    strength: number;
+    rationale: string;
+    signals: {
+      hasOrderBlock: boolean;
+      hasFvg: boolean;
+      hasLiquiditySweep: boolean;
+    };
   };
   /** For WAIT plans, this carries the explanation. */
   waitReason?: string;
@@ -242,7 +262,11 @@ function computeConsensus(input: ExecutionPlanInput): ExecutionPlanResult["conse
 
 // ─── LLM execution plan ────────────────────────────────────────────
 
-function buildPrompt(input: ExecutionPlanInput, consensus: ExecutionPlanResult["consensus"]): { system: string; user: string } {
+function buildPrompt(
+  input: ExecutionPlanInput,
+  consensus: ExecutionPlanResult["consensus"],
+  smcZone?: SmcEntryZone | null,
+): { system: string; user: string } {
   const isAr = input.language === "ar";
   const a = input.analysis;
   const dir = a.signal;
@@ -260,6 +284,34 @@ function buildPrompt(input: ExecutionPlanInput, consensus: ExecutionPlanResult["
     ? `Debate verdict: ${input.debate.verdict} at ${input.debate.confidence}% confidence. Recommendation: ${input.debate.recommendation || "n/a"}.`
     : "";
 
+  // SMC override block: when we have a structurally-justified zone, tell
+  // the AI to USE IT for entry/stop instead of the analysis numbers. The
+  // analysis targets stay (they're price-projection, separate problem).
+  const smcBlock = smcZone
+    ? `
+
+═══ STRUCTURAL ENTRY ZONE (USE THESE LEVELS) ═══
+This zone was detected from real candle structure on the 4H gold chart.
+Use these levels for entry and stop instead of the analysis numbers above.
+
+  Direction: ${smcZone.side === "long" ? "LONG (Buy Limit)" : "SHORT (Sell Limit)"}
+  Zone range: ${smcZone.bottom.toFixed(2)} – ${smcZone.top.toFixed(2)}
+  Recommended entry: ${smcZone.entry.toFixed(2)} (zone midpoint)
+  Recommended stop: ${smcZone.stopLoss.toFixed(2)} (beyond the protective structure)
+  Zone strength: ${smcZone.strength}/100
+  Why this zone: ${smcZone.rationale}
+
+In your "instructions" output, EXPLAIN why this entry is at a structural level
+(reference the rationale above), not just "wait for retrace".`
+    : "";
+
+  const smcRule = smcZone
+    ? `
+- A STRUCTURAL ENTRY ZONE has been pre-computed below. USE its entry and stop loss
+  values — do not invent your own. The analysis targets are still valid.
+- The orderType MUST be ${smcZone.side === "long" ? "BUY_LIMIT" : "SELL_LIMIT"} (entry is away from current price by design).`
+    : "";
+
   const system = `You are the execution-planning agent for a trading platform. Your job is to translate the analysis + agent panel + debate into a concrete execution plan a retail trader can place on MT4/MT5.
 
 CRITICAL OUTPUT REQUIREMENTS
@@ -270,8 +322,7 @@ CRITICAL OUTPUT REQUIREMENTS
 DECISION RULES
 - Look at the current live price vs the analysis entry to decide the order type:
   • If currentPrice is within 0.05% of entry → use BUY_MARKET or SELL_MARKET (price is already there).
-  • Otherwise use BUY_LIMIT or SELL_LIMIT — the user waits for price to re-test the entry.
-- The plan must EXACTLY use the entry / stop / TPs from the analysis. Do not invent your own levels.
+  • Otherwise use BUY_LIMIT or SELL_LIMIT — the user waits for price to re-test the entry.${smcRule}
 - The "cancelCondition" tells the user when to cancel the pending limit order. For BUY_LIMIT: cancel if price drops to or below the stop before filling. For SELL_LIMIT: cancel if price rises to or above the stop before filling. For market orders, cancelCondition can be "Not applicable — market order".
 - "instructions" is 2-4 sentences telling the user EXACTLY what to do: where to place the limit, that they should wait for re-test, where the stop and TPs go.
 - "confidenceLabel" is one short phrase. Use Arabic phrases for ar (إعداد قوي / إعداد متوسط / إعداد ضعيف) and English for en (Strong setup / Moderate setup / Weak setup).
@@ -309,6 +360,7 @@ ${goldLine}
 ${debateLine}
 
 CONSENSUS (already computed): ${consensus.agreementPercent}% of agents agree with the ${dir} signal (${consensus.bullishAgents} bullish, ${consensus.bearishAgents} bearish, ${consensus.neutralAgents} neutral out of ${consensus.totalAgents}).
+${smcBlock}
 
 Produce the execution plan now. Output ONLY the JSON object specified.`;
 
@@ -363,7 +415,39 @@ export async function buildExecutionPlan(input: ExecutionPlanInput): Promise<Exe
     };
   }
 
-  const { system, user } = buildPrompt(input, consensus);
+  // ── SMC structural entry zone (gold only) ──
+  // For gold, pull a Smart Money Concepts reading and pick the strongest
+  // structural zone in the analysis direction. The LLM will use this
+  // zone's entry/stop instead of the analysis's raw numbers — giving
+  // the user an entry that's actually justified by liquidity, order
+  // blocks and FVGs, not just a chart-eyeball guess.
+  //
+  // Non-gold or any failure leaves smcZone undefined; the LLM falls
+  // back to the analysis numbers exactly as before.
+  let smcZone: SmcEntryZone | null = null;
+  const isGold = /xau|gold|ذهب/i.test(input.assetName);
+  if (isGold && input.currentPrice && input.currentPrice > 0) {
+    try {
+      const smc: SmcAnalysis = await getGoldSmcAnalysis(input.currentPrice);
+      if (smc.ok) {
+        const candidates = input.analysis.signal === "BUY" ? smc.longZones : smc.shortZones;
+        // Pick the strongest zone within reasonable distance of price.
+        // "Reasonable" = within 2% — beyond that, price likely won't
+        // get there during the trade horizon.
+        const maxDistance = input.currentPrice * 0.02;
+        const inRange = candidates.filter((z) =>
+          Math.abs(z.entry - input.currentPrice!) <= maxDistance,
+        );
+        smcZone = inRange[0] || candidates[0] || null;
+      } else if (smc.reason) {
+        console.warn("[executionPlan] SMC unavailable:", smc.reason);
+      }
+    } catch (err) {
+      console.warn("[executionPlan] SMC fetch failed:", (err as Error)?.message);
+    }
+  }
+
+  const { system, user } = buildPrompt(input, consensus, smcZone);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -456,6 +540,18 @@ export async function buildExecutionPlan(input: ExecutionPlanInput): Promise<Exe
         cancelCondition: String(parsed.cancelCondition || "").trim(),
         confidenceLabel: String(parsed.confidenceLabel || "").trim(),
       },
+      smcZone: smcZone ? {
+        side: smcZone.side,
+        top: smcZone.top,
+        bottom: smcZone.bottom,
+        strength: smcZone.strength,
+        rationale: smcZone.rationale,
+        signals: {
+          hasOrderBlock: !!smcZone.signals.orderBlock,
+          hasFvg: !!smcZone.signals.fvg,
+          hasLiquiditySweep: !!smcZone.signals.liquidity,
+        },
+      } : undefined,
     };
   } catch (err: any) {
     if (err?.name === "AbortError") {

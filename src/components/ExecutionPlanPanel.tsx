@@ -199,6 +199,34 @@ export default function ExecutionPlanPanel(props: Props) {
               color={C.buy} small />
           </div>
 
+          {/* SMC structural zone — shown when the plan was built on real structure */}
+          {result.smcZone && (
+            <div className="rounded-xl border p-3"
+              style={{ borderColor: "rgba(212,168,67,0.30)", background: "rgba(212,168,67,0.04)" }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles size={12} style={{ color: C.primary }} />
+                  <span className="text-[10px] uppercase tracking-wide font-semibold"
+                    style={{ color: C.primary }}>
+                    {t("exec.smcZone")}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold" style={{ color: C.primary }}>
+                  {result.smcZone.strength}/100
+                </span>
+              </div>
+              <p className="text-[12px] text-[#c8d0d8] leading-relaxed mb-1.5">
+                {result.smcZone.rationale}
+              </p>
+              <div className="flex items-center gap-2 text-[10px]" style={{ color: C.dim }}>
+                <span>{t("exec.zone")}: {result.smcZone.bottom.toFixed(2)} – {result.smcZone.top.toFixed(2)}</span>
+                {result.smcZone.signals.hasOrderBlock && <span>· OB</span>}
+                {result.smcZone.signals.hasFvg && <span>· FVG</span>}
+                {result.smcZone.signals.hasLiquiditySweep && <span>· {t("exec.liquiditySweep")}</span>}
+              </div>
+            </div>
+          )}
+
           {/* Instructions */}
           {result.plan.instructions && (
             <div className="rounded-xl border border-[#1f1f1f] bg-[#141414] p-3">
