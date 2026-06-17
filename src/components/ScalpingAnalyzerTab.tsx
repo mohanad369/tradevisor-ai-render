@@ -9,6 +9,8 @@ import { trpc } from "@/lib/trpc"
 import BullBearDebatePanel from "@/components/BullBearDebatePanel"
 import FractalPatternPanel from "@/components/FractalPatternPanel"
 import ExecutionPlanPanel from "@/components/ExecutionPlanPanel"
+import SmartSummary from "@/components/SmartSummary"
+import TechnicalDetailsCollapsible from "@/components/TechnicalDetailsCollapsible"
 
 /**
  * Multi-Timeframe Scalping Analyzer (VIP).
@@ -352,33 +354,42 @@ export default function ScalpingAnalyzerTab({ beforeAnalyze, onAnalysisComplete,
         />
       )}
 
-      {/* 10th agent — Fractal Pattern (gold only). */}
-      {result && (result as any).agents?.fractalAgent && (
-        <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
+      {result && (
+        <SmartSummary
+          agents={(result as any).agents}
+          debate={debateResult}
+          signal={result.signal}
+        />
       )}
 
-      {/* 9th agent — Bull vs Bear Debate */}
+      {/* Technical detail panels — collapsed by default. */}
       {result && (
-        <BullBearDebatePanel
-          assetName={asset}
-          strategyName="AI Scalping"
-          timeframe="1m"
-          analysis={{
-            signal: result.signal,
-            confidence: Number(result.confidence) || 0,
-            entry: Number(result.entry) || 0,
-            stopLoss: Number(result.stopLoss) || 0,
-            takeProfit1: Number(result.takeProfit1) || 0,
-            takeProfit2: Number(result.takeProfit2) || 0,
-            takeProfit3: Number(result.takeProfit3) || 0,
-            trend: result.trend,
-            marketStructure: result.marketStructure,
-            reasons: Array.isArray(result.reasons) ? result.reasons : [],
-          }}
-          onResult={(verdict, confidence, recommendation) =>
-            setDebateResult({ verdict, confidence, recommendation })
-          }
-        />
+        <TechnicalDetailsCollapsible>
+          {(result as any).agents?.fractalAgent && (
+            <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
+          )}
+
+          <BullBearDebatePanel
+            assetName={asset}
+            strategyName="AI Scalping"
+            timeframe="1m"
+            analysis={{
+              signal: result.signal,
+              confidence: Number(result.confidence) || 0,
+              entry: Number(result.entry) || 0,
+              stopLoss: Number(result.stopLoss) || 0,
+              takeProfit1: Number(result.takeProfit1) || 0,
+              takeProfit2: Number(result.takeProfit2) || 0,
+              takeProfit3: Number(result.takeProfit3) || 0,
+              trend: result.trend,
+              marketStructure: result.marketStructure,
+              reasons: Array.isArray(result.reasons) ? result.reasons : [],
+            }}
+            onResult={(verdict, confidence, recommendation) =>
+              setDebateResult({ verdict, confidence, recommendation })
+            }
+          />
+        </TechnicalDetailsCollapsible>
       )}
     </div>
   )

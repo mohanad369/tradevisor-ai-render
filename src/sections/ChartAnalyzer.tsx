@@ -16,6 +16,8 @@ import GoldFlowAgent from "@/components/GoldFlowAgent";
 import BullBearDebatePanel from "@/components/BullBearDebatePanel";
 import FractalPatternPanel from "@/components/FractalPatternPanel";
 import ExecutionPlanPanel from "@/components/ExecutionPlanPanel";
+import SmartSummary from "@/components/SmartSummary";
+import TechnicalDetailsCollapsible from "@/components/TechnicalDetailsCollapsible";
 import ScalpingAnalyzerTab from "@/components/ScalpingAnalyzerTab";
 import { strategies, assets } from "@/data/strategies";
 import type { Strategy, Asset } from "@/data/strategies";
@@ -674,12 +676,11 @@ export default function ChartAnalyzer() {
               )}
             </div>
 
-            {/* Gold Flow Agent — XAU/USD only, independent from the main analysis flow. */}
-            <GoldFlowAgent assetName={selectedAsset.name} />
-
-            {/* 11th agent — Execution Plan. Renders ABOVE the other panels because
-                it's the most actionable piece (what to do, where, when). It reads
-                the analysis + agent pipeline output + debate verdict (once it lands). */}
+            {/* ── PRIMARY (always visible) ──
+                Execution Plan stays at the top — it's the actionable trade plan.
+                The smart summary condenses every other agent into plain-language
+                one-liners. Together they tell the user EVERYTHING important in
+                a single screen, without acronyms or technical noise. */}
             {result && (
               <ExecutionPlanPanel
                 assetName={selectedAsset.name}
@@ -703,34 +704,52 @@ export default function ChartAnalyzer() {
               />
             )}
 
-            {/* 10th agent — Fractal Pattern. Reads agent output from result.agents.fractalAgent. */}
-            {result && (result as any).agents?.fractalAgent && (
-              <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
-            )}
-
-            {/* 9th agent — Bull vs Bear Debate. Renders only when there's a result. */}
             {result && (
-              <BullBearDebatePanel
-                assetName={selectedAsset.name}
-                strategyName={selectedStrategy.name}
-                timeframe={selectedTimeframe}
-                analysis={{
-                  signal: result.signal,
-                  confidence: Number(result.confidence) || 0,
-                  entry: Number(result.entry) || 0,
-                  stopLoss: Number(result.stopLoss) || 0,
-                  takeProfit1: Number(result.takeProfit1) || 0,
-                  takeProfit2: Number(result.takeProfit2) || 0,
-                  takeProfit3: Number(result.takeProfit3) || 0,
-                  trend: (result as any).trend,
-                  marketStructure: (result as any).marketStructure,
-                  reasons: Array.isArray((result as any).reasons) ? (result as any).reasons : [],
-                }}
-                onResult={(verdict, confidence, recommendation) =>
-                  setDebateResult({ verdict, confidence, recommendation })
-                }
+              <SmartSummary
+                agents={(result as any).agents}
+                debate={debateResult}
+                signal={result.signal}
               />
             )}
+
+            {/* ── TECHNICAL DETAILS (collapsed by default) ──
+                The Gold Flow, Fractal Pattern, and Bull/Bear Debate panels
+                live here. Everyday users never need to open this. Power
+                users tap "Show technical details" to see the full reasoning. */}
+            {result && (
+              <TechnicalDetailsCollapsible>
+                <GoldFlowAgent assetName={selectedAsset.name} />
+
+                {(result as any).agents?.fractalAgent && (
+                  <FractalPatternPanel reading={(result as any).agents.fractalAgent} />
+                )}
+
+                <BullBearDebatePanel
+                  assetName={selectedAsset.name}
+                  strategyName={selectedStrategy.name}
+                  timeframe={selectedTimeframe}
+                  analysis={{
+                    signal: result.signal,
+                    confidence: Number(result.confidence) || 0,
+                    entry: Number(result.entry) || 0,
+                    stopLoss: Number(result.stopLoss) || 0,
+                    takeProfit1: Number(result.takeProfit1) || 0,
+                    takeProfit2: Number(result.takeProfit2) || 0,
+                    takeProfit3: Number(result.takeProfit3) || 0,
+                    trend: (result as any).trend,
+                    marketStructure: (result as any).marketStructure,
+                    reasons: Array.isArray((result as any).reasons) ? (result as any).reasons : [],
+                  }}
+                  onResult={(verdict, confidence, recommendation) =>
+                    setDebateResult({ verdict, confidence, recommendation })
+                  }
+                />
+              </TechnicalDetailsCollapsible>
+            )}
+
+            {/* When there's no result yet, still show Gold Flow as a "live ticker"
+                style indicator (it's the only panel that's useful without a trade). */}
+            {!result && <GoldFlowAgent assetName={selectedAsset.name} />}
 
             {/* Free Analysis Counter / Tier Status */}
             {isSubscriber ? (

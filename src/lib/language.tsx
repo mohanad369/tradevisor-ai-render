@@ -134,6 +134,22 @@ const dictionary: Dictionary = {
   "exec.smcZone": { en: "Structural entry zone", ar: "منطقة دخول هيكلية" },
   "exec.zone": { en: "Zone", ar: "المنطقة" },
   "exec.liquiditySweep": { en: "Liquidity sweep", ar: "سحب سيولة" },
+
+  // ── Smart summary (plain-language one-liners) ──
+  "summary.title": { en: "What the AI agents say", ar: "ماذا يقول الذكاء الاصطناعي" },
+  "summary.fractal.agrees": { en: "Historical patterns agree with this trade ({conf}% confidence).", ar: "أنماط تاريخية مشابهة تدعم هذه الصفقة (ثقة {conf}%)." },
+  "summary.fractal.disagrees": { en: "Historical patterns suggest the opposite direction ({conf}% confidence).", ar: "أنماط تاريخية مشابهة تشير إلى الاتجاه المعاكس (ثقة {conf}%)." },
+  "summary.fractal.mixed": { en: "Historical patterns are mixed for this setup.", ar: "الأنماط التاريخية مختلطة لهذا الإعداد." },
+  "summary.strategy.confirms": { en: "The gold strategy confirms this direction.", ar: "استراتيجية الذهب تؤكد هذا الاتجاه." },
+  "summary.strategy.conflicts": { en: "The gold strategy points in the opposite direction.", ar: "استراتيجية الذهب تشير إلى الاتجاه المعاكس." },
+  "summary.strategy.wait": { en: "The gold strategy says: wait — no clear setup yet.", ar: "استراتيجية الذهب تقول: انتظر — لا يوجد إعداد واضح بعد." },
+  "summary.debate.supports": { en: "Independent review supports the trade ({conf}% confidence).", ar: "المراجعة المستقلة تدعم الصفقة (ثقة {conf}%)." },
+  "summary.debate.opposes": { en: "Independent review warns against this trade ({conf}% confidence).", ar: "المراجعة المستقلة تحذّر من هذه الصفقة (ثقة {conf}%)." },
+  "summary.debate.draw": { en: "Independent review is split — proceed with caution.", ar: "المراجعة المستقلة منقسمة — تابع بحذر." },
+
+  // ── Technical details toggle ──
+  "techDetails.show": { en: "Show technical details", ar: "عرض التفاصيل التقنية" },
+  "techDetails.hide": { en: "Hide technical details", ar: "إخفاء التفاصيل التقنية" },
 };
 
 type LanguageContextValue = {
